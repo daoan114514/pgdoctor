@@ -59,6 +59,12 @@ def reset() -> None:
         db.execute("SELECT pg_stat_statements_reset()")
     except Exception as exc:  # 扩展未就绪时不致命
         print(f"[snapshot] warn: pg_stat_statements_reset failed: {exc}")
+
+    # pg_stat_user_tables 是每库的运行时统计，DROP/CREATE DATABASE 后归零：
+    # 不补这一步，episode 开局看到的 n_live_tup 会是几百而不是一千两百万，
+    # last_analyze 也是空的 —— 而鉴别诊断正是靠它来排除"统计信息过期"。
+    # 真实生产库不会处于这种状态，所以补 ANALYZE 让基线更保真。
+    db.execute("ANALYZE")
     print(f"[snapshot] reset to golden in {time.time() - t0:.1f}s")
 
 
