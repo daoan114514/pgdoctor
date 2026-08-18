@@ -1,0 +1,25 @@
+FROM postgres:16
+
+# hypopg: 假设索引，供 ESC 的 D5 反事实验证与 PLAN 阶段的"先模拟再动手"。
+# postgresql-contrib 已含 pg_stat_statements / pgstattuple / pg_buffercache / auto_explain。
+#
+# 国内网络：Debian 与 PGDG 官方源直连极慢（实测单个索引文件 15s），全部换阿里云镜像。
+# PGDG 走 http 而非 https：容器内对该镜像的证书校验失败，而 APT 本身有 GPG 签名校验。
+# 注意 postgres:16 现已基于 Debian trixie（deb822 格式的 debian.sources），
+# 且 Debian 自带的是 postgresql-17-hypopg，与本镜像的 PG16 不匹配，
+# 所以 hypopg 必须来自 PGDG 而不是 Debian 主仓。
+RUN set -eux; \
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do \
+      if [ -f "$f" ]; then \
+        sed -i -e 's|deb.debian.org|mirrors.aliyun.com|g' \
+               -e 's|security.debian.org|mirrors.aliyun.com|g' "$f"; \
+      fi; \
+    done; \
+    for f in /etc/apt/sources.list.d/pgdg.list /etc/apt/sources.list.d/pgdg.sources; do \
+      if [ -f "$f" ]; then \
+        sed -i -e 's|https\?://apt.postgresql.org/pub/repos/apt|http://mirrors.aliyun.com/postgresql/repos/apt|g' "$f"; \
+      fi; \
+    done; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends postgresql-16-hypopg; \
+    rm -rf /var/lib/apt/lists/*

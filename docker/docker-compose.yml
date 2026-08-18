@@ -1,0 +1,56 @@
+name: pgdoctor
+
+services:
+  pg:
+    build:
+      context: .
+      dockerfile: Dockerfile.pg
+    container_name: pgdoctor-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: shop
+      # seed 规模；开发期可调小，例如 SEED_ORDERS=500000
+      SEED_ORDERS: 12000000
+      SEED_USERS: 100000
+      SEED_PRODUCTS: 10000
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    shm_size: "1gb"
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements,auto_explain
+      - -c
+      - pg_stat_statements.max=10000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - auto_explain.log_min_duration=200ms
+      - -c
+      - auto_explain.log_analyze=on
+      - -c
+      - auto_explain.log_buffers=on
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - track_io_timing=on
+      - -c
+      - logging_collector=off
+      - -c
+      - log_min_duration_statement=500ms
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  pgdata:
