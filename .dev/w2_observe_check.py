@@ -8,7 +8,9 @@ from pathlib import Path
 
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_here = Path(__file__).resolve()
+_root = next(q for q in _here.parents if (q / 'sandbox').is_dir())
+sys.path.insert(0, str(_root))
 from sandbox import snapshot
 from sandbox.observe import Observer
 from sandbox.injectors.missing_index import MissingIndexInjector

@@ -10,7 +10,9 @@ B 是这份验收里最重要的一条。判分器如果总是给 PASS 就毫无
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_here = Path(__file__).resolve()
+_root = next(q for q in _here.parents if (q / 'sandbox').is_dir())
+sys.path.insert(0, str(_root))
 
 from sandbox.env import DBAScenarioEnv
 
