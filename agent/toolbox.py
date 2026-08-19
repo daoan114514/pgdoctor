@@ -119,6 +119,12 @@ class Toolbox:
         v = Verdict(verdict)
         if v is Verdict.REFUTED_BY_REMEDIATION:
             raise ValueError("该裁决只能由修复失败产生，不能由 agent 直接声明")
+        cur = self.st.ledger.get(name)
+        if cur and cur.verdict == Verdict.REFUTED_BY_REMEDIATION.value:
+            # 否则重新调查一轮就能把修复反证覆盖掉，无限重试循环又回来了
+            raise ValueError(
+                f"{name} 已被修复反证，不能用只读证据翻案；"
+                f"若确有新证据请换用其他假设")
         self.st.set_verdict(name, v, note=note)
         return f"{name} = {v.value}"
 
@@ -131,3 +137,33 @@ class Toolbox:
         self.st.claimed_root_cause = root_cause
         self.st.set_verdict(fault_class, Verdict.CONFIRMED)
         return f"根因已声明: {fault_class}"
+
+    # ── 提交修复提案（不写库）────────────────────────────
+    def submit_proposal(self, action_type: str, sql: str, rollback: str,
+                        rationale: str = "", predicted_impact: dict | None = None
+                        ) -> str:
+        """把修复意图交给安全门。这里不执行任何东西。
+
+        要求类型化而非裸 SQL：门要在结构上做防伪校验（声称建索引却夹带
+        DROP 的提案会被 AST 拆穿），裸字符串没法做这件事。
+        """
+        self._enter("submit_proposal")
+        if not rollback or not rollback.strip():
+            raise ValueError("提案必须带回滚语句，否则无法保证可撤销")
+        if self.st.claimed_fault_class and self.st.already_failed(
+                self.st.claimed_fault_class):
+            raise ValueError("该根因此前修复失败并已被反证，不能重复提交")
+        if self.st.tried_fix(sql):
+            raise ValueError("这条修复已经试过且失败，换一个方案")
+        self.st.proposal = {
+            "action_type": action_type,
+            "sql": sql,
+            "rollback": rollback,
+            "rationale": rationale,
+            "predicted_impact": predicted_impact or {},
+            "evidence_refs": [e["raw_ref"] for e in self.st.scratchpad
+                              if e.get("raw_ref")][-5:],
+        }
+        self.st.note("agent", "remediation_proposal",
+                     f"{action_type}: {sql[:90]}")
+        return f"提案已提交，等待安全门裁决: {action_type}"

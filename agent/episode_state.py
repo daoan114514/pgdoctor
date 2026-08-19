@@ -73,6 +73,9 @@ class EpisodeState:
     directives: list[str] = field(default_factory=list)      # ESC 给的定向取证指令
     claimed_root_cause: str | None = None
     claimed_fault_class: str | None = None
+    proposal: dict = field(default_factory=dict)
+    repair_attempts: int = 0
+    max_repair_attempts: int = 2
     budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": 40})
     started_at: float = field(default_factory=time.time)
     finished: bool = False
@@ -121,12 +124,29 @@ class EpisodeState:
 
     # ── 失败尝试：知识不回滚 ──────────────────────────────
     def record_attempt(self, attempt: RemediationAttempt) -> None:
+        """只登记"这次修复失败了"，不直接否定根因。
+
+        最初把两者等同，结果一次建错列的索引就把正确的根因判死，
+        agent 再也无法用正确的修复重试。失败的是具体修复，不是根因；
+        只有同一根因下多次修复都失败，才谈得上反证根因本身。
+        """
         self.attempts.append(attempt)
-        self.set_verdict(attempt.root_cause, Verdict.REFUTED_BY_REMEDIATION,
-                         note=attempt.inference)
+
+    def attempts_for(self, root_cause: str) -> int:
+        return sum(1 for a in self.attempts if a.root_cause == root_cause)
+
+    def refute_by_remediation(self, root_cause: str, note: str = "") -> None:
+        """同一根因反复修不好，才升级为根因级反证。"""
+        self.set_verdict(root_cause, Verdict.REFUTED_BY_REMEDIATION, note=note)
 
     def already_failed(self, root_cause: str) -> bool:
-        return any(a.root_cause == root_cause for a in self.attempts)
+        """是否已被修复反证（不是"是否尝试过"）。"""
+        e = self.ledger.get(root_cause)
+        return bool(e and e.verdict == Verdict.REFUTED_BY_REMEDIATION.value)
+
+    def tried_fix(self, sql: str) -> bool:
+        norm = " ".join(sql.split()).lower()
+        return any(" ".join(a.sql.split()).lower() == norm for a in self.attempts)
 
     def spend(self, n: int = 1) -> bool:
         self.budget["steps"] += n
