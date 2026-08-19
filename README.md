@@ -198,6 +198,31 @@ VERIFY       p99=20.92ms cpu=46% 恢复=True 回归=True -> REPORT
 
 在这个已知故障类型上两者打平是预期之中的：答案本就编码在脚本的分支里。模型的价值要到故障类型超出预设范围时才体现。
 
+## Subagent 隔离编排
+
+每条假设一个独立上下文，各自只拿它需要的 3–4 个工具，只读连接，独立预算。**子 agent 连下裁决的权力都没有**——它只能通过 `report_verdict` 把结构化结论带回来，裁决在主 agent 看到所有证据后才做。
+
+隔离的代价是彼此看不见，靠 append-only 的共享便签补偿。实测里这个机制真的起了作用：调查"统计信息过期"的子 agent 顺手记下了
+
+> 发现 missing_index 迹象：查询都使用了 Seq Scan，indexes_used=[]…建议调查 missing_index 假设
+
+这条线索被写进便签并标注了它关系到哪些其他假设——正是隔离编排最容易丢失、也最需要补回来的东西。
+
+**早停剪枝**：第一批两条假设跑完即收敛（一个 CONFIRMED、一个 REFUTED），第三条 `lock_contention` 直接跳过。子 agent 部分只花 $0.0837。
+
+## 纵深防御
+
+两层，都不依赖提示词：
+
+| 层 | 位置 | 作用 |
+|---|---|---|
+| 状态机校验 | Toolbox 内 | 工具执行前抛异常 |
+| PreToolUse hook | SDK 侧 | 模型的请求根本发不出去 |
+
+第二层曾经是失效的：`permission_mode='bypassPermissions'` 会在 `can_use_tool` 回调之前自动批准所有调用，SDK 自己会警告这一点。改用 PreToolUse hook 后实测有效——诱导模型在 INVESTIGATE 阶段调用只有 PLAN 才允许的 `submit_proposal`，它收到拒绝并理解了原因；子 agent 尝试调用 `Bash` 也被拦下。
+
+内建工具采用白名单而非黑名单：内建工具集会随 SDK 版本变化，黑名单必然滞后。
+
 ## 快速开始
 
 ```bash
@@ -215,7 +240,8 @@ python3 .dev/w2_env_check.py           # 闭环验收：两个 episode 的三率
 - [x] **W2** 只读观测工具层 + 判分器 + 回归套件（env.reset/observe/verify/score 闭环）
 - [x] **W3** MAPE-K 状态机 + 工具面 + 脚本化基线（LLM 策略待接入）
 - [x] **W4** 安全门 + 护盾 + undo journal（**单故障端到端闭环**）
-- [ ] W5–W9 subagent 编排、因果图与 ESC、案例记忆库、消融实验、Demo
+- [x] **W5** subagent 隔离编排 + 证据便签 + PreToolUse 纵深防御
+- [ ] W6–W9 因果图与 ESC、案例记忆库、消融实验、Demo
 
 ## 已知局限
 
