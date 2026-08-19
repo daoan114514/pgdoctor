@@ -32,6 +32,15 @@ class ScriptedPolicy(Policy):
 
     name = "scripted"
 
+    def __init__(self, bad_fix: bool = False):
+        """bad_fix=True 时故意提交一个治不好病的修复。
+
+        用来演示并验证"修复失败 -> 自动回滚 -> 知识不回滚 -> 换假设"
+        这条路径。没有它就只能测 happy path，而这条路径恰恰是
+        Safe Pass 真正要防的东西。
+        """
+        self.bad_fix = bad_fix
+
     # 该症状组合下的候选根因。W6 起这个集合改由故障因果图多跳遍历给出，
     # 以保证覆盖率，而不是靠谁凭印象列举。
     CANDIDATES = ["missing_index", "stale_statistics", "lock_contention"]
@@ -115,6 +124,25 @@ class ScriptedPolicy(Policy):
                     "missing_index", "orders(user_id, status) 上缺少可用索引")
             else:
                 tb.declare_root_cause(rc, f"确认的根因: {rc}")
-            return Phase.REPORT
+            return Phase.PLAN if st.max_repair_attempts else Phase.REPORT
+
+        if phase is Phase.PLAN:
+            if self.bad_fix and st.repair_attempts == 0:
+                # 在无关列上建索引：能建成、可回滚，但治不好这条查询
+                tb.submit_proposal(
+                    action_type="create_index",
+                    sql="CREATE INDEX CONCURRENTLY idx_wrong_fix ON orders(total)",
+                    rollback="DROP INDEX CONCURRENTLY idx_wrong_fix",
+                    rationale="故意的无效修复，用于验证失败回滚路径",
+                    predicted_impact={"p99_ms": "<50"})
+            else:
+                tb.submit_proposal(
+                    action_type="create_index",
+                    sql="CREATE INDEX CONCURRENTLY idx_orders_user_status "
+                        "ON orders(user_id, status)",
+                    rollback="DROP INDEX CONCURRENTLY idx_orders_user_status",
+                    rationale="补上覆盖 user_id+status 谓词的复合索引，消除全表扫",
+                    predicted_impact={"cost": "180975 -> 52"})
+            return Phase.GATE
 
         raise RuntimeError(f"ScriptedPolicy 未实现阶段 {phase}")

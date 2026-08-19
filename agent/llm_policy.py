@@ -102,6 +102,15 @@ def _build_tools(tb: Toolbox) -> list:
              {"fault_class": str, "root_cause": str})(
             wrap(lambda a: tb.declare_root_cause(a["fault_class"],
                                                  a["root_cause"]))),
+
+        tool("submit_proposal",
+             "提交修复提案给安全门。这里不会执行任何东西 —— 提案要经过"
+             "AST 校验、风险分级与确认后才由系统执行。必须提供可回滚语句。",
+             {"action_type": str, "sql": str, "rollback": str,
+              "rationale": str})(
+            wrap(lambda a: tb.submit_proposal(
+                a["action_type"], a["sql"], a["rollback"],
+                a.get("rationale", "")))),
     ]
 
 
@@ -248,9 +257,35 @@ class LLMPolicy(Policy):
 3. 若证据不足以区分多个假设，不要硬下结论，直接说明缺什么证据。"""
             out = self._run(self._ask(prompt, tb, phase))
 
-            if st.claimed_fault_class:
-                return Phase.REPORT
-            st.outcome_note = f"模型未声明根因: {out[:200]}"
+            if not st.claimed_fault_class:
+                st.outcome_note = f"模型未声明根因: {out[:200]}"
+                return Phase.ESCALATE
+            return Phase.PLAN
+
+        if phase is Phase.PLAN:
+            tried = "\n".join(
+                f"  - {a.sql}  ->  {a.verdict}" for a in st.attempts) or "  （无）"
+            prompt = f"""{st.render_context()}
+
+告警指向的慢查询：
+{hot}
+
+已确认根因：{st.claimed_fault_class} — {st.claimed_root_cause}
+
+此前试过且失败的修复（不要重复提交）：
+{tried}
+
+请用 submit_proposal 提交一个修复方案。要求：
+1. 一个提案只做一件事，不要把多条语句拼在一起。
+2. 必须给出可回滚语句。
+3. 建索引一律用 CONCURRENTLY —— 大表上不加它会锁表，安全门会直接拒绝。
+4. 提交前可以用 simulate_index 确认该索引确实会被优化器采用。
+
+提案会经过 AST 校验与风险分级，不合规会被拒。"""
+            out = self._run(self._ask(prompt, tb, phase))
+            if st.proposal:
+                return Phase.GATE
+            st.outcome_note = f"模型未提交合规提案: {out[:200]}"
             return Phase.ESCALATE
 
         raise RuntimeError(f"LLMPolicy 未实现阶段 {phase}")
