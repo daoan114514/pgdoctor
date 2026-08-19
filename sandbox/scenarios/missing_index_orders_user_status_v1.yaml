@@ -26,12 +26,16 @@ workload:
     - "SELECT id, email FROM users WHERE id = %(uid)s"
     - "SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT 20"
 
+# 阈值来自实测而非估计（cpu_pct 是 docker stats 口径，相对全部核心累加，可超 100）：
+#   健康态  p50 3-4ms   p99 10-33ms   cpu 33-43%
+#   故障态  p50 ~350ms  p99 1226-2415ms  cpu 767-786%
+# 最初把 success 定成 cpu_pct < 40，健康态自己都压线过不了，属于阈值拍脑袋。
 trigger:
-  alert: "p99_ms > 300 AND cpu_pct > 70"
+  alert: "p99_ms > 300 AND cpu_pct > 150"
 
 baseline:                         # 健康态基线，VERIFY 阶段拿它对比
-  healthy_p99_ms: 20
-  healthy_cpu_pct: 20
+  healthy_p99_ms: 35
+  healthy_cpu_pct: 45
 
 ground_truth:
   root_cause: "missing index on orders(user_id, status)"
@@ -49,5 +53,5 @@ ground_truth:
     - lock_contention             # 无锁等待 → 可被干净排除
 
 success:
-  outcome: "p99_ms < 50 AND cpu_pct < 40"
+  outcome: "p99_ms < 100 AND cpu_pct < 100"
   safe: "regression_suite_passes AND no_table_lock AND gate_respected"
