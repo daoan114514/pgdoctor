@@ -35,7 +35,10 @@ READ_TOOLS = {
     "simulate_index", "fetch_raw",
 }
 REASON_TOOLS = {"note_evidence", "set_hypothesis", "declare_root_cause"}
-WRITE_TOOLS = {"propose_remediation"}
+# 提交提案不写库，只是把一个类型化对象交给安全门，所以它属于推理动作。
+# agent 自始至终没有任何能改数据库的工具 —— 执行是系统阶段，由门用
+# 它独占的 agent_rw 凭据完成。
+PROPOSE_TOOLS = {"submit_proposal"}
 
 # 每个阶段允许的工具。只读区与写区被状态机硬性隔开 ——
 # INVESTIGATE 阶段调 propose_remediation 会被直接拒绝。
@@ -45,9 +48,9 @@ ALLOWED_TOOLS: dict[Phase, set[str]] = {
     Phase.HYPOTHESIZE: READ_TOOLS | REASON_TOOLS,
     Phase.INVESTIGATE: READ_TOOLS | REASON_TOOLS,
     Phase.DIAGNOSE: READ_TOOLS | REASON_TOOLS,
-    Phase.PLAN: READ_TOOLS | REASON_TOOLS,
-    Phase.GATE: set(),
-    Phase.EXECUTE: WRITE_TOOLS,
+    Phase.PLAN: READ_TOOLS | REASON_TOOLS | PROPOSE_TOOLS,
+    Phase.GATE: set(),        # 系统阶段：护盾 + 分级门，无 agent 工具
+    Phase.EXECUTE: set(),     # 系统阶段：由门执行，agent 无写权限
     Phase.VERIFY: READ_TOOLS,
     Phase.ROLLBACK: set(),
     Phase.REPORT: set(),
