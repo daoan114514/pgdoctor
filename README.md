@@ -103,6 +103,34 @@ lock_contention    REFUTED     pg_locks 无阻塞链
 判分        Diagnosis = PASS
 ```
 
+## Agent 主循环
+
+LLM 负责推理，状态机负责保证它不越界。这个分工是架构的全部意义：
+
+- **阶段推进是硬约束**：`MONITOR -> OBSERVE -> HYPOTHESIZE -> INVESTIGATE -> DIAGNOSE` 的合法转移写死在转移表里，agent 不能自己跳到 `EXECUTE`。
+- **阶段决定工具集**：`INVESTIGATE` 阶段调用写工具会被直接拒绝，不靠提示词约束。
+- **策略与流程分离**：换成 LLM 不改变可用动作集合，所以脚本化基线与模型策略的对比是公平的；也意味着无需 API 认证就能端到端测试 harness。
+
+首个 LLM episode 的实际行为（Sonnet，Claude Pro 订阅）：
+
+```
+INVESTIGATE  get_indexes -> get_table_stats -> get_blocking_chain
+             -> explain_query x2 -> 三条 set_hypothesis        10 turns  $0.18
+DIAGNOSE     simulate_index x2 -> declare_root_cause            5 turns  $0.11
+                                                         13 步 / 155s / $0.29
+```
+
+模型自发用了反事实验证：在声明根因之前先用 hypopg 证明该索引确实会被优化器采用。
+
+与确定性基线对照：
+
+| 策略 | 步数 | 用时 | 成本 | Diagnosis | 排除竞争假设 |
+|---|---|---|---|---|---|
+| ScriptedPolicy | 11 | 3.2s | $0 | PASS | 2/2 |
+| LLMPolicy | 13 | 155s | $0.29 | PASS | 2/2 |
+
+基线赢在速度与成本（答案本就编码在它的分支里）；模型的价值要在故障类型超出预设范围时才体现，这是后续要测的。
+
 ## 快速开始
 
 ```bash
