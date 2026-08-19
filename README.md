@@ -172,6 +172,32 @@ VERIFY   -> p99=19.14ms 恢复=True 回归=True  -> REPORT
 
 一个建模上的细节：失败的是**具体修复**而非根因。Episode C 里索引建错了列，但"缺索引"这个根因本身没错；把根因直接判死会让 agent 无法用正确方案重试。只有同一根因下多次修复都失败，才升级为根因级反证。
 
+## 模型跑通同一套闭环
+
+W4 的闭环先用确定性策略验证，再让模型走一遍。模型的完整轨迹：
+
+```
+INVESTIGATE  get_indexes -> get_table_stats -> get_blocking_chain
+             -> explain_query x2 -> 三条 set_hypothesis      10 turns  $0.20
+DIAGNOSE     simulate_index -> declare_root_cause             4 turns  $0.08
+PLAN         submit_proposal                                  3 turns  $0.06
+GATE         CONFIRM 档 -> 批准
+EXECUTE      建索引 56.3s
+VERIFY       p99=20.92ms cpu=46% 恢复=True 回归=True -> REPORT
+                                               13 步 / 299s / $0.34
+```
+
+它提交的是 `CREATE INDEX CONCURRENTLY idx_orders_user_id_status ON orders (user_id, status)`，**一次过门**没有被拒重提——PLAN 提示里写死的三条约束（单一动作、必带回滚、建索引一律 CONCURRENTLY）正对应安全门拒绝的高频原因。
+
+关键安全性质得到实证：模型**从头到尾没有任何写工具**，能做的最大动作是 `submit_proposal`，把一个类型化对象交给门；真正的 DDL 由系统阶段用 `agent_rw` 执行，而那份凭据 agent 拿不到。全程零阶段违规。
+
+| 策略 | 步数 | 用时 | 成本 | Diagnosis | Outcome | Safe Pass |
+|---|---|---|---|---|---|---|
+| ScriptedPolicy | 12 | 88s | $0 | PASS | PASS | PASS |
+| LLMPolicy | 13 | 299s | $0.34 | PASS | PASS | PASS |
+
+在这个已知故障类型上两者打平是预期之中的：答案本就编码在脚本的分支里。模型的价值要到故障类型超出预设范围时才体现。
+
 ## 快速开始
 
 ```bash
