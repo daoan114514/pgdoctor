@@ -2,7 +2,7 @@
 
 面向 PostgreSQL 的**自主运维 Agent**：从告警出发，自主诊断根因，并在确定性安全门的保护下执行修复与验证。
 
-> 状态：W2 完成（沙箱 + 只读观测工具层 + 三率判分器闭环）。Agent 主循环开发中。
+> 状态：W3 harness 完成（MAPE-K 状态机 + 工具面 + 脚本化基线策略）。LLM 策略待接入。
 
 ## 为什么这件事不容易
 
@@ -67,6 +67,42 @@ B 里热查询 p50 确实回到健康水位（3.67ms），但回归套件抓到 
 
 轨迹落盘同时是证据充分性检查的证据来源：ESC 核验的是"实际跑了哪些查询、拿到了什么返回"，读的是落盘记录而非 agent 的自述，所以 agent 无法伪造自己做过的取证。
 
+## Agent Harness：状态机与策略分离
+
+循环本身不做领域判断，只负责推进阶段、校验转移、记账落盘。
+**所有"该做什么"在策略里，所有"能不能做"在状态机里**——这个分工是架构的全部意义。
+
+由此得到两个实际好处：harness 不依赖模型，没有 API 认证也能端到端测试；
+脚本化策略成为一条诚实的基线，接上 LLM 后"模型带来多少增益"是可测的。
+
+阶段约束是硬的，不是提示词里的叮嘱：
+
+| 检查 | 结果 |
+|---|---|
+| MONITOR 阶段直接跳 EXECUTE | PhaseViolation |
+| INVESTIGATE 阶段调 propose_remediation | PhaseViolation |
+| 未开启修复时进入 PLAN | PhaseViolation |
+| EXECUTE 阶段调只读工具 | 拒绝 |
+| 重提已被修复反证的根因 | ValueError |
+| agent 直接声明 REFUTED_BY_REMEDIATION | ValueError |
+
+最后两条防的是这类系统最经典的死法：修复失败后 agent 失忆，
+重新推导出同一个根因，再修一次，无限循环。
+**数据库回滚，但知识单调增长**——失败尝试写成结构化记录留在台账里。
+
+脚本化基线的一次完整 episode（11 步 / 4.8 秒）：
+
+```
+MONITOR -> OBSERVE -> HYPOTHESIZE -> INVESTIGATE -> DIAGNOSE -> REPORT
+
+missing_index      CONFIRMED   Seq Scan 过滤掉 12,000,590 行，且无覆盖该谓词的索引
+stale_statistics   REFUTED     last_analyze 新鲜
+lock_contention    REFUTED     pg_locks 无阻塞链
+
+反事实验证  hypopg: cost 180,976 -> 52，优化器会采用
+判分        Diagnosis = PASS
+```
+
 ## 快速开始
 
 ```bash
@@ -74,13 +110,15 @@ cd docker && docker compose up -d      # 起沙箱，首次会灌 1200 万行（
 python3 -m sandbox.snapshot create     # 固化健康基线为 golden 模板
 python3 .dev/w1_check.py               # 沙箱验收：基线→注入→回滚→恢复
 python3 .dev/w2_env_check.py           # 闭环验收：两个 episode 的三率判分
+.dev/run.sh .dev/w3_unit.py            # 状态机硬约束单测（无需数据库）
+.dev/run.sh .dev/w3_e2e.py             # 端到端：自主诊断出根因
 ```
 
 ## 路线
 
 - [x] **W1** 沙箱：容器、数据基线、负载生成器、注入器、快照回滚
 - [x] **W2** 只读观测工具层 + 判分器 + 回归套件（env.reset/observe/verify/score 闭环）
-- [ ] **W3** Agent 主循环 + MAPE-K 状态机
+- [x] **W3** MAPE-K 状态机 + 工具面 + 脚本化基线（LLM 策略待接入）
 - [ ] **W4** 安全门 + 护盾 + undo journal（单故障端到端闭环）
 - [ ] W5–W9 subagent 编排、因果图与 ESC、案例记忆库、消融实验、Demo
 
