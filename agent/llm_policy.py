@@ -29,6 +29,8 @@ from claude_agent_sdk import (
 
 from agent.episode_state import EpisodeState, Verdict
 from agent.policy import Policy
+from agent.hooks import make_phase_hook
+from agent.orchestrator import run_investigation
 from agent.state_machine import ALLOWED_TOOLS, Phase
 from agent.toolbox import Toolbox
 
@@ -138,11 +140,17 @@ class LLMPolicy(Policy):
     CANDIDATES = ["missing_index", "stale_statistics", "lock_contention"]
 
     def __init__(self, model: str = MODEL, max_turns_per_phase: int = 12,
-                 verbose: bool = True):
+                 verbose: bool = True, use_subagents: bool = True,
+                 batch_size: int = 2):
         self.model = model
         self.max_turns = max_turns_per_phase
         self.verbose = verbose
+        # 关掉就退回单 agent 一把梭，用于对照隔离编排到底带来什么
+        self.use_subagents = use_subagents
+        self.batch_size = batch_size
+        self.orchestration = None
         self.usage: list[dict] = []
+        self.blocked: list[str] = []
 
     # ── SDK 调用 ─────────────────────────────────────────
     @staticmethod
@@ -161,20 +169,12 @@ class LLMPolicy(Policy):
         srv = create_sdk_mcp_server(SERVER, "1.0.0", _build_tools(tb))
         names = [f"mcp__{SERVER}__{t}" for t in allowed]
 
-        async def can_use(name: str, _args: dict, _ctx) -> dict:
-            # 第二道防线：状态机之外再拦一次，模型连请求都发不出去
-            bare = name.split("__")[-1]
-            if bare not in ALLOWED_TOOLS[phase]:
-                return {"behavior": "deny",
-                        "message": f"阶段 {phase.value} 不允许 {bare}"}
-            return {"behavior": "allow", "updatedInput": _args}
-
         opts = ClaudeAgentOptions(
             model=self.model,
             system_prompt=SYSTEM,
             mcp_servers={SERVER: srv},
             allowed_tools=names,
-            can_use_tool=can_use,
+            hooks=make_phase_hook(phase, self.blocked),
             max_turns=self.max_turns,
             permission_mode="bypassPermissions",
             setting_sources=None,      # 不加载用户/项目设置，保证可复现
@@ -232,6 +232,22 @@ class LLMPolicy(Policy):
             return Phase.INVESTIGATE
 
         if phase is Phase.INVESTIGATE:
+            if self.use_subagents:
+                # 每条假设一个独立上下文：取证的中间数据（大量 EXPLAIN、
+                # 视图输出）全留在子上下文里，主上下文只收结构化裁决。
+                import asyncio as _aio
+                r = self._run(run_investigation(
+                    st, tb, self.CANDIDATES, hot,
+                    batch_size=self.batch_size, verbose=self.verbose))
+                self.orchestration = r
+                self.usage.append({"phase": "INVESTIGATE(subagents)",
+                                   "cost_usd": r.cost_usd, "turns": r.turns,
+                                   "usage": None})
+                if self.verbose and r.conflicts:
+                    for c in r.conflicts:
+                        print(f"      冲突: {c}")
+                return Phase.DIAGNOSE
+
             prompt = f"""{st.render_context()}
 
 告警指向的慢查询：
