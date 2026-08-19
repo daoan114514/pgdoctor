@@ -6,6 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile.pg
     container_name: pgdoctor-pg
+    # WSL 在无进程附着时会回收发行版服务，dockerd 被停则容器随之退出。
+    # 这条策略保证 docker 起来后容器自动跟上，不必人工干预。
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
