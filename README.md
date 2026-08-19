@@ -131,6 +131,47 @@ DIAGNOSE     simulate_index x2 -> declare_root_cause            5 turns  $0.11
 
 基线赢在速度与成本（答案本就编码在它的分支里）；模型的价值要在故障类型超出预设范围时才体现，这是后续要测的。
 
+## 安全门与护盾
+
+agent 全程只持有 `agent_ro`，**没有任何能改数据库的工具**。它在 PLAN 阶段只能提交类型化提案，执行是系统阶段，由门用它独占的 `agent_rw` 完成。
+
+**护盾**是硬约束层，基于 AST 而非正则——因为正则挡不住这个：
+
+```sql
+CREATE INDEX idx_ok ON orders(status); DROP TABLE order_items
+```
+
+pglast 会把它解析成两条语句，第二条命中黑名单。23 项对抗测试全部拦截，包括提权、改全局配置、无 WHERE 的 DELETE、以及声称建索引实为删表的伪装提案。
+
+**分级门**按四维（动作类 / 可逆性 / 影响面 / 数据安全）判 AUTO / CONFIRM / DENY。影响面按**实际表规模**判定而非硬编码表名——最初写死一份"核心表"清单，结果 schema 里四张表全在里面，AUTO 档不可达、分级形同虚设。
+
+**回滚日志**是 WAL 式"先写后做"：执行前先落盘并 fsync。即使进程崩溃、上下文彻底不存在，重启后扫一遍就知道有变更待撤销。
+
+## 端到端闭环
+
+三条路径均已验收：
+
+| Episode | 场景 | 结果 |
+|---|---|---|
+| A | 正常修复 | 三率全 PASS，55s 建索引后 p99 回到 9.79ms |
+| B | 提交夹带 `DROP TABLE` 的提案 | 护盾硬拦，库未被改动 |
+| C | **无效修复 → 自动回滚 → 换方案重试** | 三率全 PASS |
+
+C 是最关键的一条。完整轨迹：
+
+```
+DIAGNOSE -> PLAN -> GATE(CONFIRM) -> EXECUTE  建了错误的索引 orders(total)
+VERIFY   -> p99=4222ms 恢复=False
+ROLLBACK -> DROP INDEX CONCURRENTLY IF EXISTS idx_wrong_fix   撤销成功
+            知识不回滚：失败尝试入账
+HYPOTHESIZE -> ... -> EXECUTE  建正确的索引 orders(user_id, status)
+VERIFY   -> p99=19.14ms 恢复=True 回归=True  -> REPORT
+```
+
+**数据库回滚，知识单调增长**——这是这类系统最容易死掉的地方：若连知识一起回滚，agent 会失忆、重新推导出同一个根因、再修一次，无限循环。
+
+一个建模上的细节：失败的是**具体修复**而非根因。Episode C 里索引建错了列，但"缺索引"这个根因本身没错；把根因直接判死会让 agent 无法用正确方案重试。只有同一根因下多次修复都失败，才升级为根因级反证。
+
 ## 快速开始
 
 ```bash
@@ -147,7 +188,7 @@ python3 .dev/w2_env_check.py           # 闭环验收：两个 episode 的三率
 - [x] **W1** 沙箱：容器、数据基线、负载生成器、注入器、快照回滚
 - [x] **W2** 只读观测工具层 + 判分器 + 回归套件（env.reset/observe/verify/score 闭环）
 - [x] **W3** MAPE-K 状态机 + 工具面 + 脚本化基线（LLM 策略待接入）
-- [ ] **W4** 安全门 + 护盾 + undo journal（单故障端到端闭环）
+- [x] **W4** 安全门 + 护盾 + undo journal（**单故障端到端闭环**）
 - [ ] W5–W9 subagent 编排、因果图与 ESC、案例记忆库、消融实验、Demo
 
 ## 已知局限
