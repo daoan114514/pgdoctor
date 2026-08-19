@@ -45,10 +45,24 @@ def create_golden(force: bool = False) -> None:
     print(f"[snapshot] golden created in {time.time() - t0:.1f}s")
 
 
+# 集群级互斥锁的 key。DROP + CREATE DATABASE 不是原子的，两个 episode
+# 并发 reset 会撞成 "database already exists"。加锁让并发跑批时自然串行化。
+_RESET_LOCK = 728301
+
+
 def reset() -> None:
     """回滚到健康基线。episode 开始时调。"""
     if not _exists(GOLDEN):
         raise RuntimeError(f"{GOLDEN} missing — 先跑 create_golden()")
+    with db.connect(dbname="postgres") as lock_conn, lock_conn.cursor() as lc:
+        lc.execute("SELECT pg_advisory_lock(%s)", (_RESET_LOCK,))
+        try:
+            _do_reset()
+        finally:
+            lc.execute("SELECT pg_advisory_unlock(%s)", (_RESET_LOCK,))
+
+
+def _do_reset() -> None:
     _terminate(db.PG_DB)
     t0 = time.time()
     db.execute(f'DROP DATABASE IF EXISTS "{db.PG_DB}"', dbname="postgres")
