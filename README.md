@@ -283,6 +283,61 @@ long_idle_transaction  2 跳   long_idle_transaction -> autovacuum_starvation ->
 
 图还驱动**最优取证**：`DISCRIMINATES` 边记录一条证据能一次分开哪几个候选，取证预算有限时优先做信息增益最大的那步。实测 `stats_freshness` 一次可分开 `missing_index / stale_statistics / autovacuum_starvation`。
 
+## 案例记忆库 —— 非参数自进化
+
+**红线：案例只影响假设的生成与排序，绝不替代取证。** 即使案例斩钉截铁说"就是缺索引"，ESC 的 D1 仍要求实际跑 EXPLAIN、查 pg_indexes 才能通过。ESC 是案例记忆的安全带——没有它，案例库会把 agent 变成抄答案的机器，而抄错时没有任何机制能发现。
+
+### 检索：数据库事故的"相似"不是文本相似
+
+而是**指标异常的模式**相似。所以主力信号是结构化的症状指纹，不是向量：
+
+| 维度 | 权重 | 判别力 |
+|---|---|---|
+| `onset` 突发/渐进 | 0.30 | 突发→计划类，渐进→膨胀类 |
+| `wait_profile` 等待事件分布 | 0.28 | 有 Lock 等待→并发类 |
+| `metric_deltas` 指标变化倍数 | 0.24 | |
+| query_scope / object_scope | 0.18 | |
+
+实测同型事故指纹相似度 1.00、异型 0.64，排序正确。
+
+### 负例：大多数案例库浪费掉的一半价值
+
+失败的修复也存。正例告诉你"可能是 X"，负例告诉你"**别再走 X 这条路**"。注入的先验里明确带出来：
+
+```
+[案例先验] 相似历史事故:
+  · 1 例根因 = missing_index
+  · 决定性证据类型: ['explain_seq_scan', 'index_existence']
+  ⚠ 负例: 曾试过 CREATE INDEX CONCURRENTLY idx_wrong ON orders(total) -> FAILED_NO_IMPROVEMENT
+  · 有效取证顺序: explain_seq_scan -> index_existence -> session_wait_profile
+  （案例只是先验，不能替代取证；结论仍需 ESC 的直接证据）
+```
+
+316 字符，渐进式披露——详情按需 `fetch_case`，绝不把全文塞进上下文。
+
+### 防脏记忆
+
+**写入策略**是第一道关：只有被验证过的知识才进库。不知道对错的东西进库就是污染——一条错案例会在之后每次相似告警里把 agent 往错误方向带，而且很难追溯。
+
+**记忆治理**：效用追踪 + 隔离。实测案例连续 4 次帮倒忙后 `utility=0.0 status=quarantined`，此后不再被召回。
+
+**防污染**是硬闸：`split=="eval"` 的案例永不入库，跑 eval 时检索层只放 train。不做这条，效果曲线就是在背答案，一问就穿。
+
+自进化在这里是**可审计**的：案例以 YAML 落盘并进 git，这周学到了什么、哪条被隔离了，都能 diff 出来——比"模型好像变聪明了"可解释得多。
+
+## 轨迹重放：让离线实验零成本
+
+单个 LLM episode 约 $0.35–0.5。规模曲线实验要跑几十个，直接跑额度撑不住。
+
+但很多分析不需要重新调模型：执行轨迹（跑了哪些查询、拿到什么返回、台账怎么演变）已完整落盘，ESC 判定、判分复核、阈值消融都能离线重算。这也让实验可复现——同一份轨迹重跑一百遍结果一样，重新调模型每次都有随机性。
+
+```bash
+python3 -m eval.replay              # 重放全部历史轨迹
+python3 -m eval.replay sensitivity  # ESC 阈值敏感性分析
+```
+
+> 当前局限：现有轨迹里 D2 排除率非 0% 即 100%，中间值没有样本，所以阈值曲线是平的。要让这个分析有信息量，需等多故障类型跑批。
+
 ## 快速开始
 
 ```bash
@@ -302,7 +357,8 @@ python3 .dev/w2_env_check.py           # 闭环验收：两个 episode 的三率
 - [x] **W4** 安全门 + 护盾 + undo journal（**单故障端到端闭环**）
 - [x] **W5** subagent 隔离编排 + 证据便签 + PreToolUse 纵深防御
 - [x] **W6** 故障因果图 + 证据充分性检查（含 ESC 消融实验）
-- [ ] W7–W9 案例记忆库、规模曲线实验、Demo
+- [x] **W7** 案例记忆库（非参数自进化）+ 轨迹重放
+- [ ] W8–W9 多故障类型扩充、规模曲线实验、Demo
 
 ## 已知局限
 
