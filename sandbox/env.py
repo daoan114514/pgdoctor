@@ -32,7 +32,8 @@ def _load_injectors() -> dict:
     global INJECTORS
     if not INJECTORS:
         from sandbox.injectors.missing_index import REGISTRY as R1
-        INJECTORS = dict(R1)
+        from sandbox.injectors.more import REGISTRY as R2
+        INJECTORS = {**R1, **R2}
     return INJECTORS
 
 
@@ -117,6 +118,7 @@ class DBAScenarioEnv:
             raise KeyError(f"没有注册 {fault_class} 的注入器")
         injector = injector_cls(self.spec)
         params = injector.params(random.Random(seed))
+        self._injector = injector
         self.injection = injector.inject(params)
         if not injector.verify_injected(params):
             raise RuntimeError(f"故障注入未生效: {fault_class}")
@@ -174,6 +176,13 @@ class DBAScenarioEnv:
 
     def close(self) -> None:
         self._stop_workload()
+        # 有些注入器会留下后台事务或占用的连接，不清会拖垮后续 episode
+        inj = getattr(self, "_injector", None)
+        if inj is not None and hasattr(inj, "cleanup"):
+            try:
+                inj.cleanup()
+            except Exception:
+                pass
 
     def __enter__(self):
         return self
