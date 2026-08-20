@@ -39,7 +39,21 @@ class Toolbox:
     # ── 只读观测 ──────────────────────────────────────────
     def explain_query(self, sql: str, params: dict | None = None) -> dict:
         self._enter("explain_query")
-        d = self.o.explain_query(sql, params)
+        try:
+            d = self.o.explain_query(sql, params)
+        except Exception as exc:
+            # 只读连接 EXPLAIN 不了写操作。这不是 bug 而是权限隔离的
+            # 必然结果 —— 把原因如实返回，让 agent 换用 pg_locks 之类
+            # 的取证手段，而不是让 episode 崩掉。
+            msg = f"{type(exc).__name__}: {exc}"[:200]
+            self._evidence("explain_unavailable", "",
+                           f"无法取执行计划（{msg}）；若为写操作，"
+                           f"只读连接无权 EXPLAIN，请改用锁与会话视图取证",
+                           bears_on=["lock_contention"])
+            return {"error": msg, "scan_types": [],
+                    "rows_removed_by_filter": 0, "indexes_used": [],
+                    "total_time_ms": 0.0, "rows_est_vs_actual": [],
+                    "parallel_workers": 0, "top_nodes": [], "raw_ref": ""}
         scan = "Seq Scan" if any("Seq Scan" in s for s in d.scan_types) else (
             "Index Scan" if any("Index Scan" in s for s in d.scan_types) else "other")
         kind = "explain_seq_scan" if scan == "Seq Scan" else "explain_plan"

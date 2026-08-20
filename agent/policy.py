@@ -72,16 +72,24 @@ class ScriptedPolicy(Policy):
         if phase is Phase.INVESTIGATE:
             # H1 缺索引：EXPLAIN 见全表扫 + 索引里确实没有可用的
             plan = tb.explain_query(hot, uid)
-            seq = any("Seq Scan" in s for s in plan["scan_types"])
-            removed = plan["rows_removed_by_filter"]
-            idx = tb.get_indexes("orders")
-            names = [i["name"] for i in idx]
-            covering = [n for n in names if "user_status" in n or "status_user" in n]
+            if plan.get("error"):
+                # 取不到计划就别硬判缺索引 —— 脚本基线的领域知识只覆盖
+                # 索引类故障，遇到别的应当诚实地给 INCONCLUSIVE
+                tb.set_hypothesis("missing_index", Verdict.INCONCLUSIVE.value,
+                                  f"无法取执行计划: {plan['error'][:80]}")
+                seq, removed, names, covering = False, 0, [], []
+            else:
+                seq = any("Seq Scan" in s for s in plan["scan_types"])
+                removed = plan["rows_removed_by_filter"]
+                idx = tb.get_indexes("orders")
+                names = [i["name"] for i in idx]
+                covering = [n for n in names
+                            if "user_status" in n or "status_user" in n]
             if seq and removed > 1_000_000 and not covering:
                 tb.set_hypothesis(
                     "missing_index", Verdict.CONFIRMED.value,
                     f"Seq Scan 过滤掉 {removed:,} 行，且 orders 上无覆盖该谓词的索引")
-            else:
+            elif not plan.get("error"):
                 tb.set_hypothesis("missing_index", Verdict.REFUTED.value,
                                   f"计划={plan['scan_types']}, 索引={names}")
 
