@@ -29,3 +29,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 GRANT pg_read_all_stats TO agent_rw;
 GRANT CREATE ON SCHEMA public TO agent_rw;
 GRANT app_owner TO agent_rw;
+
+-- 连接池打满时诊断角色仍需能连上，否则该类故障无法被诊断。
+-- 用 PG16 的非超级用户保留位，避免把 agent 提成 superuser。
+GRANT pg_use_reserved_connections TO agent_ro, agent_rw;
+-- 注意不要授予 app_user：它被拒正是这个故障的症状本身。
+
+-- app_user 模拟业务应用：它没有保留连接位，所以连接池打满时它会被拒，
+-- 这正是该故障应有的症状。而 agent_ro 有保留位，仍能连上做诊断 ——
+-- 保留位机制只有在应用角色与诊断角色分开时才成立。
+CREATE ROLE app_user LOGIN PASSWORD 'app_pw_dev_only';
+GRANT CONNECT ON DATABASE shop TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO app_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE ON TABLES TO app_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;

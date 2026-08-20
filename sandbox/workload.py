@@ -107,9 +107,9 @@ def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
                             t0 = time.perf_counter()
                             ok = True
                             try:
-                                # 用普通角色：应用不会以超级用户连接，
-                                # superuser 有保留位、感知不到池子打满
-                                with db.connect(role="ro") as probe:
+                                # 探针模拟业务应用发起的新连接，
+                                # 用 app_user（无保留位）才感知得到池子打满
+                                with db.connect(role="app") as probe:
                                     with probe.cursor() as pc:
                                         pc.execute("SELECT 1")
                                         pc.fetchall()

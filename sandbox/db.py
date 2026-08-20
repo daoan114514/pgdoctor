@@ -20,6 +20,9 @@ _CREDS = {
     "super": ("postgres", "postgres"),
     "ro": ("agent_ro", "ro_pw_dev_only"),
     "rw": ("agent_rw", "rw_pw_dev_only"),
+    # 业务应用角色：无保留连接位，池子满时它先被拒 ——
+    # 这样"应用挂了但诊断还能进去"才成立
+    "app": ("app_user", "app_pw_dev_only"),
 }
 
 

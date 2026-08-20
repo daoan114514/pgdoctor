@@ -158,7 +158,7 @@ class ConnectionExhaustionInjector(Injector):
         opened, last_err = 0, ""
         for _ in range(maxc + 20):          # 上限兜底，避免死循环
             try:
-                c = psycopg.connect(db.dsn("ro"), autocommit=True)
+                c = psycopg.connect(db.dsn("app"), autocommit=True)
                 self._conns.append(c)
                 opened += 1
             except Exception as exc:
@@ -179,14 +179,19 @@ class ConnectionExhaustionInjector(Injector):
                   f"(now {used}/{maxc}); 首次失败: {last_err or '未触发'}")
 
     def verify_injected(self, params: dict) -> bool:
-        """判据是"普通用户还能不能连上"，而不是连接数够不够大。"""
-        import psycopg
+        """判据是"普通用户的位子已基本占满"。
+
+        注意不能用"完全连不上"当判据：注入时特意退还了 leave_free 个
+        连接，否则 agent 自己也连不上就没法诊断了。症状要的是"偶发
+        失败"而不是"彻底瘫痪"。
+        """
         try:
-            c = psycopg.connect(db.dsn("ro"), connect_timeout=5)
-            c.close()
-            return False         # 还连得上 -> 没占满
+            maxc = int(db.query("SHOW max_connections")[0][0])
+            used = db.query("SELECT count(*) FROM pg_stat_activity")[0][0]
+            held = len(self._conns)
+            return held > 10 and used >= maxc - int(params.get("leave_free", 1)) - 3
         except Exception:
-            return True          # 连不上 -> 注入生效
+            return len(self._conns) > 10
 
     def cleanup(self) -> None:
         for c in self._conns:
