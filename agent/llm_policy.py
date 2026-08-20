@@ -238,7 +238,8 @@ class LLMPolicy(Policy):
                 import asyncio as _aio
                 r = self._run(run_investigation(
                     st, tb, ctx.get("candidates") or self.CANDIDATES, hot,
-                    batch_size=self.batch_size, verbose=self.verbose))
+                    batch_size=self.batch_size, verbose=self.verbose,
+                    case_prior=ctx.get("case_prior", "")))
                 self.orchestration = r
                 self.usage.append({"phase": "INVESTIGATE(subagents)",
                                    "cost_usd": r.cost_usd, "turns": r.turns,
@@ -249,6 +250,8 @@ class LLMPolicy(Policy):
                 return Phase.DIAGNOSE
 
             prompt = f"""{st.render_context()}
+
+{ctx.get("case_prior", "")}
 
 告警指向的慢查询：
 {hot}

@@ -45,6 +45,7 @@ class RunResult:
     error: str = ""
     audit: dict = field(default_factory=dict)
     esc_reports: list = field(default_factory=list)
+    case_ids_used: list = field(default_factory=list)
     # 循环里 VERIFY 已经量过一次，判分应复用它而不是再测一遍：
     # 重测会拿到另一个时间窗的数据，导致"循环说恢复了、判分说没恢复"。
     final_kpi: object = None
@@ -65,7 +66,8 @@ def _symptoms(obs) -> list[str]:
 
 def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                 max_steps: int = 45, allow_repair: bool = False,
-                confirm_cb=None, quiet: bool = False, use_esc: bool = True
+                confirm_cb=None, quiet: bool = False, use_esc: bool = True,
+                use_cases: bool = True, use_cases_split: str = "train"
                 ) -> tuple[RunResult, EpisodeState]:
     st = EpisodeState(episode_id=env.episode_id, scenario_id=env.spec["id"])
     st.alert = obs.alert
@@ -80,6 +82,7 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
     # 候选根因由故障因果图多跳遍历给出，而不是谁凭印象列举 ——
     # 这样覆盖率有保证，级联故障里离症状好几跳的真根因也不会被漏掉。
     from knowledge.causal_graph import graph as _G
+    from knowledge import case_store as _cs
     graph_symptoms = _map_symptoms(st.symptoms)
     candidates = [c["root_cause"] for c in
                   _G.candidate_causes(graph_symptoms, top_k=4)]
@@ -91,8 +94,18 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
         "candidates": candidates,
         "graph_symptoms": graph_symptoms,
     }
+    # 案例先验：只影响假设的生成与排序，绝不替代取证。
+    # split 过滤是防污染的硬闸 —— 跑 eval 时只能检索 train 案例。
+    _fp = _cs.fingerprint_from_state(st)
+    _hits = _cs.search(_fp, split=use_cases_split, top_k=3,
+                       query_text=" ".join(st.symptoms)) if use_cases else []
+    ctx["case_prior"] = _cs.render_prior(_hits) if _hits else ""
+    ctx["case_ids"] = [h["case"].case_id for h in _hits]
     if not quiet:
         print(f"  [因果图] 症状 {graph_symptoms} -> 候选根因 {candidates}")
+        if _hits:
+            print(f"  [案例库] 命中 {len(_hits)} 例 "
+                  f"(指纹相似度 {[h['fp_sim'] for h in _hits]})")
 
     t0 = time.time()
     res = RunResult(episode_id=st.episode_id, final_phase=st.phase,
@@ -304,6 +317,7 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
     res.transitions = sm.history
     res.elapsed_s = round(time.time() - t0, 1)
     res.audit.update(audit)
+    res.case_ids_used = ctx.get("case_ids", [])
     return res, st
 
 

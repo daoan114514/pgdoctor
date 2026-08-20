@@ -113,7 +113,8 @@ def merge(st: EpisodeState, verdicts: list[HypothesisVerdict]) -> list[str]:
 
 async def run_investigation(st: EpisodeState, tb: Toolbox, candidates: list[str],
                             hot_query: str, batch_size: int = 2,
-                            verbose: bool = True) -> OrchestrationResult:
+                            verbose: bool = True,
+                            case_prior: str = "") -> OrchestrationResult:
     st.ensure_hypotheses(candidates)
     res = OrchestrationResult()
     pending = list(candidates)
@@ -125,8 +126,11 @@ async def run_investigation(st: EpisodeState, tb: Toolbox, candidates: list[str]
             print(f"      批次 {res.batches}: {batch}")
 
         items = [(h, BRIEFS.get(h, "调查该假设是否成立")) for h in batch]
+        view = scratchpad_view(st)
+        if case_prior:
+            view = case_prior + "\n" + view
         verdicts = await investigate_many(
-            items, tb, scratchpad_view(st), hot_query, verbose=verbose)
+            items, tb, view, hot_query, verbose=verbose)
         res.verdicts.extend(verdicts)
         res.cost_usd += sum(v.cost_usd for v in verdicts)
         res.turns += sum(v.turns for v in verdicts)
