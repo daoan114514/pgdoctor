@@ -66,7 +66,7 @@ class ScriptedPolicy(Policy):
             return Phase.HYPOTHESIZE
 
         if phase is Phase.HYPOTHESIZE:
-            st.ensure_hypotheses(self.CANDIDATES)
+            st.ensure_hypotheses(ctx.get("candidates") or self.CANDIDATES)
             return Phase.INVESTIGATE
 
         if phase is Phase.INVESTIGATE:

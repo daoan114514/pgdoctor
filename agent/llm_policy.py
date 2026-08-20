@@ -228,7 +228,7 @@ class LLMPolicy(Policy):
         if phase is Phase.HYPOTHESIZE:
             # W6 起候选集改由故障因果图多跳遍历给出以保证覆盖率；
             # 现在先用固定枚举，模型只负责后续取证与排除。
-            st.ensure_hypotheses(self.CANDIDATES)
+            st.ensure_hypotheses(ctx.get("candidates") or self.CANDIDATES)
             return Phase.INVESTIGATE
 
         if phase is Phase.INVESTIGATE:
@@ -237,7 +237,7 @@ class LLMPolicy(Policy):
                 # 视图输出）全留在子上下文里，主上下文只收结构化裁决。
                 import asyncio as _aio
                 r = self._run(run_investigation(
-                    st, tb, self.CANDIDATES, hot,
+                    st, tb, ctx.get("candidates") or self.CANDIDATES, hot,
                     batch_size=self.batch_size, verbose=self.verbose))
                 self.orchestration = r
                 self.usage.append({"phase": "INVESTIGATE(subagents)",
@@ -254,7 +254,7 @@ class LLMPolicy(Policy):
 {hot}
 
 请逐条调查下列假设，每条都要用工具取证，然后用 set_hypothesis 记录裁决：
-{chr(10).join('  - ' + c for c in self.CANDIDATES)}
+{chr(10).join('  - ' + c for c in (ctx.get('candidates') or self.CANDIDATES))}
 
 注意做真正的鉴别诊断：确认一个的同时也要排除其他的。"""
             self._run(self._ask(prompt, tb, phase))

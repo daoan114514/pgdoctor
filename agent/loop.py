@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
+from agent import esc as esc_mod
 from agent.episode_state import EpisodeState, RemediationAttempt
 from agent.policy import Policy
 from agent.state_machine import Phase, PhaseViolation, StateMachine
@@ -43,6 +44,7 @@ class RunResult:
     elapsed_s: float = 0.0
     error: str = ""
     audit: dict = field(default_factory=dict)
+    esc_reports: list = field(default_factory=list)
     # 循环里 VERIFY 已经量过一次，判分应复用它而不是再测一遍：
     # 重测会拿到另一个时间窗的数据，导致"循环说恢复了、判分说没恢复"。
     final_kpi: object = None
@@ -63,7 +65,7 @@ def _symptoms(obs) -> list[str]:
 
 def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                 max_steps: int = 45, allow_repair: bool = False,
-                confirm_cb=None, quiet: bool = False
+                confirm_cb=None, quiet: bool = False, use_esc: bool = True
                 ) -> tuple[RunResult, EpisodeState]:
     st = EpisodeState(episode_id=env.episode_id, scenario_id=env.spec["id"])
     st.alert = obs.alert
@@ -75,12 +77,22 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
 
     sm = StateMachine(st, allow_repair=allow_repair)
     tb = Toolbox(env.observe(), st, sm)
+    # 候选根因由故障因果图多跳遍历给出，而不是谁凭印象列举 ——
+    # 这样覆盖率有保证，级联故障里离症状好几跳的真根因也不会被漏掉。
+    from knowledge.causal_graph import graph as _G
+    graph_symptoms = _map_symptoms(st.symptoms)
+    candidates = [c["root_cause"] for c in
+                  _G.candidate_causes(graph_symptoms, top_k=4)]
     ctx = {
         # 告警里带上慢查询本身：真实场景里 APM 会指出哪条查询在拖慢，
         # 让 agent 从零猜"哪条查询有问题"不是本项目要解决的问题。
         "hot_query": " ".join(env.spec["workload"]["hot_query"].split()),
         "symptoms": st.symptoms,
+        "candidates": candidates,
+        "graph_symptoms": graph_symptoms,
     }
+    if not quiet:
+        print(f"  [因果图] 症状 {graph_symptoms} -> 候选根因 {candidates}")
 
     t0 = time.time()
     res = RunResult(episode_id=st.episode_id, final_phase=st.phase,
@@ -104,6 +116,41 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
             # ── 策略阶段 ──────────────────────────────────
             if cur in POLICY_PHASES:
                 nxt = policy.run_phase(cur, tb, st, ctx)
+
+                # ★ 证据充分性检查：DIAGNOSE -> PLAN 之间的硬转移。
+                # 不过 ESC 就进不了 PLAN，也就永远到不了 EXECUTE ——
+                # 这是防"基于错根因动生产库"的第一道闸（第二道是安全门）。
+                if cur is Phase.DIAGNOSE and nxt is Phase.PLAN and use_esc:
+                    rep = esc_mod.check(st, candidates=ctx.get("candidates"))
+                    res.esc_reports.append(rep)
+                    log(f"  ESC          -> {rep.summary()}")
+                    for d in rep.dims:
+                        log(f"               {d.name} "
+                            f"{'PASS' if d.passed else 'FAIL'}"
+                            f"{'(必需)' if d.mandatory else ''} {d.detail}")
+                    if rep.verdict == esc_mod.ESCVerdict.SUFFICIENT.value:
+                        pass
+                    elif rep.verdict in (esc_mod.ESCVerdict.AMBIGUOUS.value,
+                                         esc_mod.ESCVerdict.EXHAUSTED.value):
+                        st.outcome_note = f"ESC {rep.verdict}: {rep.directives[:2]}"
+                        sm.goto(Phase.ESCALATE, f"esc {rep.verdict}")
+                        continue
+                    else:
+                        # INSUFFICIENT 不只是拒绝，还要指路：把缺什么证据
+                        # 变成定向取证指令，退回继续调查
+                        st.directives = rep.directives[:5]
+                        st.claimed_fault_class = None
+                        st.claimed_root_cause = None
+                        st.esc_retries = getattr(st, "esc_retries", 0) + 1
+                        for dtv in rep.directives[:3]:
+                            log(f"               补证: {dtv}")
+                        if st.esc_retries > 2:
+                            st.outcome_note = "反复取证仍不足，升级人工"
+                            sm.goto(Phase.ESCALATE, "esc exhausted")
+                        else:
+                            sm.goto(Phase.INVESTIGATE, "esc insufficient")
+                        continue
+
                 log(f"  {cur.value:<12} -> {nxt.value:<12} "
                     f"(累计 {st.budget['steps']} 步)")
                 sm.goto(nxt, f"policy={policy.name}")
@@ -265,3 +312,16 @@ def run_diagnosis(env, obs, policy, max_steps: int = 40,
                   allow_repair: bool = False, quiet: bool = False):
     return run_episode(env, obs, policy, max_steps=max_steps,
                        allow_repair=allow_repair, quiet=quiet)
+
+
+def _map_symptoms(symptoms: list[str]) -> list[str]:
+    """把人话症状描述映射成因果图的节点 id。"""
+    out = set()
+    for s in symptoms:
+        if "p99" in s or "延迟" in s:
+            out.add("latency_p99_up")
+        if "cpu" in s.lower():
+            out.add("cpu_saturated")
+        if "错误" in s:
+            out.add("throughput_down")
+    return sorted(out) or ["latency_p99_up"]

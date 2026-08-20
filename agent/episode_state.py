@@ -75,6 +75,7 @@ class EpisodeState:
     claimed_fault_class: str | None = None
     proposal: dict = field(default_factory=dict)
     repair_attempts: int = 0
+    esc_retries: int = 0
     max_repair_attempts: int = 2
     budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": 40})
     started_at: float = field(default_factory=time.time)
