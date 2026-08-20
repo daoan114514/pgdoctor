@@ -1,0 +1,89 @@
+# 故障因果知识图谱 —— 边
+#
+# 为什么必须是图而不是向量库：故障是连锁的。
+#   autovacuum 停摆 -> 死元组堆积 -> 表膨胀 + XID 逼近 -> 磁盘涨 -> 停库
+# 告警端看到的是"磁盘满"，真根因在三跳之外。向量相似度永远找不到三跳外的
+# 东西，图遍历可以。
+
+# 根因 -> 症状。likelihood 是"该根因导致此症状"的条件概率。
+causes_symptom:
+  - {from: missing_index,         to: latency_p99_up,  likelihood: 0.95}
+  - {from: missing_index,         to: cpu_saturated,   likelihood: 0.85}
+  - {from: missing_index,         to: throughput_down, likelihood: 0.60}
+  - {from: stale_statistics,      to: latency_p99_up,  likelihood: 0.85}
+  - {from: stale_statistics,      to: cpu_saturated,   likelihood: 0.60}
+  - {from: lock_contention,       to: latency_p99_up,  likelihood: 0.90}
+  - {from: lock_contention,       to: queries_blocked, likelihood: 0.95}
+  - {from: lock_contention,       to: throughput_down, likelihood: 0.80}
+  - {from: table_bloat,           to: latency_p99_up,  likelihood: 0.70}
+  - {from: table_bloat,           to: disk_growing,    likelihood: 0.85}
+  - {from: connection_exhaustion, to: throughput_down, likelihood: 0.90}
+  - {from: connection_exhaustion, to: conn_near_limit, likelihood: 0.98}
+  - {from: long_idle_transaction, to: queries_blocked, likelihood: 0.70}
+  - {from: disk_pressure,         to: disk_growing,    likelihood: 0.95}
+  - {from: xid_wraparound_risk,   to: disk_growing,    likelihood: 0.40}
+
+# 根因 -> 根因（级联）。这是图相对查找表的不可替代之处。
+causes_cause:
+  - {from: autovacuum_starvation, to: table_bloat,         likelihood: 0.85,
+     note: "死元组无人回收，表持续膨胀"}
+  - {from: autovacuum_starvation, to: xid_wraparound_risk, likelihood: 0.45,
+     note: "冻结不及时，XID 年龄持续增长"}
+  - {from: long_idle_transaction, to: autovacuum_starvation, likelihood: 0.75,
+     note: "长事务持有快照，vacuum 无法回收其后产生的死元组"}
+  - {from: table_bloat,           to: disk_pressure,       likelihood: 0.55}
+  - {from: table_bloat,           to: missing_index,       likelihood: 0.10,
+     note: "膨胀会让索引失效感知变强，但不是真因，权重低"}
+
+# 根因 <- 确认证据。necessity=required 的是硬要求：
+# 证据充分性检查的 D1 直接读这里，缺一即判 INSUFFICIENT。
+confirmed_by:
+  - {cause: missing_index,  evidence: explain_seq_scan,   necessity: required}
+  - {cause: missing_index,  evidence: index_existence,    necessity: required}
+  - {cause: missing_index,  evidence: counterfactual_index, necessity: supporting}
+  - {cause: stale_statistics, evidence: stats_freshness,  necessity: required}
+  - {cause: stale_statistics, evidence: explain_plan,     necessity: supporting}
+  - {cause: lock_contention,  evidence: lock_blocking_chain, necessity: required}
+  - {cause: lock_contention,  evidence: session_wait_profile, necessity: supporting}
+  - {cause: table_bloat,      evidence: dead_tuple_ratio, necessity: required}
+  - {cause: connection_exhaustion, evidence: connection_count, necessity: required}
+  - {cause: long_idle_transaction, evidence: session_wait_profile, necessity: required}
+  - {cause: autovacuum_starvation, evidence: stats_freshness, necessity: required}
+
+# 根因 <- 反证证据：拿到这条证据即可排除该根因
+refuted_by:
+  - {cause: stale_statistics, evidence: stats_freshness,
+     when: "last_analyze 新鲜且估计与实际行数偏差不大"}
+  - {cause: lock_contention,  evidence: lock_blocking_chain,
+     when: "阻塞链为空"}
+  - {cause: missing_index,    evidence: explain_plan,
+     when: "执行计划已走索引"}
+  - {cause: table_bloat,      evidence: dead_tuple_ratio,
+     when: "死元组占比很低"}
+  - {cause: connection_exhaustion, evidence: connection_count,
+     when: "连接数远低于上限"}
+
+# 一条证据能一次分开哪几个候选 —— 驱动"下一步查什么最划算"。
+# 取证预算有限时，优先做信息增益最大的那次查询。
+discriminates:
+  - {evidence: explain_seq_scan,
+     separates: [missing_index, stale_statistics], power: 0.8}
+  - {evidence: stats_freshness,
+     separates: [stale_statistics, missing_index, autovacuum_starvation], power: 0.9}
+  - {evidence: lock_blocking_chain,
+     separates: [lock_contention, long_idle_transaction, missing_index], power: 0.95}
+  - {evidence: index_existence,
+     separates: [missing_index, stale_statistics], power: 0.85}
+  - {evidence: dead_tuple_ratio,
+     separates: [table_bloat, autovacuum_starvation, missing_index], power: 0.8}
+  - {evidence: connection_count,
+     separates: [connection_exhaustion, lock_contention], power: 0.9}
+
+# 根因 -> 修复。risk_tier 是给安全门的先验，门仍会独立评估。
+fixed_by:
+  - {cause: missing_index,        fix: create_covering_index}
+  - {cause: stale_statistics,     fix: analyze_table}
+  - {cause: table_bloat,          fix: vacuum_table}
+  - {cause: lock_contention,      fix: terminate_blocker}
+  - {cause: long_idle_transaction, fix: terminate_blocker}
+  - {cause: autovacuum_starvation, fix: enable_autovacuum}

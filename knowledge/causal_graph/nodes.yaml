@@ -1,0 +1,118 @@
+# 故障因果知识图谱 —— 节点
+#
+# 手工种子骨架。这部分必须手工写，因为它是 ground truth 的一部分：
+# 让模型生成因果边等于让被考核者出考题。文档抽取只能用来扩充，且必须人工校验
+# —— 一条错的 CAUSES 边会系统性地毒化所有相关诊断。
+#
+# Evidence 节点的 id 必须与 Toolbox 实际产出的 evidence_type 严格一致，
+# 否则证据充分性检查无法机械核验，只能退化成看模型自述。
+
+symptoms:
+  - id: latency_p99_up
+    desc: 查询 p99 延迟显著上升
+    measured_by: p99_ms
+  - id: cpu_saturated
+    desc: CPU 占用饱和
+    measured_by: cpu_pct
+  - id: conn_near_limit
+    desc: 连接数逼近上限
+    measured_by: connections
+  - id: disk_growing
+    desc: 磁盘占用持续增长
+    measured_by: disk_pct
+  - id: queries_blocked
+    desc: 查询挂起不返回
+    measured_by: blocked_sessions
+  - id: throughput_down
+    desc: 吞吐下降
+    measured_by: qps
+
+root_causes:
+  - id: missing_index
+    desc: 缺少可用索引，谓词无法走索引导致全表扫
+    prior: 0.35
+    fix_hint: 补上覆盖该谓词的索引
+  - id: stale_statistics
+    desc: 统计信息过期，优化器选了坏计划
+    prior: 0.15
+  - id: lock_contention
+    desc: 锁等待，存在阻塞链
+    prior: 0.15
+  - id: table_bloat
+    desc: 表膨胀，死元组堆积导致扫描变慢
+    prior: 0.12
+  - id: autovacuum_starvation
+    desc: autovacuum 跟不上或被关闭
+    prior: 0.08
+  - id: connection_exhaustion
+    desc: 连接池打满，新连接被拒
+    prior: 0.08
+  - id: long_idle_transaction
+    desc: 长事务 idle in transaction，挡住 vacuum 与其他会话
+    prior: 0.07
+  - id: xid_wraparound_risk
+    desc: 事务 ID 逼近回卷上限，属灾难级
+    prior: 0.02
+  - id: disk_pressure
+    desc: 磁盘空间不足
+    prior: 0.03
+
+# 证据类型 —— id 与 Toolbox 的 evidence_type 一一对应
+evidence:
+  - id: explain_seq_scan
+    desc: EXPLAIN 显示 Seq Scan 且过滤掉大量行
+    obtained_by: explain_query
+  - id: explain_plan
+    desc: EXPLAIN 显示走了索引
+    obtained_by: explain_query
+  - id: index_existence
+    desc: pg_indexes 上是否存在可覆盖该谓词的索引
+    obtained_by: get_indexes
+  - id: stats_freshness
+    desc: last_analyze 是否新鲜，以及估计行数与实际行数的偏差
+    obtained_by: get_table_stats
+  - id: lock_blocking_chain
+    desc: pg_locks 阻塞链，谁挡住了谁
+    obtained_by: get_blocking_chain
+  - id: session_wait_profile
+    desc: 活动会话的等待事件分布
+    obtained_by: get_active_sessions
+  - id: slow_query_ranking
+    desc: pg_stat_statements 里按累计耗时排序的慢查询
+    obtained_by: get_top_queries
+  - id: counterfactual_index
+    desc: hypopg 模拟索引后优化器是否改用它、成本降幅多少
+    obtained_by: simulate_index
+  - id: dead_tuple_ratio
+    desc: 死元组占比
+    obtained_by: get_table_stats
+  - id: connection_count
+    desc: 当前连接数与上限
+    obtained_by: get_active_sessions
+
+fixes:
+  - id: create_covering_index
+    action_type: create_index
+    risk_tier: CONFIRM
+    template: "CREATE INDEX CONCURRENTLY {name} ON {table}({cols})"
+    rollback: "DROP INDEX CONCURRENTLY {name}"
+  - id: analyze_table
+    action_type: vacuum_analyze
+    risk_tier: AUTO
+    template: "ANALYZE {table}"
+    rollback: "SELECT 1"
+  - id: vacuum_table
+    action_type: vacuum_analyze
+    risk_tier: CONFIRM
+    template: "VACUUM ANALYZE {table}"
+    rollback: "SELECT 1"
+  - id: terminate_blocker
+    action_type: session_control
+    risk_tier: CONFIRM
+    template: "SELECT pg_terminate_backend({pid})"
+    rollback: "SELECT 1"
+  - id: enable_autovacuum
+    action_type: alter_table_options
+    risk_tier: CONFIRM
+    template: "ALTER TABLE {table} SET (autovacuum_enabled = true)"
+    rollback: "ALTER TABLE {table} SET (autovacuum_enabled = false)"
