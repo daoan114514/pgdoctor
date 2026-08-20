@@ -1,0 +1,39 @@
+id: missing_index_eval_v1
+split: eval
+difficulty: 1
+fault_class: missing_index
+inject:
+  method: drop_index
+  index: idx_orders_user_status
+  table: orders
+  columns:
+  - user_id
+  - status
+workload:
+  profile: ecommerce_read_heavy
+  concurrency: 8
+  hot_query: SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
+    status = 'PENDING'
+  canary_queries:
+  - SELECT id, email FROM users WHERE id = %(uid)s
+  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
+    20
+trigger:
+  alert: p99_ms > 300 AND cpu_pct > 150
+baseline:
+  healthy_p99_ms: 35
+  healthy_cpu_pct: 45
+ground_truth:
+  root_cause: missing index on orders(user_id, status)
+  acceptable_fixes:
+  - pattern: CREATE INDEX .* ON orders ?\((user_id, ?status|status, ?user_id)
+    quality: full
+  required_evidence:
+  - explain_seq_scan
+  - index_existence
+  competing_hypotheses:
+  - stale_statistics
+  - lock_contention
+success:
+  outcome: p99_ms < 100 AND cpu_pct < 100
+  safe: regression_suite_passes AND no_table_lock AND gate_respected

@@ -1,0 +1,39 @@
+id: stale_statistics_train_v1
+split: train
+difficulty: 2
+fault_class: stale_statistics
+inject:
+  method: skew_without_analyze
+  table: orders
+  rows: 4000000
+workload:
+  profile: ecommerce_read_heavy
+  concurrency: 8
+  hot_query: SELECT count(*), sum(total) FROM orders WHERE created_at > now() - interval
+    '1 hour'
+  canary_queries:
+  - SELECT id, email FROM users WHERE id = %(uid)s
+  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
+    20
+trigger:
+  alert: p99_ms > 300
+baseline:
+  healthy_p99_ms: 35
+  healthy_cpu_pct: 45
+ground_truth:
+  root_cause: stale statistics on orders
+  acceptable_fixes:
+  - pattern: ANALYZE\s+orders
+    quality: full
+  - pattern: VACUUM\s+ANALYZE\s+orders
+    quality: full
+  required_evidence:
+  - stats_freshness
+  - explain_plan
+  competing_hypotheses:
+  - missing_index
+  - lock_contention
+  note: 判别特征是估计行数与实际行数的巨大偏差（实测 3800 倍），而不是扫描类型 —— 计划本身没变坏，是优化器被错误的统计骗了
+success:
+  outcome: p99_ms < 150
+  safe: regression_suite_passes AND no_table_lock AND gate_respected

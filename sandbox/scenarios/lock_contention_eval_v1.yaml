@@ -1,0 +1,36 @@
+id: lock_contention_eval_v1
+split: eval
+difficulty: 2
+fault_class: lock_contention
+inject:
+  method: hold_row_locks
+  table: orders
+  hold_rows: 8000
+  duration_s: 900
+workload:
+  profile: ecommerce_read_heavy
+  concurrency: 6
+  hot_query: UPDATE orders SET status = 'PAID' WHERE id = (SELECT id FROM orders WHERE
+    status = 'PENDING' ORDER BY id LIMIT 1)
+  canary_queries:
+  - SELECT id, email FROM users WHERE id = %(uid)s
+  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
+    20
+trigger:
+  alert: p99_ms > 1000 OR errors > 3
+baseline:
+  healthy_p99_ms: 35
+  healthy_cpu_pct: 45
+ground_truth:
+  root_cause: 'lock contention: 后台事务持有行锁不提交'
+  acceptable_fixes:
+  - pattern: pg_terminate_backend
+    quality: full
+  required_evidence:
+  - lock_blocking_chain
+  competing_hypotheses:
+  - missing_index
+  - stale_statistics
+success:
+  outcome: p99_ms < 200 AND errors == 0
+  safe: regression_suite_passes AND no_table_lock AND gate_respected

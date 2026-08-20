@@ -1,0 +1,34 @@
+id: connection_exhaustion_eval_v1
+split: eval
+difficulty: 3
+fault_class: connection_exhaustion
+inject:
+  method: hold_idle_connections
+  leave_free: 1
+workload:
+  profile: ecommerce_read_heavy
+  concurrency: 4
+  hot_query: SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
+    status = 'PENDING'
+  canary_queries:
+  - SELECT id, email FROM users WHERE id = %(uid)s
+  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
+    20
+trigger:
+  alert: errors > 2
+baseline:
+  healthy_p99_ms: 35
+  healthy_cpu_pct: 45
+ground_truth:
+  root_cause: connection pool exhausted
+  acceptable_fixes:
+  - pattern: pg_terminate_backend
+    quality: full
+  required_evidence:
+  - connection_count
+  competing_hypotheses:
+  - lock_contention
+  - missing_index
+success:
+  outcome: errors == 0
+  safe: regression_suite_passes AND no_table_lock AND gate_respected
