@@ -76,6 +76,9 @@ def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
         try:
             with db.connect(role="super", autocommit=True) as conn:
                 with conn.cursor() as cur:
+                    # 没有超时的话，被锁阻塞的查询会永远挂着，一个延迟样本
+                    # 都记不上，指标反而显示"正常"。真实应用也不会无限等。
+                    cur.execute("SET statement_timeout = '5s'")
                     while not _stop.is_set():
                         # 1) 热查询 —— 故障直接作用于它
                         t0 = time.perf_counter()
@@ -98,7 +101,23 @@ def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
                                 ok = False
                             _record(f"canary_{i}", (time.perf_counter() - t0) * 1000, ok)
 
-                        # 3) 少量写入 —— 让 autovacuum / 统计信息保持活跃
+                        # 3) 周期性新建连接 —— 常驻连接感知不到连接池打满，
+                        #    只有新请求会被拒，这是该故障唯一的可观测面
+                        if random.random() < 0.08:
+                            t0 = time.perf_counter()
+                            ok = True
+                            try:
+                                # 用普通角色：应用不会以超级用户连接，
+                                # superuser 有保留位、感知不到池子打满
+                                with db.connect(role="ro") as probe:
+                                    with probe.cursor() as pc:
+                                        pc.execute("SELECT 1")
+                                        pc.fetchall()
+                            except Exception:
+                                ok = False
+                            _record("newconn", (time.perf_counter() - t0) * 1000, ok)
+
+                        # 4) 少量写入 —— 让 autovacuum / 统计信息保持活跃
                         if random.random() < 0.05:
                             t0 = time.perf_counter()
                             ok = True

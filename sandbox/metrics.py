@@ -61,14 +61,25 @@ def read_workload(max_age_s: float = 15.0, kind: str = "hot") -> dict:
     return q
 
 
-def collect(kind: str = "hot") -> KPI:
+def collect(kind: str = "hot", include_all_errors: bool = True) -> KPI:
     w = read_workload(kind=kind)
+    # 错误要跨查询类型聚合：连接池打满时热查询走的是常驻连接、完全正常，
+    # 错误全部出在新建连接探针上。只看一类就会漏掉整类故障。
+    err = int(w.get("errors", 0))
+    if include_all_errors:
+        try:
+            import json as _json
+            d = _json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+            err = sum(int(v.get("errors", 0))
+                      for v in d.get("by_query", {}).values())
+        except Exception:
+            pass
     return KPI(
         p50_ms=float(w.get("p50_ms", 0.0)),
         p95_ms=float(w.get("p95_ms", 0.0)),
         p99_ms=float(w.get("p99_ms", 0.0)),
         qps=float(w.get("qps", 0.0)),
-        errors=int(w.get("errors", 0)),
+        errors=err,
         cpu_pct=container_cpu_pct(),
         samples=int(w.get("n", 0)),
         stale=bool(w.get("_stale", True)),
