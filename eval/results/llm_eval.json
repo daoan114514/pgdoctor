@@ -1,0 +1,101 @@
+{
+  "tag": "llm_eval",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 1716.1,
+  "episodes": [
+    {
+      "scenario": "connection_exhaustion_eval_v1",
+      "fault_class": "connection_exhaustion",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 11,
+      "elapsed_s": 227.8,
+      "cost_usd": 0.3251,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_connection_exhaustion_eval_v1_1787210991"
+    },
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": "missing_index",
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 8,
+      "elapsed_s": 144.9,
+      "cost_usd": 0.2063,
+      "esc_verdicts": [
+        "AMBIGUOUS"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_lock_contention_eval_v1_1787211291"
+    },
+    {
+      "scenario": "missing_index_eval_v1",
+      "fault_class": "missing_index",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "REPORT",
+      "claimed": "missing_index",
+      "diagnosis": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 17,
+      "elapsed_s": 350.9,
+      "cost_usd": 0.4149,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "applied_sql": [
+        "CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id, status)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_missing_index_eval_v1_1787211503"
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 21,
+      "elapsed_s": 637.9,
+      "cost_usd": 0.816,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "INSUFFICIENT",
+        "INSUFFICIENT"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_stale_statistics_eval_v1_1787211910"
+    }
+  ]
+}
