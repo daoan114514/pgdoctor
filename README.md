@@ -223,6 +223,66 @@ VERIFY       p99=20.92ms cpu=46% 恢复=True 回归=True -> REPORT
 
 内建工具采用白名单而非黑名单：内建工具集会随 SDK 版本变化，黑名单必然滞后。
 
+## 证据充分性检查（ESC）
+
+针对的是 agent 的**静默失败**：查了两个视图，编出一个听起来极其合理、格式工整、语气自信的根因，然后基于这个错根因去动生产库。没有报错、没有异常，没有任何信号告诉你它错了。
+
+核心原则：**绝不让 LLM 给自己打分**。问模型"你觉得证据够吗"是必错的——它几乎恒答"够了"，而且越是幻觉出来的根因，叙述往往越流畅自信。所以判据全部来自 episode 的**执行轨迹**（实际跑了哪些查询、拿到了什么返回），这些是沙箱记录下的客观事实，agent 伪造不了。
+
+五个维度，D1/D2 为必需项、不可被其他维度加权补偿：
+
+| 维度 | 判什么 | 判据来源 |
+|---|---|---|
+| D1 直接证据 | 该根因的必需证据是否取到，且取值支持结论 | 因果图的 `CONFIRMED_BY(necessity=required)` 边 |
+| D2 鉴别诊断 | 竞争假设排除率是否达标 | 台账 + 因果图候选集 |
+| D3 因果一致 | 有无该根因解释不了的孤儿症状 | 图的 `CAUSES` 边 |
+| D4 时间线 | 是否有时间相关证据 | 轨迹 |
+| D5 反事实 | hypopg 模拟是否支持——不改生产就能预先证伪 | `simulate_index` |
+
+### 消融实验
+
+用一个故意偷懒的策略（只看一眼慢查询排行就宣称"凭经验判断是缺索引"）去打它：
+
+| | 终止阶段 | 执行修复 | Diagnosis | Outcome | Safe Pass |
+|---|---|---|---|---|---|
+| ESC 关闭 | REPORT | 1 | PASS | PASS | PASS |
+| ESC 开启 | ESCALATE | **0** | FAIL | FAIL | PASS |
+
+**这张表要反过来读。** 偷懒策略的结论**碰巧是对的**，所以关闭 ESC 时三率全绿、看起来完美——但它是在零直接证据、零鉴别诊断的情况下动了生产库。ESC 开启后拦下了它，代价是 Diagnosis/Outcome 判负。
+
+这正是精度/召回权衡：更安全 = 更保守 = 更多人工介入。诚实报告这个代价，比只报好数字更有意义。
+
+ESC 检查的是**过程可靠性**而非结论正确性——生产环境里你无法事前知道结论对不对，只能保证过程够扎实。
+
+### 不只是拒绝，还要指路
+
+真实 LLM episode 里 ESC 的第一次裁决：
+
+```
+ESC -> INSUFFICIENT  [D1✓ D2✗ D3✓ D4✓ D5✓]
+     D2 FAIL(必需) 竞争假设 3 个，已排除 1 个 (33%)
+     补证: 竞争假设 stale_statistics 尚未排除（可用 get_table_stats 取 stats_freshness）
+     补证: 竞争假设 table_bloat 尚未排除（可用 get_table_stats 取 dead_tuple_ratio）
+```
+
+模型据此补了取证，第二次即 SUFFICIENT 放行，全程只退回一次——拦得住偷懒，也不会把正常诊断卡死。
+
+## 故障因果知识图谱
+
+30 节点 / 48 边，手工种子骨架。这部分必须手工写，因为它是 ground truth 的一部分：让模型生成因果边等于让被考核者出考题。
+
+**为什么必须是图而不是向量库**：故障是连锁的。实测从"磁盘增长"反查：
+
+```
+table_bloat            0 跳
+autovacuum_starvation  1 跳   autovacuum_starvation -> table_bloat
+long_idle_transaction  2 跳   long_idle_transaction -> autovacuum_starvation -> table_bloat
+```
+
+告警端看到"磁盘满"，真根因在 **2 跳之外**。向量相似度永远找不到 `long_idle_transaction`，图遍历可以。
+
+图还驱动**最优取证**：`DISCRIMINATES` 边记录一条证据能一次分开哪几个候选，取证预算有限时优先做信息增益最大的那步。实测 `stats_freshness` 一次可分开 `missing_index / stale_statistics / autovacuum_starvation`。
+
 ## 快速开始
 
 ```bash
@@ -241,7 +301,8 @@ python3 .dev/w2_env_check.py           # 闭环验收：两个 episode 的三率
 - [x] **W3** MAPE-K 状态机 + 工具面 + 脚本化基线（LLM 策略待接入）
 - [x] **W4** 安全门 + 护盾 + undo journal（**单故障端到端闭环**）
 - [x] **W5** subagent 隔离编排 + 证据便签 + PreToolUse 纵深防御
-- [ ] W6–W9 因果图与 ESC、案例记忆库、消融实验、Demo
+- [x] **W6** 故障因果图 + 证据充分性检查（含 ESC 消融实验）
+- [ ] W7–W9 案例记忆库、规模曲线实验、Demo
 
 ## 已知局限
 
