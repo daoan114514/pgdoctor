@@ -47,6 +47,32 @@ def _confirm(p, d):
     return True
 
 
+def _already_valid(policy: str) -> set[str]:
+    """历史跑批里已经拿到有效结果的场景。
+
+    额度有限时要能跨多个窗口拼出一次完整实验，所以先跑还没结果的。
+    """
+    import json as _json
+    done: set[str] = set()
+    if not RESULTS.exists():
+        return done
+    for f in RESULTS.glob("*.json"):
+        try:
+            d = _json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if d.get("policy") != policy:
+            continue
+        for e in d.get("episodes", []):
+            low = (e.get("error") or "").lower()
+            dead = ("modelunavailable" in low
+                    or "error result: success" in low
+                    or not e.get("fired"))
+            if not dead:
+                done.add(e["scenario"])
+    return done
+
+
 def _model_reachable() -> bool:
     """跑批前的探针：花几分钱确认模型可用，胜过烧半小时产出一堆废数据。"""
     import asyncio
@@ -181,6 +207,9 @@ def main() -> None:
     ap.add_argument("--no-repair", action="store_true")
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--tag", default="")
+    ap.add_argument("--order", default="name",
+                    choices=["name", "reverse", "pending"],
+                    help="pending=优先跑历史结果里还没有效数据的场景")
     args = ap.parse_args()
 
     scen_dir = ROOT / "sandbox" / "scenarios"
@@ -192,6 +221,14 @@ def main() -> None:
         if args.faults and d["fault_class"] not in args.faults.split(","):
             continue
         picks.append(p)
+
+    if args.order == "reverse":
+        picks.reverse()
+    elif args.order == "pending":
+        done = _already_valid(args.policy)
+        picks.sort(key=lambda q: (q.stem in done, q.stem))
+        if done:
+            print(f"已有有效结果的场景排到最后: {sorted(done)}")
 
     tag = args.tag or f"{args.policy}_{args.split}"
     if args.no_esc:
