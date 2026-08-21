@@ -35,6 +35,21 @@ from agent.state_machine import ALLOWED_TOOLS, Phase
 from agent.toolbox import Toolbox
 
 MODEL = os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5")
+
+
+class ModelUnavailable(RuntimeError):
+    """模型调不通（额度、限流、网络），与"模型答错了"是两回事。
+
+    必须区分：前者该把 episode 判为不可用，后者才是实验数据。
+    混在一起的话，一次额度耗尽会让整轮实验静默变成 0/4。
+    """
+
+
+# 额度/限流的特征串。cost=$0 且立刻失败是最可靠的旁证。
+_UNAVAILABLE_HINTS = (
+    "error result: success", "usage limit", "rate limit",
+    "quota", "overloaded", "429", "exceeded",
+)
 SERVER = "pgdoctor"
 
 
@@ -87,6 +102,11 @@ def _build_tools(tb: Toolbox) -> list:
 
         tool("get_blocking_chain", "锁阻塞链：谁挡住了谁", {})(
             wrap(lambda a: tb.get_blocking_chain())),
+
+        tool("get_connection_stats",
+             "连接数与上限、按状态与角色的分布，以及 idle in transaction 数量",
+             {})(
+            wrap(lambda a: tb.get_connection_stats())),
 
         tool("simulate_index", "用 hypopg 建假设索引并对比执行计划成本。"
              "不会真正修改数据库，可在动手前证伪一个缺索引判断",
@@ -151,6 +171,7 @@ class LLMPolicy(Policy):
         self.orchestration = None
         self.usage: list[dict] = []
         self.blocked: list[str] = []
+        self.unavailable_hits = 0
 
     # ── SDK 调用 ─────────────────────────────────────────
     @staticmethod
@@ -183,6 +204,28 @@ class LLMPolicy(Policy):
         )
 
         text: list[str] = []
+        try:
+            return await self._drain(prompt, opts, phase, text)
+        except Exception as exc:
+            # 先重试一次：部分失败确实是瞬时的
+            if self.verbose:
+                print(f"      [{phase.value}] 调用失败，重试一次: "
+                      f"{str(exc)[:80]}")
+            await asyncio.sleep(8)
+            try:
+                text = []
+                return await self._drain(prompt, opts, phase, text)
+            except Exception as exc2:
+                msg = f"{exc2}".lower()
+                self.unavailable_hits += 1
+                if any(h in msg for h in _UNAVAILABLE_HINTS):
+                    # 连续两次都是这个特征 -> 判为模型不可用而非答错，
+                    # 让跑批把该 episode 标成不可用
+                    raise ModelUnavailable(
+                        f"模型调用不可用（疑似额度或限流）: {exc2}") from exc2
+                raise
+
+    async def _drain(self, prompt: str, opts, phase, text: list[str]) -> str:
         async for msg in query(prompt=self._stream(prompt), options=opts):
             if isinstance(msg, AssistantMessage):
                 for b in msg.content:

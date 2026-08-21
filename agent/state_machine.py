@@ -32,6 +32,7 @@ class Phase(str, Enum):
 READ_TOOLS = {
     "explain_query", "get_active_sessions", "get_top_queries",
     "get_blocking_chain", "get_table_stats", "get_indexes",
+    "get_connection_stats",
     "simulate_index", "fetch_raw",
 }
 REASON_TOOLS = {"note_evidence", "set_hypothesis", "declare_root_cause"}

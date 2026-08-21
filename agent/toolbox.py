@@ -62,6 +62,22 @@ class Toolbox:
             f"{d.total_time_ms}ms, {scan}, Rows Removed by Filter="
             f"{d.rows_removed_by_filter:,}, 用到索引={d.indexes_used or '无'}",
             bears_on=["missing_index", "stale_statistics"])
+
+        # 估计与实际行数的偏差单独记一条：它是统计过期的判别特征，
+        # 混在执行计划摘要里容易被忽略（实测子 agent 只看了 last_analyze
+        # 时间戳就把 stale_statistics 判成 REFUTED，而同一次取证里
+        # 偏差高达 4200 倍）。
+        worst = 0.0
+        for est, act in (d.rows_est_vs_actual or []):
+            if est > 0 and act > 0:
+                worst = max(worst, max(est / act, act / est))
+        if worst > 0:
+            self._evidence(
+                "row_estimate_deviation", d.raw_ref,
+                f"估计与实际行数最大偏差 {worst:.0f} 倍 "
+                f"(明细 {d.rows_est_vs_actual[:3]})；"
+                f"偏差 >10 倍通常意味着统计信息失真",
+                bears_on=["stale_statistics"])
         return asdict(d)
 
     def get_indexes(self, table: str = "orders") -> list[dict]:
@@ -109,6 +125,18 @@ class Toolbox:
                        bears_on=["lock_contention"])
         return rows
 
+    def get_connection_stats(self) -> dict:
+        self._enter("get_connection_stats")
+        r = self.o.get_connection_stats()
+        self._evidence(
+            "connection_count", "",
+            f"连接 {r['used']}/{r['max_connections']} ({r['pct']}%), "
+            f"逼近上限={r['near_limit']}, "
+            f"idle in transaction={r['idle_in_transaction']}, "
+            f"按角色={r['by_user']}",
+            bears_on=["connection_exhaustion", "long_idle_transaction"])
+        return r
+
     def simulate_index(self, create_sql: str, test_sql: str,
                        params: dict | None = None) -> dict:
         """反事实验证：不改生产就能预先证伪一个"缺索引"的判断。"""
@@ -133,6 +161,12 @@ class Toolbox:
         v = Verdict(verdict)
         if v is Verdict.REFUTED_BY_REMEDIATION:
             raise ValueError("该裁决只能由修复失败产生，不能由 agent 直接声明")
+        if v is Verdict.CONFIRMED and len(note.strip()) < 15:
+            # 确认一个假设必须给出依据。实测出现过 verdict=CONFIRMED
+            # 而 note 为空的情况，等于凭空确认，会直接把 ESC 的 D2
+            # 推向 AMBIGUOUS。
+            raise ValueError(
+                f"确认 {name} 必须在 note 里给出证据依据（当前为空或过短）")
         cur = self.st.ledger.get(name)
         if cur and cur.verdict == Verdict.REFUTED_BY_REMEDIATION.value:
             # 否则重新调查一轮就能把修复反证覆盖掉，无限重试循环又回来了

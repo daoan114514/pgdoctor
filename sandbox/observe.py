@@ -180,6 +180,32 @@ class Observer:
                           json.dumps(out, ensure_ascii=False), {"n": len(out)})
         return out
 
+    def get_connection_stats(self) -> dict:
+        """连接数与上限、按状态与角色的分布。
+
+        连接打满时会话大多是 idle，用 get_active_sessions 看不出问题 ——
+        必须直接看总数与上限的关系，以及谁占着这些连接。
+        """
+        maxc = int(db.query("SHOW max_connections", role="ro")[0][0])
+        rows = db.query(
+            "SELECT coalesce(usename,'?'), coalesce(state,'?'), count(*) "
+            "FROM pg_stat_activity GROUP BY 1,2 ORDER BY 3 DESC", role="ro")
+        total = sum(r[2] for r in rows)
+        by_user: dict[str, int] = {}
+        by_state: dict[str, int] = {}
+        for u, st_, n in rows:
+            by_user[u] = by_user.get(u, 0) + n
+            by_state[st_] = by_state.get(st_, 0) + n
+        idle_in_tx = by_state.get("idle in transaction", 0)
+        out = {"used": total, "max_connections": maxc,
+               "pct": round(total / max(maxc, 1) * 100, 1),
+               "by_user": by_user, "by_state": by_state,
+               "idle_in_transaction": idle_in_tx,
+               "near_limit": total >= maxc * 0.85}
+        self.trace.record("get_connection_stats", {},
+                          json.dumps(out, ensure_ascii=False), out)
+        return out
+
     def simulate_index(self, create_sql: str, test_sql: str,
                        params: dict | None = None) -> dict:
         """hypopg 假设索引：不改生产就能预先证伪一个缺索引的判断。ESC 的 D5。"""
