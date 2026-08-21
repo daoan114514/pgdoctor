@@ -69,8 +69,12 @@ evidence:
     desc: pg_indexes 上是否存在可覆盖该谓词的索引
     obtained_by: get_indexes
   - id: stats_freshness
-    desc: last_analyze 是否新鲜，以及估计行数与实际行数的偏差
+    desc: last_analyze 是否新鲜
     obtained_by: get_table_stats
+  - id: row_estimate_deviation
+    desc: EXPLAIN 里估计行数与实际行数的偏差倍数。统计过期的真正判别
+      特征 —— 时间戳"看着新"也可能因为刚灌过数据而严重失真
+    obtained_by: explain_query
   - id: lock_blocking_chain
     desc: pg_locks 阻塞链，谁挡住了谁
     obtained_by: get_blocking_chain
@@ -86,9 +90,12 @@ evidence:
   - id: dead_tuple_ratio
     desc: 死元组占比
     obtained_by: get_table_stats
+  - id: idle_in_transaction
+    desc: 处于 idle in transaction 的会话数
+    obtained_by: get_connection_stats
   - id: connection_count
-    desc: 当前连接数与上限
-    obtained_by: get_active_sessions
+    desc: 当前连接数与上限、按状态与角色的分布
+    obtained_by: get_connection_stats
 
 fixes:
   - id: create_covering_index

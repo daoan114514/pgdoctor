@@ -19,6 +19,7 @@ causes_symptom:
   - {from: table_bloat,           to: disk_growing,    likelihood: 0.85}
   - {from: connection_exhaustion, to: throughput_down, likelihood: 0.90}
   - {from: connection_exhaustion, to: conn_near_limit, likelihood: 0.98}
+  - {from: connection_exhaustion, to: latency_p99_up,  likelihood: 0.55}
   - {from: long_idle_transaction, to: queries_blocked, likelihood: 0.70}
   - {from: disk_pressure,         to: disk_growing,    likelihood: 0.95}
   - {from: xid_wraparound_risk,   to: disk_growing,    likelihood: 0.40}
@@ -41,19 +42,22 @@ confirmed_by:
   - {cause: missing_index,  evidence: explain_seq_scan,   necessity: required}
   - {cause: missing_index,  evidence: index_existence,    necessity: required}
   - {cause: missing_index,  evidence: counterfactual_index, necessity: supporting}
-  - {cause: stale_statistics, evidence: stats_freshness,  necessity: required}
-  - {cause: stale_statistics, evidence: explain_plan,     necessity: supporting}
+  # 统计过期的判别特征是估计与实际的偏差，不是时间戳。实测偏差 4200 倍
+  # 而 last_analyze 看着是新的（刚灌完数据、autovacuum 被关）。
+  - {cause: stale_statistics, evidence: row_estimate_deviation, necessity: required}
+  - {cause: stale_statistics, evidence: stats_freshness,  necessity: supporting}
   - {cause: lock_contention,  evidence: lock_blocking_chain, necessity: required}
   - {cause: lock_contention,  evidence: session_wait_profile, necessity: supporting}
   - {cause: table_bloat,      evidence: dead_tuple_ratio, necessity: required}
   - {cause: connection_exhaustion, evidence: connection_count, necessity: required}
   - {cause: long_idle_transaction, evidence: session_wait_profile, necessity: required}
+  - {cause: long_idle_transaction, evidence: idle_in_transaction, necessity: required}
   - {cause: autovacuum_starvation, evidence: stats_freshness, necessity: required}
 
 # 根因 <- 反证证据：拿到这条证据即可排除该根因
 refuted_by:
-  - {cause: stale_statistics, evidence: stats_freshness,
-     when: "last_analyze 新鲜且估计与实际行数偏差不大"}
+  - {cause: stale_statistics, evidence: row_estimate_deviation,
+     when: "估计与实际行数偏差不大"}
   - {cause: lock_contention,  evidence: lock_blocking_chain,
      when: "阻塞链为空"}
   - {cause: missing_index,    evidence: explain_plan,

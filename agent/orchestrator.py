@@ -23,10 +23,13 @@ BRIEFS = {
         "查询是否因缺少可用索引而全表扫。看 EXPLAIN 的扫描类型与 "
         "Rows Removed by Filter，并核对表上现有索引能否覆盖该谓词。",
     "stale_statistics":
-        "优化器是否因统计信息过期而选了坏计划。看 last_analyze 是否陈旧，"
-        "以及 EXPLAIN 里估计行数与实际行数的偏差。",
+        "优化器是否因统计信息过期而选了坏计划。**判别特征是 EXPLAIN 里"
+        "估计行数与实际行数的偏差倍数**，不是 last_analyze 时间戳 —— "
+        "刚灌过数据时时间戳可能看着很新，但统计早已失真。偏差超过 10 倍"
+        "就应当确认该假设。",
     "lock_contention":
-        "是否存在锁等待。看 pg_locks 的阻塞链与会话的 wait_event。",
+        "是否存在锁等待。看 pg_locks 的阻塞链与会话的 wait_event。"
+        "阻塞链非空或出现 Lock:* 等待事件即可确认，不需要看执行计划。",
     "table_bloat":
         "表是否严重膨胀。看死元组占比与表实际大小。",
     "connection_exhaustion":
