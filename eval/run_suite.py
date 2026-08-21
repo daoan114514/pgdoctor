@@ -39,10 +39,43 @@ class EpisodeOutcome:
     violations: list = field(default_factory=list)
     error: str = ""
     episode_id: str = ""
+    # 模型调不通导致的作废，与"没诊断出来"必须分开统计
+    unusable: bool = False
 
 
 def _confirm(p, d):
     return True
+
+
+def _model_reachable() -> bool:
+    """跑批前的探针：花几分钱确认模型可用，胜过烧半小时产出一堆废数据。"""
+    import asyncio
+
+    from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+
+    async def probe() -> bool:
+        import os
+        env = {k: os.environ[k] for k in
+               ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy",
+                "no_proxy") if k in os.environ}
+        opts = ClaudeAgentOptions(
+            model=os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5"),
+            system_prompt="只回一个数字。", max_turns=1,
+            permission_mode="bypassPermissions", setting_sources=None,
+            env=env)
+        try:
+            async for m in query(prompt="回复 1", options=opts):
+                if isinstance(m, ResultMessage):
+                    return True
+        except Exception as exc:
+            print(f"  探针失败: {str(exc)[:120]}")
+            return False
+        return True
+
+    print("探测模型可用性 ...", flush=True)
+    okp = asyncio.run(probe())
+    print(f"  模型可用: {okp}")
+    return okp
 
 
 def _settle(max_wait: float = 60.0) -> None:
@@ -113,6 +146,11 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
             out.violations = res.violations
             out.error = res.error
             out.episode_id = res.episode_id
+            # run_episode 会把异常吞进 res.error，所以要在这里判，
+            # 否则额度耗尽的 episode 会被当成"模型没诊断出来"计入分母
+            low = (res.error or "").lower()
+            if "modelunavailable" in low or "error result: success" in low:
+                out.unusable = True
             out.cost_usd = round(
                 sum((u.get("cost_usd") or 0.0)
                     for u in getattr(policy, "usage", [])), 4)
@@ -123,7 +161,11 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 cs.write_case(st, score, spec, res.applied_sql)
     except Exception as exc:
         out.error = f"{type(exc).__name__}: {exc}"
-        traceback.print_exc()
+        if type(exc).__name__ == "ModelUnavailable" or \
+                "error result: success" in str(exc).lower():
+            out.unusable = True
+        else:
+            traceback.print_exc()
     return out
 
 
@@ -157,6 +199,13 @@ def main() -> None:
     if args.no_cases:
         tag += "_nocases"
 
+    # 跑批前先探一次模型是否可用，避免烧掉几十分钟才发现额度没了
+    if args.policy == "llm":
+        if not _model_reachable():
+            print("模型当前不可用（额度或限流），跑批中止 —— "
+                  "现在跑只会产出一堆作废的 episode")
+            raise SystemExit(2)
+
     print(f"跑批 {tag}: {len(picks)} 个场景 "
           f"(ESC={'off' if args.no_esc else 'on'}, "
           f"cases={'off' if args.no_cases else 'on'})")
@@ -181,10 +230,17 @@ def main() -> None:
          "episodes": [asdict(r) for r in results]},
         ensure_ascii=False, indent=2), encoding="utf-8")
 
-    usable = [r for r in results if r.fired]
+    usable = [r for r in results if r.fired and not r.unusable]
+    dead = [r for r in results if r.unusable]
     n = max(len(usable), 1)
     print(f"\n=== {tag} ===")
     print(f"可用 episode: {len(usable)}/{len(results)}")
+    if dead:
+        print(f"!! {len(dead)} 个 episode 因模型调不通作废（额度/限流），"
+              f"不计入三率：{[r.fault_class for r in dead]}")
+        print("   这类失败不是模型能力问题，混进统计会让整轮实验失真")
+    if dead:
+        print(f"   （三率仅基于 {len(usable)} 个有效 episode 计算）")
     print(f"Diagnosis {sum(r.diagnosis for r in usable)}/{n}  "
           f"Outcome {sum(r.outcome for r in usable)}/{n}  "
           f"SafePass {sum(r.safe_pass for r in usable)}/{n}")
