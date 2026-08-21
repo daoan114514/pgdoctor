@@ -41,14 +41,47 @@ SUB_DENIED = {"set_hypothesis", "declare_root_cause", "submit_proposal"}
 # 上一轮给了全部 8 个，结果子 agent 把 turn 全耗在逐个检索工具 schema 上，
 # 撞到 max_turns 时还没来得及汇报裁决。窄工具集不只是安全考虑，
 # 也直接决定它能不能在预算内把活干完。
-TOOLSETS: dict[str, list[str]] = {
+DEFAULT_TOOLSET = ["explain_query", "get_indexes", "get_table_stats"]
+
+# 手工兜底：图里查不到时用。正常路径是从因果图推导。
+FALLBACK_TOOLSETS: dict[str, list[str]] = {
     "missing_index": ["explain_query", "get_indexes", "simulate_index"],
     "stale_statistics": ["get_table_stats", "explain_query"],
     "lock_contention": ["get_blocking_chain", "get_active_sessions"],
     "table_bloat": ["get_table_stats"],
-    "connection_exhaustion": ["get_active_sessions"],
+    "connection_exhaustion": ["get_connection_stats", "get_active_sessions"],
+    "long_idle_transaction": ["get_active_sessions", "get_connection_stats"],
+    "autovacuum_starvation": ["get_table_stats"],
 }
-DEFAULT_TOOLSET = ["explain_query", "get_indexes", "get_table_stats"]
+
+
+def toolset_for(hypothesis: str) -> list[str]:
+    """从因果图推导该假设需要哪些取证工具。
+
+    "该查什么"图里本来就有：CONFIRMED_BY / REFUTED_BY 边指向的 Evidence
+    节点，其 obtained_by 就是该调的工具。硬编码一份工具集意味着每加一个
+    故障类型都要改两处代码，而且很容易漏 —— W8 的跨故障实验里
+    connection_exhaustion 拿不到判别性证据就是这么来的。
+
+    现在加故障类型只需改图。
+    """
+    try:
+        from knowledge.causal_graph import graph as G
+
+        g = G.load()
+        if hypothesis in g:
+            tools = set()
+            for _, ev, k in g.out_edges(hypothesis, keys=True):
+                if k not in ("CONFIRMED_BY", "REFUTED_BY"):
+                    continue
+                t = g.nodes.get(ev, {}).get("obtained_by")
+                if t:
+                    tools.add(t)
+            if tools:
+                return sorted(tools)
+    except Exception:
+        pass
+    return FALLBACK_TOOLSETS.get(hypothesis, DEFAULT_TOOLSET)
 
 
 @dataclass
@@ -164,6 +197,10 @@ def _tools_for(tb: Toolbox, sink: dict) -> list:
             wrap(lambda a: tb.get_active_sessions())),
         tool("get_blocking_chain", "锁阻塞链", {})(
             wrap(lambda a: tb.get_blocking_chain())),
+        tool("get_connection_stats",
+             "连接数与上限、按状态与角色的分布。连接打满时会话大多是 idle，"
+             "用会话列表看不出问题，必须直接看总数与上限的关系。", {})(
+            wrap(lambda a: tb.get_connection_stats())),
         tool("simulate_index", "hypopg 假设索引，不改数据库",
              {"create_sql": str, "test_sql": str, "uid": int})(
             wrap(lambda a: tb.simulate_index(a["create_sql"], a["test_sql"],
@@ -185,7 +222,7 @@ async def investigate(hypothesis: str, brief: str, tb: Toolbox,
     sink: dict = {}
     blocked: list[str] = []
     used: list[str] = []
-    wanted = set(TOOLSETS.get(hypothesis, DEFAULT_TOOLSET)) | {"report_verdict"}
+    wanted = set(toolset_for(hypothesis)) | {"report_verdict"}
     all_tools = _tools_for(tb, sink)
     tools = [t for t in all_tools if getattr(t, "name", "") in wanted]
     srv = create_sdk_mcp_server(SERVER, "1.0.0", tools)
