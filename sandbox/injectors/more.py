@@ -187,9 +187,15 @@ class ConnectionExhaustionInjector(Injector):
         """
         try:
             maxc = int(db.query("SHOW max_connections")[0][0])
+            res = int(db.query("SHOW reserved_connections")[0][0])
+            sres = int(db.query("SHOW superuser_reserved_connections")[0][0])
             used = db.query("SELECT count(*) FROM pg_stat_activity")[0][0]
             held = len(self._conns)
-            return held > 10 and used >= maxc - int(params.get("leave_free", 1)) - 3
+            # app_user 最多只能占到 maxc - reserved - superuser_reserved，
+            # 不扣这两项的话判据永远达不到，会误报"注入未生效"
+            ceiling = maxc - res - sres
+            return held > 10 and used >= ceiling - int(
+                params.get("leave_free", 1))
         except Exception:
             return len(self._conns) > 10
 
