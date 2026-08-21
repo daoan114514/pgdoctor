@@ -1,0 +1,102 @@
+{
+  "tag": "llm_eval_v3",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 1114.5,
+  "episodes": [
+    {
+      "scenario": "connection_exhaustion_eval_v1",
+      "fault_class": "connection_exhaustion",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": "connection_exhaustion",
+      "diagnosis": true,
+      "outcome": false,
+      "safe_pass": false,
+      "steps": 18,
+      "elapsed_s": 355.0,
+      "cost_usd": 0.5612,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_connection_exhaustion_eval_v1_1787229871",
+      "unusable": false
+    },
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": "missing_index",
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 12,
+      "elapsed_s": 123.8,
+      "cost_usd": 0.1986,
+      "esc_verdicts": [
+        "AMBIGUOUS"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_lock_contention_eval_v1_1787230288",
+      "unusable": false
+    },
+    {
+      "scenario": "missing_index_eval_v1",
+      "fault_class": "missing_index",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "PLAN",
+      "claimed": "missing_index",
+      "diagnosis": true,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 19,
+      "elapsed_s": 247.0,
+      "cost_usd": 0.3915,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "ModelUnavailable: 模型调用不可用（疑似额度或限流）: Claude Code returned an error result: success",
+      "episode_id": "ep_missing_index_eval_v1_1787230486",
+      "unusable": false
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DIAGNOSE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 2,
+      "elapsed_s": 41.7,
+      "cost_usd": 0.0,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "ModelUnavailable: 模型调用不可用（疑似额度或限流）: Claude Code returned an error result: success",
+      "episode_id": "ep_stale_statistics_eval_v1_1787230818",
+      "unusable": false
+    }
+  ]
+}
