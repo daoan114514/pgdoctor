@@ -370,7 +370,38 @@ python3 -m eval.replay sensitivity  # ESC 阈值敏感性分析
 1. **判别性证据取不到**：`connection_exhaustion` 的必需证据是 `connection_count`，但工具层没有直接给出连接数与上限对比的工具——`get_active_sessions` 只回异常会话。子 agent 拿不到证据，自然给不出裁决。
 2. **子 agent 的窄工具集按假设硬编码**：新故障类型进来时 `TOOLSETS` 里对应条目缺失或不合适。这是为控成本做的取舍，现在显出代价。
 
-修复路径明确（补连接统计工具、让工具集由因果图的 `CONFIRMED_BY` 边自动推导），但当前这组数据本身已是完整实验，先如实记录。
+### 修复后的复测
+
+两处覆盖不足都修了，其中第二处改成让工具集**由因果图自动推导**——加故障类型只改图不改代码：
+
+```python
+toolset_for("connection_exhaustion")  # -> ['get_connection_stats']
+toolset_for("lock_contention")        # -> ['get_active_sessions','get_blocking_chain']
+```
+
+复测结果（按正确口径统计，额度耗尽作废的 episode 不计入分母）：
+
+| 跑批 | 有效 episode | Diagnosis | 关键变化 |
+|---|---|---|---|
+| scripted | 4 | 1/4 | 基线 |
+| llm 修复前 | 4 | 1/4 | connection_exhaustion 声称 None |
+| **llm 修复后** | 2 | **1/2** | **connection_exhaustion 诊断正确**（18 步） |
+
+补上 `get_connection_stats` 后，模型第一次正确诊断出连接池打满——之前它拿不到"连接数 vs 上限"这条判别性证据（`get_active_sessions` 只回异常会话，而连接打满时会话大多是 idle、根本不算异常）。
+
+### 因果图里的两处建模错误
+
+复盘轨迹时发现的，都比"模型不够聪明"更值得记：
+
+**必需证据不能一刀切。** 原来把 `explain_seq_scan` 当成通用必需项，导致 ESC 要求锁竞争也提供执行计划——但锁竞争根本不该看计划。现在必需证据按根因区分。
+
+**统计过期的判别特征是偏差倍数，不是时间戳。** 子 agent 的顺带发现里白纸黑字写着"估计行数 1189 vs 实际 5,000,688（偏差 4200 倍）"，但它的裁决却是 REFUTED，理由是"last_analyze 在近期"——刚灌完数据时时间戳确实是新的，统计却早已失真。现在把偏差单独记成一条证据类型 `row_estimate_deviation`，并写进子 agent 的调查提示。
+
+### 实验卫生：额度耗尽必须与"模型答错"分开
+
+Pro 额度用尽时 SDK 抛的是 `Claude Code returned an error result: success`，cost=$0。如果不特判，跑批会把它记成 `Diagnosis=False`，一整轮实验静默变成"0/4"，看起来像模型没能力——**这会直接得出错误结论**。
+
+现在这类 episode 被标为 `unusable` 单列，不计入三率分母；跑批前还会先花几分钱探一次模型可用性，避免烧掉半小时才发现额度没了。
 
 ## 快速开始
 
