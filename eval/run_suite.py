@@ -90,14 +90,24 @@ def _model_reachable() -> bool:
             system_prompt="只回一个数字。", max_turns=1,
             permission_mode="bypassPermissions", setting_sources=None,
             env=env)
+        from agent.llm_policy import _UNAVAILABLE_HINTS
         try:
             async for m in query(prompt="回复 1", options=opts):
                 if isinstance(m, ResultMessage):
+                    # 只要收到 ResultMessage 就算可用是错的：额度耗尽时
+                    # 返回的正是一条 ResultMessage，is_error=True、内容是
+                    # "error result: success"。探针必须和跑批用同一套判据，
+                    # 否则它防不住它本该防的东西。
+                    blob = f"{getattr(m, 'subtype', '')} {getattr(m, 'result', '')}"
+                    if getattr(m, "is_error", False) or \
+                            any(h in blob for h in _UNAVAILABLE_HINTS):
+                        print(f"  探针拿到错误结果: {blob[:120]}")
+                        return False
                     return True
         except Exception as exc:
             print(f"  探针失败: {str(exc)[:120]}")
             return False
-        return True
+        return False    # 一条 ResultMessage 都没收到，同样不算可用
 
     print("探测模型可用性 ...", flush=True)
     okp = asyncio.run(probe())
@@ -268,6 +278,12 @@ def main() -> None:
         print(f"    fired={r.fired} claimed={r.claimed} "
               f"D={r.diagnosis} O={r.outcome} S={r.safe_pass} "
               f"steps={r.steps} ${r.cost_usd} {r.error[:40]}", flush=True)
+        if r.unusable and i < len(picks):
+            # 撞到额度墙就整批中止。继续往下跑毫无意义：每个场景都要先花
+            # 两分钟重建沙箱、灌数据、等告警，然后必然撞上同一堵墙。
+            print(f"!! 模型不可用，剩余 {len(picks) - i} 个场景不再尝试",
+                  flush=True)
+            break
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     path = RESULTS / f"{tag}.json"

@@ -18,8 +18,11 @@ NAME="${2:-$(basename "${SCRIPT%% *}" .py)}"
 rm -f "$D/$NAME.log" "$D/$NAME.done"
 cd "$ROOT" || exit 9
 
+# 必须带上 env.sh 的代理与 PATH：原先直接调 python3，调模型时会拿到
+# "403 Request not allowed"，而 SDK 把它包成一条 is_error 的 ResultMessage，
+# 看起来和额度耗尽一模一样 —— 排查时被误导了好几轮（踩过）。
 PYTHONPATH="$ROOT" setsid bash -c \
-  "python3 $SCRIPT > '$D/$NAME.log' 2>&1; echo \$? > '$D/$NAME.done'" \
+  ". '$D/env.sh'; python3 $SCRIPT > '$D/$NAME.log' 2>&1; echo \$? > '$D/$NAME.done'" \
   < /dev/null > /dev/null 2>&1 &
 
 sleep 2

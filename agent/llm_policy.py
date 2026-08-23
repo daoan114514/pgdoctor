@@ -38,7 +38,11 @@ MODEL = os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5")
 
 
 class ModelUnavailable(RuntimeError):
-    """模型调不通（额度、限流、网络），与"模型答错了"是两回事。
+    """模型调不通（额度、限流、认证、网络），与"模型答错了"是两回事。
+
+    别把这几种混为一谈地报给人看：原先提示语只写"疑似额度或限流"，
+    而真正的原因是启动脚本没配代理、直连拿到 403 —— 那句提示让我
+    朝着"等额度恢复"查了好几轮。
 
     必须区分：前者该把 episode 判为不可用，后者才是实验数据。
     混在一起的话，一次额度耗尽会让整轮实验静默变成 0/4。
@@ -222,7 +226,7 @@ class LLMPolicy(Policy):
                     # 连续两次都是这个特征 -> 判为模型不可用而非答错，
                     # 让跑批把该 episode 标成不可用
                     raise ModelUnavailable(
-                        f"模型调用不可用（疑似额度或限流）: {exc2}") from exc2
+                        f"模型调用不可用（额度/限流/认证/网络，看下方原文）: {exc2}") from exc2
                 raise
 
     async def _drain(self, prompt: str, opts, phase, text: list[str]) -> str:
