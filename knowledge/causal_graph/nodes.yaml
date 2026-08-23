@@ -116,6 +116,8 @@ fixes:
   - id: terminate_blocker
     action_type: session_control
     risk_tier: CONFIRM
+    # 只终止链条最上游的持锁者（pg_blocking_pids 为空的那个）——
+    # 链上其余会话多是被牵连的正常业务连接，一并终止是误伤
     template: "SELECT pg_terminate_backend({pid})"
     # 终止会话撤不回来。写个假的回滚语句只会制造"以为能回滚"的错觉，
     # 所以要求显式声明不可逆，由人来担这个责任。

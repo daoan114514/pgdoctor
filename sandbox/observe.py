@@ -146,10 +146,38 @@ class Observer:
             " JOIN LATERAL unnest(pg_blocking_pids(blocked.pid)) AS bp(pid) ON true"
             " JOIN pg_stat_activity blocking ON blocking.pid = bp.pid",
             ("[[:space:]]+",), role="ro")
-        out = [{"blocked_pid": r[0], "blocked_by": r[1], "wait": r[2], "query": r[3]}
+        out = [{"blocked_pid": r[0], "blocked_by": r[1], "wait": r[2],
+                "query": r[3], "evidence": "currently_waiting"}
                for r in rows]
+
+        # 上面那个查询只看得见"此刻正在等待"的会话。等待者一旦被
+        # statement_timeout 掐掉，阻塞链立刻变空 —— 只报这一种信号，
+        # agent 拿到的 blocked_by 是瞬时的，等它提出终止提案时可能已失效。
+        # 稳定信号是"持有锁且事务挂着不动"，这也是真实 DBA 排查锁问题时
+        # 真正依据的东西：连接不在跑任何语句，却攥着锁不放。
+        idle = db.query(
+            "SELECT a.pid, a.usename,"
+            " round(extract(epoch FROM now() - a.xact_start))::int,"
+            " count(DISTINCT l.relation) FILTER (WHERE l.relation IS NOT NULL),"
+            " left(regexp_replace(coalesce(a.query,''), %s, ' ', 'g'), 80)"
+            " FROM pg_stat_activity a"
+            " JOIN pg_locks l ON l.pid = a.pid AND l.granted"
+            " WHERE a.datname = current_database()"
+            "   AND a.state = 'idle in transaction'"
+            "   AND a.pid <> pg_backend_pid()"
+            " GROUP BY a.pid, a.usename, a.xact_start, a.query"
+            " ORDER BY 3 DESC NULLS LAST",
+            ("[[:space:]]+",), role="ro")
+        for r in idle:
+            out.append({"blocked_pid": None, "blocked_by": r[0],
+                        "wait": f"idle_in_transaction:{r[2]}s",
+                        "query": f"[持锁 {r[3]} 个对象，最后语句] {r[4]}",
+                        "evidence": "idle_in_transaction_holding_locks"})
+
         self.trace.record("get_blocking_chain", {},
-                          json.dumps(out, ensure_ascii=False), {"n": len(out)})
+                          json.dumps(out, ensure_ascii=False),
+                          {"n": len(out), "n_waiting": len(rows),
+                           "n_idle_holders": len(idle)})
         return out
 
     def get_table_stats(self, table: str) -> TableStats:

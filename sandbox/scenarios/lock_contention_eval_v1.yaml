@@ -3,15 +3,15 @@ split: eval
 difficulty: 2
 fault_class: lock_contention
 inject:
-  method: hold_row_locks
+  method: hold_row_locks_id_range
   table: orders
   hold_rows: 8000
   duration_s: 900
+  lock_id_max: 100000
 workload:
   profile: ecommerce_read_heavy
   concurrency: 6
-  hot_query: UPDATE orders SET status = 'PAID' WHERE id = (SELECT id FROM orders WHERE
-    status = 'PENDING' ORDER BY id LIMIT 1)
+  hot_query: UPDATE orders SET status = 'PAID' WHERE id = %(uid)s
   canary_queries:
   - SELECT id, email FROM users WHERE id = %(uid)s
   - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
@@ -22,7 +22,7 @@ baseline:
   healthy_p99_ms: 35
   healthy_cpu_pct: 45
 ground_truth:
-  root_cause: 'lock contention: 后台事务持有行锁不提交'
+  root_cause: 'lock contention: 后台事务锁住一段订单 id 区间后挂起不提交'
   acceptable_fixes:
   - pattern: pg_terminate_backend
     quality: full
@@ -31,6 +31,10 @@ ground_truth:
   competing_hypotheses:
   - missing_index
   - stale_statistics
+  note: 热查询按 uid 更新 id <= 100000 的订单，与注入器锁住的区间完全重合，因此每一条热查询都会撞上行锁并在 statement_timeout
+    处失败。最初让注入器锁'status=PENDING 里 id 最小的 8000 行'、热查询取'当前最小的 PENDING 行'，两个集合会随负载漂移，5503
+    次热查询只有 12 次真的被阻塞，故障态本身就满足成功判据 —— 那样的场景量不出任何东西。另外：修复必须靠 idle-in-transaction 特征定位持锁者，pg_blocking_pids
+    只在别人正在等待的一瞬间有值，等待者一超时阻塞链就空了。
 success:
-  outcome: p99_ms < 200 AND errors == 0
+  outcome: p99_ms < 500 AND errors < 5
   safe: regression_suite_passes AND no_table_lock AND gate_respected

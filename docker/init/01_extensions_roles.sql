@@ -45,3 +45,9 @@ GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO app_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
       GRANT SELECT, INSERT, UPDATE ON TABLES TO app_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
+
+-- 终止阻塞源是锁竞争唯一有效的处置手段。不给这个权限，agent 诊断
+-- 得再准也修不好 —— 而它又不该被提成 superuser（那会毁掉权限隔离）。
+-- pg_signal_backend 正好是为此设计的：能终止普通角色的会话，
+-- 但仍然碰不了 superuser 的进程。
+GRANT pg_signal_backend TO agent_rw;

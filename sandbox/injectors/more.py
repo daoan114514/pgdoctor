@@ -54,10 +54,33 @@ class StaleStatisticsInjector(Injector):
         if not rows:
             return False
         est, actual = rows[0]
-        # 估计与实际相差 15% 以上即算注入成功。
-        # 阈值不能定太高：优化器选错计划并不需要偏差多离谱，
-        # 关键是 status 的分布被改变了（PENDING 从 10% 拉到 ~33%）。
-        return actual > 0 and abs(est - actual) / actual > 0.15
+        if actual > 0 and abs(est - actual) / actual > 0.15:
+            return True
+
+        # 全表基数只差几个百分点不代表注入无效：往 1200 万行里灌 40 万
+        # 只差 3.3%，但热查询谓词上的选择率估计可以差几百倍 —— 后者才是
+        # 优化器选错计划的直接原因。所以真正该验的是"计划估计行数与实际
+        # 行数的偏差倍数"，这也正是这类故障的判别特征。
+        pred = self.spec.get("inject", {}).get("verify_predicate")
+        if not pred:
+            return False
+        plan = db.query(
+            "EXPLAIN (ANALYZE, FORMAT JSON, TIMING OFF) "
+            f"SELECT count(*) FROM {t} WHERE {pred}")[0][0][0]["Plan"]
+
+        def walk(node):
+            yield node
+            for child in node.get("Plans", []):
+                yield from walk(child)
+
+        worst = 0.0
+        for node in walk(plan):
+            loops = max(node.get("Actual Loops", 1), 1)
+            est_rows = float(node.get("Plan Rows", 0)) * loops
+            act_rows = float(node.get("Actual Rows", 0)) * loops
+            if act_rows >= 1000:          # 小基数上的偏差没有判别意义
+                worst = max(worst, act_rows / max(est_rows, 1.0))
+        return worst >= 10.0
 
 
 class LockContentionInjector(Injector):
@@ -80,17 +103,32 @@ class LockContentionInjector(Injector):
         inj = self.spec["inject"]
         return {"table": inj.get("table", "orders"),
                 "hold_rows": int(inj.get("hold_rows", 5000)),
+                # 锁住 id <= lock_id_max 的整段区间。必须覆盖热查询的
+                # 取值空间，否则两者只是概率性相交，故障弱到量不出来。
+                "lock_id_max": int(inj.get("lock_id_max", 0)),
                 "duration_s": float(inj.get("duration_s", 600))}
 
     def _hold(self, params: dict) -> None:
         try:
-            with db.connect(autocommit=False) as conn, conn.cursor() as cur:
+            # 必须用普通角色持锁：superuser 的进程只有 superuser 能终止，
+            # 而修复走的是 agent_rw —— 拿 superuser 持锁等于造了一个
+            # agent 原理上修不好的故障。真实场景里持锁的也是业务连接。
+            with db.connect(role="app", autocommit=False) as conn, \
+                    conn.cursor() as cur:
                 cur.execute("SELECT pg_backend_pid()")
                 self._holder_pid = cur.fetchone()[0]
-                cur.execute(
-                    f"SELECT id FROM {params['table']} "
-                    f"WHERE status = 'PENDING' "
-                    f"ORDER BY id LIMIT {params['hold_rows']} FOR UPDATE")
+                if params["lock_id_max"]:
+                    # 锁住整段 id 区间：对应真实场景里"批处理作业锁了一段
+                    # 订单后卡住不提交"，且与热查询的取值空间完全重合。
+                    cur.execute(
+                        f"SELECT id FROM {params['table']} "
+                        f"WHERE id <= {params['lock_id_max']} "
+                        f"ORDER BY id FOR UPDATE")
+                else:
+                    cur.execute(
+                        f"SELECT id FROM {params['table']} "
+                        f"WHERE status = 'PENDING' "
+                        f"ORDER BY id LIMIT {params['hold_rows']} FOR UPDATE")
                 cur.fetchall()
                 # 拿着锁不提交，直到 episode 结束
                 self._stop.wait(params["duration_s"])
@@ -103,20 +141,33 @@ class LockContentionInjector(Injector):
         self._thread = threading.Thread(target=self._hold, args=(params,),
                                         daemon=True)
         self._thread.start()
-        for _ in range(40):          # 等锁真正拿到
+        for _ in range(120):         # 等锁真正拿到（区间锁要扫十万行）
             time.sleep(0.25)
             if self._holder_pid:
                 break
         return InjectionRecord(
             fault_class=self.fault_class, params=params,
             notes=f"后台事务 pid={self._holder_pid} 锁住 "
-                  f"{params['hold_rows']} 行且不提交")
+                  + (f"id <= {params['lock_id_max']} 的整段区间"
+                     if params["lock_id_max"] else f"{params['hold_rows']} 行")
+                  + "且不提交")
 
     def verify_injected(self, params: dict) -> bool:
+        # 不能只数 ExclusiveLock：每个事务对自己的 transactionid 都持有
+        # 一把 ExclusiveLock，这个条件恒为真，等于没验证。
+        # 真正要确认的是那个具体的持锁者还在、事务还挂着、且行锁已拿到。
+        if not self._holder_pid:
+            return False
         rows = db.query(
-            "SELECT count(*) FROM pg_locks WHERE granted AND mode = %s",
-            ("ExclusiveLock",))
-        return bool(self._holder_pid) and rows and rows[0][0] > 0
+            "SELECT a.state,"
+            " count(*) FILTER (WHERE l.locktype = 'transactionid' AND l.granted)"
+            " FROM pg_stat_activity a"
+            " LEFT JOIN pg_locks l ON l.pid = a.pid"
+            " WHERE a.pid = %s GROUP BY a.state", (self._holder_pid,))
+        if not rows:
+            return False                      # 持锁会话已经没了
+        state, n_txlocks = rows[0]
+        return state == "idle in transaction" and n_txlocks > 0
 
     def cleanup(self) -> None:
         self._stop.set()
