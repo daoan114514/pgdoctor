@@ -97,7 +97,7 @@ for scen, label in CASES:
         except Exception as exc:
             print(f"    读指标文件失败: {exc}")
 
-        kpi, reg = env.verify(settle_s=20.0)
+        kpi, reg = env.verify()
         try:
             final = metrics.eval_expr(spec["success"]["outcome"], kpi)
         except Exception:

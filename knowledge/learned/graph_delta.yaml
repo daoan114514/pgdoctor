@@ -27,17 +27,17 @@ observed:
     hit: 2
     miss: 0
   lock_contention:
-    hit: 2
+    hit: 3
     miss: 0
   missing_index:
     hit: 3
     miss: 4
   stale_statistics:
-    hit: 1
+    hit: 2
     miss: 0
 prior_adj:
   connection_exhaustion: 0.04
-  lock_contention: 0.075
+  lock_contention: 0.05
   missing_index: -0.125
-  stale_statistics: 0.075
-updated_at: 1787464850.6005723
+  stale_statistics: 0.05
+updated_at: 1787477809.5075982

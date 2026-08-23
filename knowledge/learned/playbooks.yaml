@@ -12,14 +12,14 @@ connection_exhaustion:
 lock_contention:
   decisive_evidence: []
   evidence_order: []
-  fail_count: 2
+  fail_count: 3
   fix_action_type: ''
   learned_under: 2
   median_steps: 0
   root_cause: lock_contention
   success_count: 0
   typical_fix: ''
-  updated_at: 1787464585.0750618
+  updated_at: 1787477026.9872222
 missing_index:
   decisive_evidence:
   - explain_seq_scan
@@ -46,11 +46,11 @@ missing_index:
 stale_statistics:
   decisive_evidence: []
   evidence_order: []
-  fail_count: 1
+  fail_count: 2
   fix_action_type: ''
   learned_under: 2
   median_steps: 0
   root_cause: stale_statistics
   success_count: 0
   typical_fix: ''
-  updated_at: 1787464587.281389
+  updated_at: 1787477807.8511682

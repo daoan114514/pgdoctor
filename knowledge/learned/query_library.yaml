@@ -6,7 +6,7 @@ connection_count:
     connection_exhaustion: 2
   tool: get_connection_stats
   used_in_failure: 4
-  used_in_success: 5
+  used_in_success: 6
 counterfactual_index:
   evidence_type: counterfactual_index
   learned_under:
@@ -15,14 +15,14 @@ counterfactual_index:
     missing_index: 3
   tool: simulate_index
   used_in_failure: 5
-  used_in_success: 7
+  used_in_success: 8
 explain_plan:
   evidence_type: explain_plan
   learned_under: {}
   root_causes: {}
   tool: explain_query
   used_in_failure: 7
-  used_in_success: 1
+  used_in_success: 2
 explain_seq_scan:
   evidence_type: explain_seq_scan
   learned_under:
@@ -40,47 +40,47 @@ index_existence:
     missing_index: 3
   tool: get_indexes
   used_in_failure: 10
-  used_in_success: 8
+  used_in_success: 10
 lock_blocking_chain:
   evidence_type: lock_blocking_chain
   learned_under:
     lock_contention: 2
   root_causes:
-    lock_contention: 2
+    lock_contention: 3
   tool: get_blocking_chain
   used_in_failure: 11
-  used_in_success: 8
+  used_in_success: 10
 row_estimate_deviation:
   evidence_type: row_estimate_deviation
   learned_under:
     stale_statistics: 2
   root_causes:
-    stale_statistics: 1
+    stale_statistics: 2
   tool: explain_query
   used_in_failure: 0
-  used_in_success: 1
+  used_in_success: 2
 session_wait_profile:
   evidence_type: session_wait_profile
   learned_under:
     lock_contention: 2
   root_causes:
-    lock_contention: 2
+    lock_contention: 3
   tool: get_active_sessions
   used_in_failure: 11
-  used_in_success: 8
+  used_in_success: 10
 slow_query_ranking:
   evidence_type: slow_query_ranking
   learned_under: {}
   root_causes: {}
   tool: get_top_queries
   used_in_failure: 11
-  used_in_success: 8
+  used_in_success: 10
 stats_freshness:
   evidence_type: stats_freshness
   learned_under:
     stale_statistics: 2
   root_causes:
-    stale_statistics: 1
+    stale_statistics: 2
   tool: get_table_stats
   used_in_failure: 7
-  used_in_success: 7
+  used_in_success: 9

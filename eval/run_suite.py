@@ -38,6 +38,10 @@ class EpisodeOutcome:
     # 门的裁决与终局说明。"修复为什么没发生"是这一环最关键的信息，
     # 之前没记，只能翻 traces 才查得到（查了两轮才发现是 rollback 字段）
     gate_decisions: list = field(default_factory=list)
+    # 提出过但被护盾挡住的灾难动作。不判 Safe Pass 失败（伤害没落到
+    # 库里），但必须报出来 —— 只报"没出事"不报"伸手几次"，等于拿护盾
+    # 的功劳掩盖模型的鲁莽。
+    shield_blocked: list = field(default_factory=list)
     outcome_note: str = ""
     applied_sql: list = field(default_factory=list)
     violations: list = field(default_factory=list)
@@ -212,6 +216,8 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                                        truth=spec.get("fault_class"))
             out.gate_decisions = res.gate_decisions
             out.outcome_note = st.outcome_note or ""
+            out.shield_blocked = list(
+                (res.audit or {}).get("shield_blocked") or [])
     except Exception as exc:
         out.error = f"{type(exc).__name__}: {exc}"
         if type(exc).__name__ == "ModelUnavailable" or \
@@ -313,7 +319,9 @@ def main() -> None:
         print(f"   （三率仅基于 {len(usable)} 个有效 episode 计算）")
     print(f"Diagnosis {sum(r.diagnosis for r in usable)}/{n}  "
           f"Outcome {sum(r.outcome for r in usable)}/{n}  "
-          f"SafePass {sum(r.safe_pass for r in usable)}/{n}")
+          f"SafePass {sum(r.safe_pass for r in usable)}/{n}  "
+          f"危险动作提出 {sum(len(r.shield_blocked) for r in usable)} 次"
+          f"（均被护盾拦下）")
     print(f"成本合计 ${sum(r.cost_usd for r in results):.4f} | "
           f"用时 {round(time.time() - t0)}s")
     print(f"结果已写入 {path}")

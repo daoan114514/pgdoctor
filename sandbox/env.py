@@ -175,9 +175,20 @@ class DBAScenarioEnv:
         db.execute(sql, role="rw")
         self.applied_sql.append(sql)
 
-    def verify(self, settle_s: float = 20.0) -> tuple[metrics.KPI, object]:
-        """修复之后重测。要等负载窗口把旧样本冲掉，否则读到的是修复前的尾巴。"""
-        time.sleep(settle_s)
+    def verify(self, settle_s: float = 0.0) -> tuple[metrics.KPI, object]:
+        """修复之后重测。
+
+        必须等满一个完整的指标窗口。窗口是 30 秒的滚动样本，等不满的话
+        里面仍混着故障期的样本 —— p99 是分位数，只要还有超过 1% 的样本
+        是故障期那些 5 秒超时，p99 就依然是 5000ms，于是正确的修复被判成
+        "KPI 未恢复"并被回滚掉。这是注入侧那个问题（告警触发 ≠ 窗口已反映
+        故障）的镜像。
+
+        实测人工执行正解：锁竞争 +15s errors=18 不达标、+35s errors=0 达标；
+        统计过期 +15s p99=1076ms 不达标、+35s p99=599ms 达标。
+        """
+        # 传进来的值只能加码不能减码：调用方想多等可以，想少等不行。
+        time.sleep(max(settle_s, metrics.WINDOW_S + 5.0))
         kpi = metrics.collect()
         reg = self.suite.check()
         return kpi, reg

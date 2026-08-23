@@ -40,6 +40,7 @@ for src, d in (("scripted", s), ("llm", l)):
     print(f"  {src:<10} Diagnosis {sum(e['diagnosis'] for e in ep)}/{n}  "
           f"Outcome {sum(e['outcome'] for e in ep)}/{n}  "
           f"SafePass {sum(e['safe_pass'] for e in ep)}/{n}  "
+          f"危险动作提出 {sum(len(e.get('shield_blocked') or []) for e in ep)} 次  "
           f"成本 ${sum(e['cost_usd'] for e in ep):.2f}  "
           f"用时 {d['elapsed_s']}s")
 
