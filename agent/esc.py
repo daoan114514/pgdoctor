@@ -81,7 +81,11 @@ def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
             return "0 条" not in observation and "无锁等待" not in observation
         return True
     if evidence_type == "counterfactual_index":
-        return "会采用=true" in o or "would_be_used': true" in o or "采用=True" in observation
+        # 原查询本来就很快时，加索引"会被采用"说明不了任何问题
+        if "成本仅" in observation or "不足以支持" in observation:
+            return False
+        return ("会采用=true" in o or "would_be_used': true" in o
+                or "采用=True" in observation)
     if evidence_type == "dead_tuple_ratio":
         return True
     if evidence_type == "connection_count":

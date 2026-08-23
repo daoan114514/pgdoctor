@@ -224,11 +224,20 @@ class Observer:
         cb = float(before.get("Total Cost", 0.0))
         ca = float(after.get("Total Cost", 0.0))
         used = any(hypo in i or i.startswith("<") for i in aa["indexes"])
+        # 绝对成本太小时，相对降幅没有意义。实测出现过 cost 1 -> 0
+        # 报"降 87.5%、会采用"，模型据此把锁竞争误诊成了缺索引。
+        MEANINGFUL_COST = 100.0
+        trivial = cb < MEANINGFUL_COST
         res = {"hypothetical_index": hypo,
                "cost_before": round(cb, 2), "cost_after": round(ca, 2),
                "scans_before": ab["scans"][:3], "scans_after": aa["scans"][:3],
-               "would_be_used": bool(used),
-               "cost_reduction_pct": round((1 - ca / cb) * 100, 1) if cb else 0.0}
+               "would_be_used": bool(used) and not trivial,
+               "cost_reduction_pct": round((1 - ca / cb) * 100, 1) if cb else 0.0,
+               "trivial_baseline": trivial}
+        if trivial:
+            res["note"] = (
+                f"原查询成本仅 {cb:.1f}，本来就很快，加索引的收益没有意义；"
+                f"该结果不足以支持'缺索引'的判断")
         self.trace.record("simulate_index", {"create": create_sql},
                           json.dumps(res, ensure_ascii=False), res)
         return res
