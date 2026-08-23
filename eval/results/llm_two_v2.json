@@ -1,0 +1,56 @@
+{
+  "tag": "llm_two_v2",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 813.1,
+  "episodes": [
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": "lock_contention",
+      "diagnosis": true,
+      "outcome": false,
+      "safe_pass": false,
+      "steps": 12,
+      "elapsed_s": 220.7,
+      "cost_usd": 0.3626,
+      "esc_verdicts": [
+        "SUFFICIENT"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_lock_contention_eval_v1_1787300202",
+      "unusable": false
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": "stale_statistics",
+      "diagnosis": true,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 11,
+      "elapsed_s": 335.4,
+      "cost_usd": 0.4468,
+      "esc_verdicts": [
+        "SUFFICIENT"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_stale_statistics_eval_v1_1787300489",
+      "unusable": false
+    }
+  ]
+}

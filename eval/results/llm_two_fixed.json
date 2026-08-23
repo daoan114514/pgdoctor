@@ -1,0 +1,60 @@
+{
+  "tag": "llm_two_fixed",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 1394.0,
+  "episodes": [
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": "lock_contention",
+      "diagnosis": true,
+      "outcome": false,
+      "safe_pass": false,
+      "steps": 18,
+      "elapsed_s": 344.5,
+      "cost_usd": 0.5728,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_lock_contention_eval_v1_1787290546",
+      "unusable": false
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "PLAN",
+      "claimed": "stale_statistics",
+      "diagnosis": true,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 21,
+      "elapsed_s": 823.6,
+      "cost_usd": 0.9425,
+      "esc_verdicts": [
+        "SUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "applied_sql": [
+        "CREATE INDEX CONCURRENTLY idx_orders_created_total ON orders (created_at) INCLUDE (total)"
+      ],
+      "violations": [],
+      "error": "ModelUnavailable: 模型调用不可用（疑似额度或限流）: Claude Code returned an error result: success",
+      "episode_id": "ep_stale_statistics_eval_v1_1787290953",
+      "unusable": true
+    }
+  ]
+}
