@@ -3,25 +3,26 @@ connection_exhaustion:
   evidence_order: []
   fail_count: 2
   fix_action_type: ''
+  learned_under: 1
   median_steps: 0
   root_cause: connection_exhaustion
   success_count: 0
   typical_fix: ''
-  updated_at: 1787455351.1331928
+  updated_at: 1787462336.6794546
 lock_contention:
   decisive_evidence: []
   evidence_order: []
   fail_count: 2
   fix_action_type: ''
+  learned_under: 2
   median_steps: 0
   root_cause: lock_contention
   success_count: 0
   typical_fix: ''
-  updated_at: 1787455351.2469919
+  updated_at: 1787462342.1809442
 missing_index:
   decisive_evidence:
   - explain_seq_scan
-  - row_estimate_deviation
   - index_existence
   - lock_blocking_chain
   evidence_order:
@@ -30,24 +31,26 @@ missing_index:
   - slow_query_ranking
   - slow_query
   - explain_seq_scan
-  - row_estimate_deviation
   - index_existence
   - stats_freshness
+  - lock_blocking_chain
   fail_count: 4
   fix_action_type: create_index
-  median_steps: 12
+  learned_under: 1
+  median_steps: 13
   root_cause: missing_index
-  success_count: 4
+  success_count: 3
   typical_fix: CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id,
     status)
-  updated_at: 1787460906.3456454
+  updated_at: 1787462350.0871408
 stale_statistics:
   decisive_evidence: []
   evidence_order: []
   fail_count: 1
   fix_action_type: ''
+  learned_under: 2
   median_steps: 0
   root_cause: stale_statistics
   success_count: 0
   typical_fix: ''
-  updated_at: 1787455351.2867806
+  updated_at: 1787462344.18045

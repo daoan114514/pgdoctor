@@ -2,6 +2,7 @@ id: stale_statistics_eval_v1
 split: eval
 difficulty: 2
 fault_class: stale_statistics
+revision: 2
 inject:
   method: skew_without_analyze
   table: orders

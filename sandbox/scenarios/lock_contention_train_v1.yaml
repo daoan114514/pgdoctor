@@ -2,6 +2,7 @@ id: lock_contention_train_v1
 split: train
 difficulty: 2
 fault_class: lock_contention
+revision: 2
 inject:
   method: hold_row_locks_id_range
   table: orders

@@ -2,6 +2,7 @@ id: missing_index_eval_v1
 split: eval
 difficulty: 1
 fault_class: missing_index
+revision: 1
 inject:
   method: drop_index
   index: idx_orders_user_status

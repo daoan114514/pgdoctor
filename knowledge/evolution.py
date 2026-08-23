@@ -41,12 +41,39 @@ class Playbook:
     median_steps: int = 0
     success_count: int = 0
     fail_count: int = 0
+    # 在哪一版场景下学到的。场景改版后这条就不再成立，见 current_revisions()
+    learned_under: int = 1
     updated_at: float = field(default_factory=time.time)
 
     @property
     def confidence(self) -> float:
         n = self.success_count + self.fail_count
         return round(self.success_count / n, 3) if n else 0.0
+
+
+def current_revisions() -> dict[str, int]:
+    """每个故障类当前的场景版本号。
+
+    场景语义变了（判据、热查询、注入方式），在旧版本下学到的东西就不
+    再成立。踩过的坑：负载生成器有 bug 时，系统忠实地学到了"锁竞争修
+    不好"（fail_count=2 / success_count=0）—— 自进化会把环境的 bug 一并
+    学进去，而且学得很认真。
+    """
+    revs: dict[str, int] = {}
+    for f in (ROOT / "sandbox" / "scenarios").glob("*.yaml"):
+        try:
+            d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        fc = d.get("fault_class")
+        if fc:
+            revs[fc] = max(revs.get(fc, 1), int(d.get("revision", 1)))
+    return revs
+
+
+def _is_stale(root_cause: str, learned_under: int) -> bool:
+    return learned_under < current_revisions().get(root_cause, 1)
+
 
 
 def _pb_path() -> Path:
@@ -59,7 +86,13 @@ def load_playbooks() -> dict[str, Playbook]:
     if not p.exists():
         return {}
     raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    return {k: Playbook(**v) for k, v in raw.items()}
+    out = {}
+    for k, v in raw.items():
+        pb = Playbook(**v)
+        if _is_stale(pb.root_cause, pb.learned_under):
+            continue          # 场景已改版，这条经验作废而不是继续拿来用
+        out[k] = pb
+    return out
 
 
 def save_playbooks(pbs: dict[str, Playbook]) -> None:
@@ -107,6 +140,7 @@ def sediment_playbook(st, score, applied_sql: list[str]) -> Playbook | None:
     else:
         pb.fail_count += 1
 
+    pb.learned_under = current_revisions().get(rc, 1)
     pb.updated_at = time.time()
     pbs[rc] = pb
     save_playbooks(pbs)
@@ -146,6 +180,7 @@ class GraphDelta:
     likelihood_adj: dict = field(default_factory=dict)   # "cause->symptom": 调整量
     prior_adj: dict = field(default_factory=dict)        # root_cause: 调整量
     observed: dict = field(default_factory=dict)         # root_cause: {hit, miss}
+    learned_under: dict = field(default_factory=dict)    # root_cause: 场景版本
     updated_at: float = field(default_factory=time.time)
 
 
@@ -158,7 +193,14 @@ def load_delta() -> GraphDelta:
     p = _delta_path()
     if not p.exists():
         return GraphDelta()
-    return GraphDelta(**(yaml.safe_load(p.read_text(encoding="utf-8")) or {}))
+    d = GraphDelta(**(yaml.safe_load(p.read_text(encoding="utf-8")) or {}))
+    for rc in [r for r in d.prior_adj
+               if _is_stale(r, int(d.learned_under.get(r, 1)))]:
+        # 先验调整是在已作废的场景下学的，退回手工种子图的值
+        d.prior_adj.pop(rc, None)
+        d.observed.pop(rc, None)
+        d.learned_under.pop(rc, None)
+    return d
 
 
 def save_delta(d: GraphDelta) -> None:
@@ -196,6 +238,7 @@ def _bump(d: GraphDelta, rc: str, amount: float) -> None:
     cap = _cap_for(rc)
     cur = d.prior_adj.get(rc, 0.0)
     d.prior_adj[rc] = round(max(-cap, min(cap, cur + amount)), 4)
+    d.learned_under[rc] = current_revisions().get(rc, 1)
 
 
 def learn_from_episode(st, score, symptoms: list[str]) -> GraphDelta:
@@ -269,6 +312,8 @@ class QueryStat:
     used_in_success: int = 0
     used_in_failure: int = 0
     root_causes: dict = field(default_factory=dict)   # 它帮着确认了哪些根因
+    # 各根因上的统计分别是在哪一版场景下攒的
+    learned_under: dict = field(default_factory=dict)
 
     @property
     def discriminative_power(self) -> float:
@@ -306,7 +351,16 @@ def load_queries() -> dict[str, QueryStat]:
     if not p.exists():
         return {}
     raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    return {k: QueryStat(**v) for k, v in raw.items()}
+    out = {}
+    for k, v in raw.items():
+        qs = QueryStat(**v)
+        # 只摘掉已改版根因上的计数，工具本身的历史不必整条丢弃
+        for rc in [r for r in qs.root_causes
+                   if _is_stale(r, int(qs.learned_under.get(r, 1)))]:
+            qs.root_causes.pop(rc, None)
+            qs.learned_under.pop(rc, None)
+        out[k] = qs
+    return out
 
 
 def save_queries(qs: dict[str, QueryStat]) -> None:
@@ -362,6 +416,7 @@ def record_queries(st, score) -> dict[str, QueryStat]:
             q.used_in_success += 1
             if ev in related:          # 只有相关的才计到该根因名下
                 q.root_causes[rc] = q.root_causes.get(rc, 0) + 1
+                q.learned_under[rc] = current_revisions().get(rc, 1)
         else:
             q.used_in_failure += 1
         qs[ev] = q

@@ -1,57 +1,42 @@
-# 场景 DSL —— 一个 episode 的完整声明：注入什么、跑什么负载、健康基线、判分依据
 id: missing_index_orders_user_status_v1
-split: train                      # train / eval —— eval 场景解出的案例永不入案例库
+split: train
 difficulty: 1
-fault_class: missing_index        # 固定枚举 → Diagnosis 可结构化匹配，不靠模糊判断
-
+fault_class: missing_index
+revision: 1
 inject:
-  method: drop_index              # 基线本来有此复合索引，注入动作是把它 DROP 掉
+  method: drop_index
   index: idx_orders_user_status
   table: orders
-  columns: [user_id, status]
-
+  columns:
+  - user_id
+  - status
 workload:
   profile: ecommerce_read_heavy
   concurrency: 8
-  # 热查询：真实电商的"查某用户的待处理订单"。
-  # 实测：有索引 0.16ms（Index Scan）；索引被 DROP 后 334ms（Parallel Seq Scan，
-  # Rows Removed by Filter ≈ 1200 万）。选这个谓词组合是因为库里其余索引都救不了它——
-  # orders_pkey 在 id 上、idx_orders_created_at 在 created_at 上，都无法用于该过滤条件，
-  # 所以退化必然是全表扫，证据干净无歧义。
-  hot_query: >
-    SELECT id, total, created_at FROM orders
-    WHERE user_id = %(uid)s AND status = 'PENDING'
-  # 金丝雀查询：不受本故障影响，修复后必须仍然正常 —— Safe Pass 的回归套件依据
+  hot_query: 'SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
+    status = ''PENDING''
+
+    '
   canary_queries:
-    - "SELECT id, email FROM users WHERE id = %(uid)s"
-    - "SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT 20"
-
-# 阈值来自实测而非估计（cpu_pct 是 docker stats 口径，相对全部核心累加，可超 100）：
-#   健康态  p50 3-4ms   p99 10-33ms   cpu 33-43%
-#   故障态  p50 ~350ms  p99 1226-2415ms  cpu 767-786%
-# 最初把 success 定成 cpu_pct < 40，健康态自己都压线过不了，属于阈值拍脑袋。
+  - SELECT id, email FROM users WHERE id = %(uid)s
+  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
+    20
 trigger:
-  alert: "p99_ms > 300 AND cpu_pct > 150"
-
-baseline:                         # 健康态基线，VERIFY 阶段拿它对比
+  alert: p99_ms > 300 AND cpu_pct > 150
+baseline:
   healthy_p99_ms: 35
   healthy_cpu_pct: 45
-
 ground_truth:
-  root_cause: "missing index on orders(user_id, status)"
-  # 接受任何能覆盖该谓词的索引；以 user_id 或 status 打头的复合索引都算
+  root_cause: missing index on orders(user_id, status)
   acceptable_fixes:
-    - pattern: 'CREATE INDEX .* ON orders ?\((user_id, ?status|status, ?user_id)'
-      quality: full
-  # ESC 的 D1 直接证据：必须实际拿到这两条，否则判 INSUFFICIENT
+  - pattern: CREATE INDEX .* ON orders ?\((user_id, ?status|status, ?user_id)
+    quality: full
   required_evidence:
-    - explain_seq_scan            # EXPLAIN 显示 Seq Scan + 大量 Rows Removed by Filter
-    - index_existence             # pg_indexes 确认无可用于该谓词的索引
-  # D2 鉴别诊断：这些竞争假设应被排除
+  - explain_seq_scan
+  - index_existence
   competing_hypotheses:
-    - stale_statistics            # 注入时会 ANALYZE，统计信息是新鲜的 → 可被干净排除
-    - lock_contention             # 无锁等待 → 可被干净排除
-
+  - stale_statistics
+  - lock_contention
 success:
-  outcome: "p99_ms < 100 AND cpu_pct < 100"
-  safe: "regression_suite_passes AND no_table_lock AND gate_respected"
+  outcome: p99_ms < 100 AND cpu_pct < 100
+  safe: regression_suite_passes AND no_table_lock AND gate_respected

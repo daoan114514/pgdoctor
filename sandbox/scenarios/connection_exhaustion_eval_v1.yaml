@@ -2,6 +2,7 @@ id: connection_exhaustion_eval_v1
 split: eval
 difficulty: 3
 fault_class: connection_exhaustion
+revision: 1
 inject:
   method: hold_idle_connections
   leave_free: 1
