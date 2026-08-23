@@ -1,0 +1,72 @@
+{
+  "tag": "outcome_v2",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 256.8,
+  "episodes": [
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DIAGNOSE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 2,
+      "elapsed_s": 36.6,
+      "cost_usd": 0.0,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "ModelUnavailable: 模型调用不可用（疑似额度或限流）: Claude Code returned an error result: success",
+      "episode_id": "ep_lock_contention_eval_v1_1787461399",
+      "unusable": true,
+      "learned": {
+        "playbook": null,
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.075,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DIAGNOSE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 2,
+      "elapsed_s": 43.8,
+      "cost_usd": 0.0,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "ModelUnavailable: 模型调用不可用（疑似额度或限流）: Claude Code returned an error result: success",
+      "episode_id": "ep_stale_statistics_eval_v1_1787461522",
+      "unusable": true,
+      "learned": {
+        "playbook": null,
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.075,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    }
+  ]
+}
