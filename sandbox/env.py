@@ -124,12 +124,28 @@ class DBAScenarioEnv:
             raise RuntimeError(f"故障注入未生效: {fault_class}")
         self._log(f"[env] 已注入: {self.injection.notes}")
 
+        injected_at = time.time()
         alert_expr = self.spec["trigger"]["alert"]
         fired, cur = self._wait_for_alert(alert_expr)
         if not fired:
             notes.append(f"告警未在 {self.degrade_timeout_s}s 内触发；该 episode 不可用")
+
+        if fired:
+            # 告警响了不等于 KPI 窗口已经反映故障。健康态吞吐往往远高于
+            # 故障态：锁竞争注入后每条热查询都要阻塞 5 秒才超时，而健康态
+            # 是每秒五百多次 —— 30 秒滚动窗口里绝大多数样本仍是注入前的，
+            # p99 被稀释到看不出异常（实测 1.7 万个样本里只有 6 个超时，
+            # 占 0.035%，p99 显示 14ms 像是没事）。
+            # 等窗口被故障期样本填满再测，故障态 KPI 才和修复后的 KPI 可比，
+            # 否则 Outcome 判据是拿两个不同口径的数在比。
+            settle = metrics.WINDOW_S - (time.time() - injected_at)
+            if settle > 0:
+                self._log(f"[env] 等待 {settle:.0f}s 让指标窗口填满故障期样本 ...")
+                time.sleep(settle)
+            cur = metrics.collect()
+
         self._log(f"[env] 告警({alert_expr}) 触发={fired} "
-                  f"p99={cur.p99_ms}ms cpu={cur.cpu_pct}%")
+                  f"p99={cur.p99_ms}ms errors={cur.errors} cpu={cur.cpu_pct}%")
 
         return Observation(
             alert=alert_expr, fired=fired,

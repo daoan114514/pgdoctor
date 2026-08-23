@@ -61,6 +61,10 @@ def read_workload(max_age_s: float = 15.0, kind: str = "hot") -> dict:
     return q
 
 
+# 负载生成器写指标用的滚动窗口长度。env 要用它判断"窗口是否已经被故障期的样本填满"。
+WINDOW_S = 30.0
+
+
 def collect(kind: str = "hot", include_all_errors: bool = True) -> KPI:
     w = read_workload(kind=kind)
     # 错误要跨查询类型聚合：连接池打满时热查询走的是常驻连接、完全正常，
