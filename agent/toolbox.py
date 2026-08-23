@@ -142,11 +142,13 @@ class Toolbox:
         """反事实验证：不改生产就能预先证伪一个"缺索引"的判断。"""
         self._enter("simulate_index")
         r = self.o.simulate_index(create_sql, test_sql, params)
-        self._evidence(
-            "counterfactual_index", "",
-            f"hypopg: cost {r['cost_before']:,.0f} -> {r['cost_after']:,.0f} "
-            f"(降 {r['cost_reduction_pct']}%), 优化器会采用={r['would_be_used']}",
-            bears_on=["missing_index"])
+        desc = (f"hypopg: cost {r['cost_before']:,.0f} -> "
+                f"{r['cost_after']:,.0f} (降 {r['cost_reduction_pct']}%), "
+                f"优化器会采用={r['would_be_used']}")
+        if r.get("trivial_baseline"):
+            desc += f"；{r.get('note', '')}"
+        self._evidence("counterfactual_index", "", desc,
+                       bears_on=["missing_index"])
         return r
 
     # ── 推理（内部动作，不碰数据库）────────────────────────
@@ -181,9 +183,38 @@ class Toolbox:
         if self.st.already_failed(fault_class):
             raise ValueError(
                 f"{fault_class} 此前修复失败并已被反证；除非有新证据，否则不能重提")
+
+        # 声明根因比设置假设更重，门槛只能更高不能更低。
+        # 必需证据必须已经在轨迹里 —— 这是 ESC 的 D1 会查的东西，
+        # 在声明时就查一遍能让模型立刻拿到反馈，而不是等到 ESC 才被打回。
+        from knowledge.causal_graph import graph as _G
+        required = _G.required_evidence(fault_class)
+        got = {e["evidence_type"] for e in self.st.scratchpad}
+        missing = [r for r in required if r not in got]
+        if missing:
+            hints = []
+            for m in missing:
+                by = _G.load().nodes.get(m, {}).get("obtained_by", "相应工具")
+                hints.append(f"{m}(用 {by} 取)")
+            raise ValueError(
+                f"不能声明 {fault_class}：缺少必需证据 {hints}。"
+                f"请先取证，或改声明证据已齐备的那个根因")
+
+        # 别人已经带着依据确认了另一个假设时，不允许无依据地再确认一个 ——
+        # 两个 CONFIRMED 会把 ESC 直接推向 AMBIGUOUS
+        others = [k for k, v in self.st.ledger.items()
+                  if k != fault_class
+                  and v.verdict == Verdict.CONFIRMED.value
+                  and len(v.note.strip()) >= 15]
+        if others and len(root_cause.strip()) < 20:
+            raise ValueError(
+                f"{others} 已被带依据地确认；要改声明 {fault_class} "
+                f"必须在 root_cause 里说明为何它更能解释症状")
+
         self.st.claimed_fault_class = fault_class
         self.st.claimed_root_cause = root_cause
-        self.st.set_verdict(fault_class, Verdict.CONFIRMED)
+        self.st.set_verdict(fault_class, Verdict.CONFIRMED,
+                            note=root_cause[:200])
         return f"根因已声明: {fault_class}"
 
     # ── 提交修复提案（不写库）────────────────────────────
@@ -196,6 +227,14 @@ class Toolbox:
         DROP 的提案会被 AST 拆穿），裸字符串没法做这件事。
         """
         self._enter("submit_proposal")
+        # 提前把 action_type 对齐到 AST 的分类，避免模型用了同义词
+        # （实测它写 "analyze" 而分类器返回 "vacuum_analyze"，连续被拒两次）
+        from safety import shield as _sh
+        actual = _sh.classify(sql)
+        if action_type != actual:
+            self.st.note("agent", "proposal_type_corrected",
+                         f"action_type 由 {action_type} 校正为 {actual}")
+            action_type = actual
         if not rollback or not rollback.strip():
             raise ValueError("提案必须带回滚语句，否则无法保证可撤销")
         if self.st.claimed_fault_class and self.st.already_failed(
