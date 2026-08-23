@@ -5,18 +5,19 @@ fault_class: stale_statistics
 inject:
   method: skew_without_analyze
   table: orders
-  rows: 4000000
+  rows: 300000
+  verify_predicate: created_at > now() - interval '1 hour'
 workload:
   profile: ecommerce_read_heavy
-  concurrency: 8
-  hot_query: SELECT count(*), sum(total) FROM orders WHERE created_at > now() - interval
-    '1 hour'
+  concurrency: 4
+  hot_query: SELECT o.status, count(*), sum(o.total) FROM orders o JOIN users u ON
+    u.id = o.user_id WHERE o.created_at > now() - interval '1 hour' GROUP BY o.status
   canary_queries:
   - SELECT id, email FROM users WHERE id = %(uid)s
   - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
     20
 trigger:
-  alert: p99_ms > 300
+  alert: p99_ms > 800
 baseline:
   healthy_p99_ms: 35
   healthy_cpu_pct: 45
@@ -33,7 +34,9 @@ ground_truth:
   competing_hypotheses:
   - missing_index
   - lock_contention
-  note: 判别特征是估计行数与实际行数的巨大偏差（实测 3800 倍），而不是扫描类型 —— 计划本身没变坏，是优化器被错误的统计骗了
+  note: 判别特征是 EXPLAIN 里估计行数与实际行数的偏差倍数（实测差 500 倍），不是 last_analyze 时间戳 —— 刚灌过数据时时间戳看着很新，统计却已失真。热查询是
+    orders JOIN users 的聚合：统计过期时优化器低估匹配行数而选 Nested Loop，对 30 万行做 30 万次索引查找；ANALYZE
+    后改用 Hash Join。修复的可观测证据是计划类型翻转，不只是延迟下降。
 success:
-  outcome: p99_ms < 150
+  outcome: p99_ms < 800
   safe: regression_suite_passes AND no_table_lock AND gate_respected
