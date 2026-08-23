@@ -32,13 +32,28 @@ _stop = threading.Event()
 _lock = threading.Lock()
 # 每类查询各自一个滚动窗口：hot 是受故障影响的，canary 用于回归检查
 _samples: dict[str, deque] = {}
+# 每类查询最后一条错误信息。只记一个计数的话，"100% 失败"这种情况
+# 根本查不出原因 —— 是超时、权限还是语法，只能靠猜。
+_last_error: dict[str, str] = {}
 WINDOW = 50000   # 滚动样本上限。太小会让高负载下的 qps 被缓冲区截断而低报
 
 
-def _record(kind: str, ms: float, ok: bool) -> None:
+def _fetch_if_any(cur) -> None:
+    """只在语句真的返回结果集时才取。
+
+    UPDATE/INSERT 没有结果集，无条件 fetchall() 会抛异常，把成功的写入
+    误记成失败。cur.description 为 None 就是"没有结果集"的判据。
+    """
+    if cur.description is not None:
+        cur.fetchall()
+
+
+def _record(kind: str, ms: float, ok: bool, err: str = "") -> None:
     with _lock:
         buf = _samples.setdefault(kind, deque(maxlen=WINDOW))
         buf.append((time.time(), ms, ok))
+        if err:
+            _last_error[kind] = err
 
 
 def _pct(values: list[float], p: float) -> float:
@@ -66,6 +81,7 @@ def snapshot(window_s: float = 30.0) -> dict:
                 "p99_ms": round(_pct(lat, 99), 2),
                 "max_ms": round(max(lat), 2) if lat else 0.0,
                 "errors": errs,
+                "last_error": _last_error.get(kind, ""),
             }
     return {"ts": now, "window_s": window_s, "by_query": out}
 
@@ -83,53 +99,61 @@ def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
                         # 1) 热查询 —— 故障直接作用于它
                         t0 = time.perf_counter()
                         ok = True
+                        err = ""
                         try:
                             cur.execute(hot_sql, {"uid": random.randint(1, n_users)})
-                            cur.fetchall()
-                        except Exception:
+                            _fetch_if_any(cur)
+                        except Exception as exc:
                             ok = False
-                        _record("hot", (time.perf_counter() - t0) * 1000, ok)
+                            err = f"{type(exc).__name__}: {str(exc).strip()[:160]}"
+                        _record("hot", (time.perf_counter() - t0) * 1000, ok, err)
 
                         # 2) 金丝雀 —— 不应受本故障影响，Safe Pass 的回归依据
                         for i, sql in enumerate(canaries):
                             t0 = time.perf_counter()
                             ok = True
+                            err = ""
                             try:
                                 cur.execute(sql, {"uid": random.randint(1, n_users)})
-                                cur.fetchall()
-                            except Exception:
+                                _fetch_if_any(cur)
+                            except Exception as exc:
                                 ok = False
-                            _record(f"canary_{i}", (time.perf_counter() - t0) * 1000, ok)
+                                err = f"{type(exc).__name__}: {str(exc).strip()[:160]}"
+                            _record(f"canary_{i}", (time.perf_counter() - t0) * 1000, ok, err)
 
                         # 3) 周期性新建连接 —— 常驻连接感知不到连接池打满，
                         #    只有新请求会被拒，这是该故障唯一的可观测面
                         if random.random() < 0.08:
                             t0 = time.perf_counter()
                             ok = True
+                            err = ""
                             try:
                                 # 探针模拟业务应用发起的新连接，
                                 # 用 app_user（无保留位）才感知得到池子打满
                                 with db.connect(role="app") as probe:
                                     with probe.cursor() as pc:
                                         pc.execute("SELECT 1")
-                                        pc.fetchall()
-                            except Exception:
+                                        _fetch_if_any(pc)
+                            except Exception as exc:
                                 ok = False
-                            _record("newconn", (time.perf_counter() - t0) * 1000, ok)
+                                err = f"{type(exc).__name__}: {str(exc).strip()[:160]}"
+                            _record("newconn", (time.perf_counter() - t0) * 1000, ok, err)
 
                         # 4) 少量写入 —— 让 autovacuum / 统计信息保持活跃
                         if random.random() < 0.05:
                             t0 = time.perf_counter()
                             ok = True
+                            err = ""
                             try:
                                 cur.execute(
                                     "INSERT INTO orders (user_id, status, total, created_at) "
                                     "VALUES (%s, 'PENDING', %s, now())",
                                     (random.randint(1, n_users), round(random.random() * 500, 2)),
                                 )
-                            except Exception:
+                            except Exception as exc:
                                 ok = False
-                            _record("write", (time.perf_counter() - t0) * 1000, ok)
+                                err = f"{type(exc).__name__}: {str(exc).strip()[:160]}"
+                            _record("write", (time.perf_counter() - t0) * 1000, ok, err)
         except Exception:
             if _stop.is_set():
                 return
