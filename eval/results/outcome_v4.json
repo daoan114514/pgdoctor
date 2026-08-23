@@ -1,0 +1,43 @@
+{
+  "tag": "outcome_v4",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 152.9,
+  "episodes": [
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DIAGNOSE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 6,
+      "elapsed_s": 57.5,
+      "cost_usd": 0.0465,
+      "esc_verdicts": [],
+      "gate_decisions": [],
+      "outcome_note": "ModelUnavailable: 模型调用不可用（额度/限流/认证/网络，看下方原文）: Claude Code returned an error result: success",
+      "applied_sql": [],
+      "violations": [],
+      "error": "ModelUnavailable: 模型调用不可用（额度/限流/认证/网络，看下方原文）: Claude Code returned an error result: success",
+      "episode_id": "ep_lock_contention_eval_v1_1787464702",
+      "unusable": true,
+      "learned": {
+        "playbook": null,
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.125,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    }
+  ]
+}

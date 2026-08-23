@@ -195,10 +195,25 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                     if d.shield_reasons and not d.approved and any(
                             "护盾" in r for r in d.reasons):
                         audit["shield_breaches"].append(p.sql[:80])
+                    reasons = d.reasons + d.shield_reasons
+                    # 理由必须落进 episode 状态：只记在 res 上的话，模型
+                    # 退回 PLAN 时读到的上下文和被拒之前一模一样。
+                    st.last_gate_denial = {
+                        "sql": p.sql,
+                        "action_type": p.action_type,
+                        "rollback": p.rollback,
+                        "tier": d.tier,
+                        "reasons": reasons,
+                    }
+                    st.note("gate", "proposal_denied",
+                            f"[{d.tier}] {p.sql[:60]} — "
+                            f"{'; '.join(reasons)[:150]}")
                     st.proposal = {}
                     st.repair_attempts += 1
                     if st.repair_attempts >= st.max_repair_attempts:
-                        st.outcome_note = "提案连续被拒，升级人工"
+                        st.outcome_note = (
+                            f"提案连续被拒，升级人工；最后一次 [{d.tier}] "
+                            f"{'; '.join(reasons)[:160]}")
                         sm.goto(Phase.ESCALATE, "gate denied")
                     else:
                         sm.goto(Phase.PLAN, "gate denied, replan")

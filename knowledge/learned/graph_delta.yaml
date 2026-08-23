@@ -6,6 +6,8 @@ learned_under:
 likelihood_adj:
   connection_exhaustion->错误 32: 0.05
   connection_exhaustion->错误 75: 0.05
+  lock_contention->p99 上升 334x: 0.05
+  lock_contention->错误 30: 0.05
   lock_contention->错误 5086: 0.05
   lock_contention->错误 5285: 0.05
   lock_contention->错误 5381: 0.05
@@ -20,7 +22,7 @@ likelihood_adj:
 observed:
   _no_conclusion:
     hit: 0
-    miss: 6
+    miss: 7
   connection_exhaustion:
     hit: 2
     miss: 0
@@ -38,4 +40,4 @@ prior_adj:
   lock_contention: 0.075
   missing_index: -0.125
   stale_statistics: 0.075
-updated_at: 1787464596.5791817
+updated_at: 1787464850.6005723

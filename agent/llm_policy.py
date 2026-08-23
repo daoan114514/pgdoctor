@@ -332,6 +332,18 @@ class LLMPolicy(Policy):
         if phase is Phase.PLAN:
             tried = "\n".join(
                 f"  - {a.sql}  ->  {a.verdict}" for a in st.attempts) or "  （无）"
+            denial = ""
+            if st.last_gate_denial:
+                g = st.last_gate_denial
+                denial = (
+                    "\n★ 上一个提案被安全门拒绝了，先看清原因再改：\n"
+                    f"  被拒 SQL : {g.get('sql', '')}\n"
+                    f"  action_type: {g.get('action_type', '')}   "
+                    f"rollback: {g.get('rollback', '')}\n"
+                    f"  档位     : {g.get('tier', '')}\n"
+                    f"  理由     : {'; '.join(g.get('reasons', []))}\n"
+                    "  必须针对上面的理由修改，原样重提只会再被拒一次。\n")
+
             prompt = f"""{st.render_context()}
 
 {ctx.get("playbook_hint", "")}
@@ -340,7 +352,7 @@ class LLMPolicy(Policy):
 {hot}
 
 已确认根因：{st.claimed_fault_class} — {st.claimed_root_cause}
-
+{denial}
 此前试过且失败的修复（不要重复提交）：
 {tried}
 

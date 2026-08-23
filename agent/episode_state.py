@@ -75,6 +75,9 @@ class EpisodeState:
     claimed_fault_class: str | None = None
     proposal: dict = field(default_factory=dict)
     repair_attempts: int = 0
+    # 最近一次被安全门拒绝的提案及其理由。不存进状态的话，模型退回
+    # PLAN 时读到的上下文和第一次完全一样，只会把同样的错误再提一遍。
+    last_gate_denial: dict = field(default_factory=dict)
     esc_retries: int = 0
     max_repair_attempts: int = 2
     budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": 40})
