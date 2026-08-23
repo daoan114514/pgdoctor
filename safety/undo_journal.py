@@ -50,6 +50,16 @@ def _append_line(rec: dict) -> None:
         os.fsync(f.fileno())   # 落盘之后才允许继续，否则崩溃会丢记录
 
 
+# 显式声明"这个动作撤不回来"的标记，不是可执行 SQL。
+# 终止会话、重载配置这类动作本质上不可撤销，强求一条回滚语句只会
+# 逼出假的，反而制造"以为能回滚"的错觉。
+IRREVERSIBLE = "IRREVERSIBLE"
+
+
+def is_irreversible(undo_sql: str) -> bool:
+    return (undo_sql or "").strip().upper() == IRREVERSIBLE
+
+
 def make_idempotent(undo_sql: str) -> str:
     """撤销语句必须幂等，否则崩溃恢复时重复执行会二次出错。
 
@@ -59,6 +69,8 @@ def make_idempotent(undo_sql: str) -> str:
     最初用 split 拼接就踩了这个顺序，导致回滚语句本身非法、撤销失败。
     """
     s = undo_sql.strip().rstrip(";")
+    if is_irreversible(s):
+        return IRREVERSIBLE          # 原样保留，执行层会跳过
     if "IF EXISTS" in s.upper():
         return s
     m = re.match(r"^(DROP\s+INDEX)(\s+CONCURRENTLY)?\s+(.+)$", s,

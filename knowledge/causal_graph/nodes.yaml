@@ -117,7 +117,9 @@ fixes:
     action_type: session_control
     risk_tier: CONFIRM
     template: "SELECT pg_terminate_backend({pid})"
-    rollback: "SELECT 1"
+    # 终止会话撤不回来。写个假的回滚语句只会制造"以为能回滚"的错觉，
+    # 所以要求显式声明不可逆，由人来担这个责任。
+    rollback: "IRREVERSIBLE"
   - id: enable_autovacuum
     action_type: alter_table_options
     risk_tier: CONFIRM

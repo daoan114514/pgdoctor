@@ -106,7 +106,24 @@ def assess(p: RemediationProposal) -> GateDecision:
             [f"提案声称 {p.action_type}，AST 实际为 {actual}"])
 
     if not p.rollback or not p.rollback.strip():
+        # 终止会话这类动作本质上不可撤销，强求回滚语句只会逼出假的，
+        # 反而制造"以为能回滚"的错觉。改为要求显式承认不可逆。
+        if actual == "session_control":
+            return GateDecision(
+                Tier.DENY.value, False,
+                ["会话控制不可撤销，rollback 请显式写 IRREVERSIBLE 以示知情"])
         return GateDecision(Tier.DENY.value, False, ["缺少回滚语句"])
+
+    if p.rollback.strip().upper() == "IRREVERSIBLE":
+        if actual != "session_control":
+            return GateDecision(Tier.DENY.value, False,
+                                [f"{actual} 不允许标记为不可逆"])
+        return GateDecision(Tier.CONFIRM.value, True,
+                            ["终止会话不可撤销，已显式声明并需人工确认"],
+                            {"action_class": actual, "reversible": False,
+                             "locks_table": False,
+                             "blast_radius": "session",
+                             "touches_data": False})
 
     rb = shield.inspect_sql(p.rollback)
     if not rb.allowed and "DROP" not in p.rollback.upper():
@@ -155,6 +172,16 @@ def assess(p: RemediationProposal) -> GateDecision:
     elif actual == "alter_table_options":
         tier = Tier.CONFIRM
         reasons.append("表存储参数变更需确认")
+    elif actual == "session_control":
+        # 终止会话会让对方的事务回滚。这不可撤销 —— 但它恰恰是锁竞争
+        # 唯一有效的处置手段，一律拒绝等于让这类故障无解。
+        # 归到需确认档，由人来担这个责任。
+        tier = Tier.CONFIRM
+        risk["reversible"] = False
+        reasons.append("终止会话不可撤销，会让对方事务回滚，需人工确认")
+    elif actual in ("config_reload", "maintenance", "replication_control"):
+        tier = Tier.CONFIRM
+        reasons.append(f"{actual} 类动作影响面较大，需确认")
     elif risk["touches_data"]:
         tier = Tier.CONFIRM
         reasons.append("直接修改数据行")
@@ -230,6 +257,12 @@ def rollback(undo_id: str) -> tuple[bool, str]:
         return False, f"找不到回滚记录 {undo_id}"
     if rec.get("status") == UndoStatus.REVERTED.value:
         return True, "已经撤销过（幂等）"
+    if undo_journal.is_irreversible(rec.get("undo_sql", "")):
+        # 不是失败，是这个动作本来就撤不回来 —— 提案时已显式声明并经人工确认。
+        # 当成"回滚失败"会误判成需人工介入的严重情形。
+        undo_journal.mark(undo_id, UndoStatus.APPLIED,
+                          "该动作不可撤销，提案时已显式声明")
+        return True, "该动作不可撤销（提案时已声明 IRREVERSIBLE），无需回滚"
     try:
         with db.connect(role="rw", autocommit=True) as conn, conn.cursor() as cur:
             cur.execute("SET lock_timeout = '5s'")
