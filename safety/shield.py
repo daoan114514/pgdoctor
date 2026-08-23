@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from pglast import parse_sql
@@ -53,6 +54,30 @@ ALLOWED_STMT = {
 
 # AlterTable 里只放行改存储参数一类；加列删列改类型都拒绝
 ALTER_SUBTYPE_ALLOW = {"AT_SetRelOptions", "AT_ResetRelOptions"}
+
+# 语法上是 SELECT、语义上却有强副作用的函数。
+# 只看语句类型会把它们当成只读放行 —— pg_terminate_backend 会直接
+# 掐断别人的连接，这跟"只读查询"是两回事，必须单独归类并过门。
+SIDE_EFFECT_FUNCS = {
+    "pg_terminate_backend": "session_control",
+    "pg_cancel_backend": "session_control",
+    "pg_reload_conf": "config_reload",
+    "pg_rotate_logfile": "maintenance",
+    "pg_switch_wal": "maintenance",
+    "pg_promote": "replication_control",
+    "pg_drop_replication_slot": "replication_control",
+    "pg_create_restore_point": "maintenance",
+    "hypopg_reset": "noop",
+}
+
+
+def _side_effect_func(sql: str) -> str | None:
+    """SQL 里是否调用了有副作用的函数；返回它对应的动作类型。"""
+    low = sql.lower()
+    for fn, kind in SIDE_EFFECT_FUNCS.items():
+        if re.search(r"\b" + re.escape(fn) + r"\s*\(", low):
+            return kind
+    return None
 
 
 def _node_name(node) -> str:
@@ -142,6 +167,10 @@ def classify(sql: str) -> str:
     if not tree:
         return "empty"
     kind = _node_name(tree[0].stmt)
+    # 先看有没有副作用函数：语法类型在这里会骗人
+    se = _side_effect_func(sql)
+    if se and kind == "SelectStmt":
+        return se
     return {
         "IndexStmt": "create_index",
         "VacuumStmt": "vacuum_analyze",
