@@ -351,9 +351,15 @@ set_parameter / alter_table_options / session_control / dml_update / dml_delete
 
 要求：
 1. 一个提案只做一件事，不要把多条语句拼在一起。
-2. 必须给出可回滚语句。
+2. rollback 字段必须填，三选一：
+   - 能撤销的写具体回滚 SQL（如建索引对应 DROP INDEX CONCURRENTLY）
+   - 撤不回来的写 IRREVERSIBLE（终止会话）
+   - 本就无需撤销的写 NO_ROLLBACK_NEEDED（ANALYZE 只重算统计，
+     退回失真的旧统计既做不到也没人想要）
+   留空一律拒绝 —— 留空分不清"想过了不需要"和"忘了写"。
 3. 建索引一律用 CONCURRENTLY —— 大表上不加它会锁表，安全门会直接拒绝。
-4. 修复要对症：统计信息过期用 ANALYZE，不要用建索引去绕；
+4. 修复要对症：统计信息过期用 ANALYZE（action_type 填 vacuum_analyze、
+   rollback 填 NO_ROLLBACK_NEEDED），不要用建索引去绕；
    锁竞争用 pg_terminate_backend 终止阻塞源，action_type 填
    session_control、rollback 填 IRREVERSIBLE（终止会话本就撤不回来，
    写假的回滚语句会制造"以为能回滚"的错觉）。

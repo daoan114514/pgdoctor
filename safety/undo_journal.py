@@ -54,10 +54,27 @@ def _append_line(rec: dict) -> None:
 # 终止会话、重载配置这类动作本质上不可撤销，强求一条回滚语句只会
 # 逼出假的，反而制造"以为能回滚"的错觉。
 IRREVERSIBLE = "IRREVERSIBLE"
+# 与 IRREVERSIBLE 对称的另一种声明：动作本身不破坏任何东西，
+# 撤销无从谈起也无必要（ANALYZE 只是重算统计，退不回失真的旧统计）。
+NO_ROLLBACK_NEEDED = "NO_ROLLBACK_NEEDED"
 
 
 def is_irreversible(undo_sql: str) -> bool:
     return (undo_sql or "").strip().upper() == IRREVERSIBLE
+
+
+def is_no_rollback_needed(undo_sql: str) -> bool:
+    return (undo_sql or "").strip().upper() == NO_ROLLBACK_NEEDED
+
+
+def is_marker(undo_sql: str) -> bool:
+    """是不是一个声明标记，而不是真的 SQL。
+
+    标记既不能拿去过护盾解析，也不能在回滚时当语句执行 ——
+    IRREVERSIBLE 早先被当成 SQL 执行过，报 syntax error 之后
+    被判成"回滚失败"。
+    """
+    return is_irreversible(undo_sql) or is_no_rollback_needed(undo_sql)
 
 
 def make_idempotent(undo_sql: str) -> str:
@@ -69,8 +86,8 @@ def make_idempotent(undo_sql: str) -> str:
     最初用 split 拼接就踩了这个顺序，导致回滚语句本身非法、撤销失败。
     """
     s = undo_sql.strip().rstrip(";")
-    if is_irreversible(s):
-        return IRREVERSIBLE          # 原样保留，执行层会跳过
+    if is_marker(s):
+        return s.upper()             # 标记原样保留，执行层会跳过
     if "IF EXISTS" in s.upper():
         return s
     m = re.match(r"^(DROP\s+INDEX)(\s+CONCURRENTLY)?\s+(.+)$", s,

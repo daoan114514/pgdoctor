@@ -35,6 +35,10 @@ class EpisodeOutcome:
     elapsed_s: float = 0.0
     cost_usd: float = 0.0
     esc_verdicts: list = field(default_factory=list)
+    # 门的裁决与终局说明。"修复为什么没发生"是这一环最关键的信息，
+    # 之前没记，只能翻 traces 才查得到（查了两轮才发现是 rollback 字段）
+    gate_decisions: list = field(default_factory=list)
+    outcome_note: str = ""
     applied_sql: list = field(default_factory=list)
     violations: list = field(default_factory=list)
     error: str = ""
@@ -206,6 +210,8 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 out.learned = ev.learn(st, score, res.applied_sql,
                                        st.symptoms,
                                        truth=spec.get("fault_class"))
+            out.gate_decisions = res.gate_decisions
+            out.outcome_note = st.outcome_note or ""
     except Exception as exc:
         out.error = f"{type(exc).__name__}: {exc}"
         if type(exc).__name__ == "ModelUnavailable" or \

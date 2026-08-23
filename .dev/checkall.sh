@@ -5,7 +5,7 @@ export PYTHONPATH="$PWD"
 fail=0
 for f in .dev/shield_check.py .dev/esc_check.py .dev/evo_check.py \
          .dev/gate_check.py .dev/check_gate_reject.py .dev/check_lock_safe.py \
-         .dev/w7_check.py .dev/coverage_check.py; do
+         .dev/w7_check.py .dev/coverage_check.py .dev/check_rollback_markers.py; do
   [ -f "$f" ] || continue
   printf '%-32s ' "$f"
   out="$(timeout 180 python3 "$f" 2>&1)"

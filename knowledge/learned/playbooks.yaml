@@ -8,7 +8,7 @@ connection_exhaustion:
   root_cause: connection_exhaustion
   success_count: 0
   typical_fix: ''
-  updated_at: 1787462336.6794546
+  updated_at: 1787464579.5529242
 lock_contention:
   decisive_evidence: []
   evidence_order: []
@@ -19,7 +19,7 @@ lock_contention:
   root_cause: lock_contention
   success_count: 0
   typical_fix: ''
-  updated_at: 1787462342.1809442
+  updated_at: 1787464585.0750618
 missing_index:
   decisive_evidence:
   - explain_seq_scan
@@ -42,7 +42,7 @@ missing_index:
   success_count: 3
   typical_fix: CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id,
     status)
-  updated_at: 1787462350.0871408
+  updated_at: 1787464593.7163928
 stale_statistics:
   decisive_evidence: []
   evidence_order: []
@@ -53,4 +53,4 @@ stale_statistics:
   root_cause: stale_statistics
   success_count: 0
   typical_fix: ''
-  updated_at: 1787462344.18045
+  updated_at: 1787464587.281389
