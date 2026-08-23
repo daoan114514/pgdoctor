@@ -100,6 +100,13 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
     _hits = _cs.search(_fp, split=use_cases_split, top_k=3,
                        query_text=" ".join(st.symptoms)) if use_cases else []
     ctx["case_prior"] = _cs.render_prior(_hits) if _hits else ""
+    # L2：历史有效的取证顺序。与案例先验的区别在于它是跨 episode
+    # 聚合出来的流程，而不是某一次具体事故。
+    try:
+        from knowledge.evolution import render_playbook_hint
+        ctx["playbook_hint"] = render_playbook_hint(candidates)
+    except Exception:
+        ctx["playbook_hint"] = ""
     ctx["case_ids"] = [h["case"].case_id for h in _hits]
     if not quiet:
         print(f"  [因果图] 症状 {graph_symptoms} -> 候选根因 {candidates}")

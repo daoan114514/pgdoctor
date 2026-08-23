@@ -78,7 +78,17 @@ def toolset_for(hypothesis: str) -> list[str]:
                 if t:
                     tools.add(t)
             if tools:
-                return sorted(tools)
+                # L4：历史上帮着确认过该根因的查询排前面。
+                # 只调顺序不裁剪集合 —— 裁剪会让没被用过的工具永远
+                # 没有出头之日，把偶然的历史固化成盲区。
+                try:
+                    from knowledge.evolution import top_queries_for
+                    pref = top_queries_for(hypothesis)
+                    ordered = [t for t in pref if t in tools]
+                    ordered += sorted(t for t in tools if t not in ordered)
+                    return ordered
+                except Exception:
+                    return sorted(tools)
     except Exception:
         pass
     return FALLBACK_TOOLSETS.get(hypothesis, DEFAULT_TOOLSET)

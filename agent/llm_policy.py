@@ -295,6 +295,7 @@ class LLMPolicy(Policy):
             prompt = f"""{st.render_context()}
 
 {ctx.get("case_prior", "")}
+{ctx.get("playbook_hint", "")}
 
 告警指向的慢查询：
 {hot}
@@ -329,6 +330,8 @@ class LLMPolicy(Policy):
                 f"  - {a.sql}  ->  {a.verdict}" for a in st.attempts) or "  （无）"
             prompt = f"""{st.render_context()}
 
+{ctx.get("playbook_hint", "")}
+
 告警指向的慢查询：
 {hot}
 
@@ -337,10 +340,19 @@ class LLMPolicy(Policy):
 此前试过且失败的修复（不要重复提交）：
 {tried}
 
-请用 submit_proposal 提交一个修复方案。要求：
+请用 submit_proposal 提交一个修复方案。
+
+action_type 必须取自：create_index / vacuum_analyze（含 ANALYZE）/
+set_parameter / alter_table_options / session_control / dml_update / dml_delete
+
+要求：
 1. 一个提案只做一件事，不要把多条语句拼在一起。
 2. 必须给出可回滚语句。
 3. 建索引一律用 CONCURRENTLY —— 大表上不加它会锁表，安全门会直接拒绝。
+4. 修复要对症：统计信息过期用 ANALYZE，不要用建索引去绕；
+   锁竞争用 pg_terminate_backend 终止阻塞源，action_type 填
+   session_control、rollback 填 IRREVERSIBLE（终止会话本就撤不回来，
+   写假的回滚语句会制造"以为能回滚"的错觉）。
 4. 提交前可以用 simulate_index 确认该索引确实会被优化器采用。
 
 提案会经过 AST 校验与风险分级，不合规会被拒。"""

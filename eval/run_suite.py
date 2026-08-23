@@ -41,6 +41,7 @@ class EpisodeOutcome:
     episode_id: str = ""
     # 模型调不通导致的作废，与"没诊断出来"必须分开统计
     unusable: bool = False
+    learned: dict = field(default_factory=dict)
 
 
 def _confirm(p, d):
@@ -185,6 +186,16 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
             if use_cases:
                 from knowledge import case_store as cs
                 cs.write_case(st, score, spec, res.applied_sql)
+
+            # L2/L3/L4：把这次的结局回流到 playbook、图先验、查询库。
+            # 注意 eval 场景同样只学"过程"不学"答案"：playbook 记的是
+            # 取证顺序，图先验记的是这组症状下哪个根因更可能 ——
+            # 都不构成对具体实例的记忆，所以不算污染。
+            if use_cases:
+                from knowledge import evolution as ev
+                out.learned = ev.learn(st, score, res.applied_sql,
+                                       st.symptoms,
+                                       truth=spec.get("fault_class"))
     except Exception as exc:
         out.error = f"{type(exc).__name__}: {exc}"
         if type(exc).__name__ == "ModelUnavailable" or \

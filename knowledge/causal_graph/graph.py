@@ -51,13 +51,27 @@ def load() -> nx.MultiDiGraph:
 
 # ── 查询接口（会被包成 MCP 工具）──────────────────────────────
 
+def _learned_adj() -> dict:
+    """L3 学到的先验调整。
+
+    单独存成 overlay 而不是改种子图：种子图是手工写的 ground truth，
+    混在一起就分不清"人写的"和"学来的"，出问题也没法回滚。
+    """
+    try:
+        from knowledge.evolution import load_delta
+        return load_delta().prior_adj
+    except Exception:
+        return {}
+
+
 def candidate_causes(symptoms: list[str], max_hops: int = 3,
-                     top_k: int = 5) -> list[dict]:
+                     top_k: int = 5, use_learned: bool = True) -> list[dict]:
     """从症状反向多跳遍历，得到候选根因并按可能性排序。
 
     多跳是关键：级联故障里真根因离症状好几跳，单跳等于退化成查找表。
     """
     g = load()
+    adj = _learned_adj() if use_learned else {}
     scores: dict[str, float] = {}
     paths: dict[str, list[str]] = {}
 
@@ -77,6 +91,11 @@ def candidate_causes(symptoms: list[str], max_hops: int = 3,
                 seen.add(cause)
                 if g.nodes.get(cause, {}).get("kind") == "RootCause":
                     prior = g.nodes[cause].get("prior", 0.1)
+                    if use_learned:
+                        # 学到的调整量有上下限，且只影响排序不改变集合 ——
+                        # 学习不该让某个根因彻底进不了候选，否则系统会
+                        # 因为几次失败而永久丧失识别某类故障的能力
+                        prior = max(0.01, prior + adj.get(cause, 0.0))
                     sc = w * (0.5 + prior)
                     if sc > scores.get(cause, 0):
                         scores[cause] = sc
@@ -92,6 +111,7 @@ def candidate_causes(symptoms: list[str], max_hops: int = 3,
     out = [{"root_cause": c, "score": round(sc, 4),
             "path": " -> ".join(paths[c]),
             "hops": len(paths[c]) - 1,
+            "learned_adj": round(adj.get(c, 0.0), 4),
             "desc": g.nodes[c].get("desc", "")}
            for c, sc in sorted(scores.items(), key=lambda x: -x[1])]
     return out[:top_k]
