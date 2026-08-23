@@ -1,0 +1,53 @@
+connection_exhaustion:
+  decisive_evidence: []
+  evidence_order: []
+  fail_count: 2
+  fix_action_type: ''
+  median_steps: 0
+  root_cause: connection_exhaustion
+  success_count: 0
+  typical_fix: ''
+  updated_at: 1787455351.1331928
+lock_contention:
+  decisive_evidence: []
+  evidence_order: []
+  fail_count: 2
+  fix_action_type: ''
+  median_steps: 0
+  root_cause: lock_contention
+  success_count: 0
+  typical_fix: ''
+  updated_at: 1787455351.2469919
+missing_index:
+  decisive_evidence:
+  - explain_seq_scan
+  - row_estimate_deviation
+  - index_existence
+  - lock_blocking_chain
+  evidence_order:
+  - session_wait_profile
+  - monitor_snapshot
+  - slow_query_ranking
+  - slow_query
+  - explain_seq_scan
+  - row_estimate_deviation
+  - index_existence
+  - stats_freshness
+  fail_count: 4
+  fix_action_type: create_index
+  median_steps: 12
+  root_cause: missing_index
+  success_count: 4
+  typical_fix: CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id,
+    status)
+  updated_at: 1787460906.3456454
+stale_statistics:
+  decisive_evidence: []
+  evidence_order: []
+  fail_count: 1
+  fix_action_type: ''
+  median_steps: 0
+  root_cause: stale_statistics
+  success_count: 0
+  typical_fix: ''
+  updated_at: 1787455351.2867806

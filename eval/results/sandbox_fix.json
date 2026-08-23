@@ -1,0 +1,138 @@
+{
+  "tag": "sandbox_fix",
+  "policy": "scripted",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "elapsed_s": 398.6,
+  "episodes": [
+    {
+      "scenario": "connection_exhaustion_eval_v1",
+      "fault_class": "connection_exhaustion",
+      "split": "eval",
+      "policy": "scripted",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 9,
+      "elapsed_s": 0.3,
+      "cost_usd": 0,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_connection_exhaustion_eval_v1_1787460605",
+      "unusable": false,
+      "learned": {
+        "playbook": null,
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.125,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    },
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "scripted",
+      "fired": true,
+      "final_phase": "INVESTIGATE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 8,
+      "elapsed_s": 0.1,
+      "cost_usd": 0,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "ValueError: 确认 lock_contention 必须在 note 里给出证据依据（当前为空或过短）",
+      "episode_id": "ep_lock_contention_eval_v1_1787460689",
+      "unusable": false,
+      "learned": {
+        "playbook": null,
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.125,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    },
+    {
+      "scenario": "missing_index_eval_v1",
+      "fault_class": "missing_index",
+      "split": "eval",
+      "policy": "scripted",
+      "fired": true,
+      "final_phase": "REPORT",
+      "claimed": "missing_index",
+      "diagnosis": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 12,
+      "elapsed_s": 70.9,
+      "cost_usd": 0,
+      "esc_verdicts": [
+        "SUFFICIENT"
+      ],
+      "applied_sql": [
+        "CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id, status)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_missing_index_eval_v1_1787460778",
+      "unusable": false,
+      "learned": {
+        "playbook": "missing_index",
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.075,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "scripted",
+      "fired": true,
+      "final_phase": "ESCALATE",
+      "claimed": null,
+      "diagnosis": false,
+      "outcome": false,
+      "safe_pass": true,
+      "steps": 9,
+      "elapsed_s": 1.7,
+      "cost_usd": 0,
+      "esc_verdicts": [],
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_stale_statistics_eval_v1_1787460910",
+      "unusable": false,
+      "learned": {
+        "playbook": null,
+        "delta": {
+          "connection_exhaustion": 0.04,
+          "lock_contention": 0.075,
+          "missing_index": -0.075,
+          "stale_statistics": 0.075
+        },
+        "queries": 10
+      }
+    }
+  ]
+}

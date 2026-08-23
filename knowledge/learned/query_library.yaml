@@ -1,0 +1,68 @@
+connection_count:
+  evidence_type: connection_count
+  root_causes:
+    connection_exhaustion: 2
+  tool: get_connection_stats
+  used_in_failure: 4
+  used_in_success: 5
+counterfactual_index:
+  evidence_type: counterfactual_index
+  root_causes:
+    missing_index: 4
+  tool: simulate_index
+  used_in_failure: 5
+  used_in_success: 8
+explain_plan:
+  evidence_type: explain_plan
+  root_causes: {}
+  tool: explain_query
+  used_in_failure: 9
+  used_in_success: 1
+explain_seq_scan:
+  evidence_type: explain_seq_scan
+  root_causes:
+    missing_index: 4
+  tool: explain_query
+  used_in_failure: 0
+  used_in_success: 4
+index_existence:
+  evidence_type: index_existence
+  root_causes:
+    missing_index: 4
+  tool: get_indexes
+  used_in_failure: 11
+  used_in_success: 9
+lock_blocking_chain:
+  evidence_type: lock_blocking_chain
+  root_causes:
+    lock_contention: 2
+  tool: get_blocking_chain
+  used_in_failure: 13
+  used_in_success: 9
+row_estimate_deviation:
+  evidence_type: row_estimate_deviation
+  root_causes:
+    stale_statistics: 1
+  tool: explain_query
+  used_in_failure: 2
+  used_in_success: 2
+session_wait_profile:
+  evidence_type: session_wait_profile
+  root_causes:
+    lock_contention: 2
+  tool: get_active_sessions
+  used_in_failure: 13
+  used_in_success: 9
+slow_query_ranking:
+  evidence_type: slow_query_ranking
+  root_causes: {}
+  tool: get_top_queries
+  used_in_failure: 13
+  used_in_success: 9
+stats_freshness:
+  evidence_type: stats_freshness
+  root_causes:
+    stale_statistics: 1
+  tool: get_table_stats
+  used_in_failure: 10
+  used_in_success: 8

@@ -1,0 +1,40 @@
+likelihood_adj:
+  connection_exhaustion->错误 32: 0.05
+  connection_exhaustion->错误 75: 0.05
+  connection_exhaustion->错误 994: 0.05
+  lock_contention->p99 上升 258x: 0.05
+  lock_contention->错误 30: 0.05
+  lock_contention->错误 5086: 0.05
+  lock_contention->错误 5285: 0.05
+  lock_contention->错误 5381: 0.05
+  lock_contention->错误 5835: 0.05
+  lock_contention->错误 6784: 0.05
+  stale_statistics->CPU 上升 11x: 0.1
+  stale_statistics->CPU 上升 15x: 0.05
+  stale_statistics->p99 上升 281x: 0.05
+  stale_statistics->p99 上升 295x: 0.05
+  stale_statistics->p99 上升 442x: 0.05
+  stale_statistics->p99 上升 484x: 0.05
+  stale_statistics->错误 4: 0.05
+observed:
+  _no_conclusion:
+    hit: 0
+    miss: 9
+  connection_exhaustion:
+    hit: 2
+    miss: 0
+  lock_contention:
+    hit: 2
+    miss: 0
+  missing_index:
+    hit: 4
+    miss: 4
+  stale_statistics:
+    hit: 1
+    miss: 0
+prior_adj:
+  connection_exhaustion: 0.04
+  lock_contention: 0.075
+  missing_index: -0.075
+  stale_statistics: 0.075
+updated_at: 1787461000.0780973
