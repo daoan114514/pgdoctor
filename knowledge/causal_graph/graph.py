@@ -214,6 +214,78 @@ def upstream_of(root_cause: str) -> list[dict]:
             if k == "CAUSES" and g.nodes.get(u, {}).get("kind") == "RootCause"]
 
 
+def _causes_reachable(g, src: str, dst: str) -> list[str] | None:
+    """沿 根因->根因 的 CAUSES 边找 src 到 dst 的路径，找不到返回 None。"""
+    stack = [(src, [src])]
+    seen = {src}
+    while stack:
+        n, path = stack.pop()
+        for _, v, k in g.out_edges(n, keys=True):
+            if k != "CAUSES" or g.nodes.get(v, {}).get("kind") != "RootCause":
+                continue
+            if v == dst:
+                return path + [v]
+            if v not in seen:
+                seen.add(v)
+                stack.append((v, path + [v]))
+    return None
+
+
+def collapse_chain(causes: list[str]) -> dict:
+    """多个根因同时被确认时，判断它们是不是同一条因果链。
+
+    级联和真·多根因是完全不同的两件事，处理方式也相反：
+      级联   —— 表面两个根因，实际一条链，该改声明最上游那个；
+                修下游只治标，根因会复发。
+      独立   —— 真的两个不相干的故障同时发生，按单根因修必然修一半。
+
+    返回 kind: single / cascade / independent
+    """
+    g = load()
+    cs = [c for c in dict.fromkeys(causes) if c in g]
+    if len(cs) <= 1:
+        return {"kind": "single", "upstream": cs[0] if cs else None,
+                "explained": [], "independent": [], "path": []}
+
+    for c in cs:
+        rest = [o for o in cs if o != c]
+        paths = [_causes_reachable(g, c, o) for o in rest]
+        if all(p is not None for p in paths):
+            longest = max(paths, key=len)
+            return {"kind": "cascade", "upstream": c, "explained": rest,
+                    "independent": [], "path": longest}
+
+    return {"kind": "independent", "upstream": None, "explained": [],
+            "independent": cs, "path": []}
+
+
+def map_symptoms(symptoms: list[str], fallback: bool = False) -> list[str]:
+    """把人话症状描述映射成因果图的节点 id。
+
+    这份映射原本在 loop.py 和 esc.py 各有一份副本，改一边另一边不动。
+    合并到这里 —— 它属于"图的词汇表"，本就该由图这边定义。
+
+    fallback: 假设生成需要至少一个种子症状，判孤儿症状则绝不能凭空补
+    一个，否则会造出根本没观测到的"孤儿"。
+    """
+    out = set()
+    for s in symptoms:
+        low = s.lower()
+        if "p99" in low or "延迟" in s or "latency" in low:
+            out.add("latency_p99_up")
+        if "cpu" in low:
+            out.add("cpu_saturated")
+        if "错误" in s or "error" in low or "吞吐" in s:
+            out.add("throughput_down")
+        if "阻塞" in s or "挂起" in s or "blocked" in low:
+            out.add("queries_blocked")
+        if "磁盘" in s or "disk" in low:
+            out.add("disk_growing")
+        if "连接" in s or "conn" in low:
+            out.add("conn_near_limit")
+    return sorted(out) or (["latency_p99_up"] if fallback else [])
+
+
 def stats() -> dict:
     g = load()
     kinds: dict[str, int] = {}

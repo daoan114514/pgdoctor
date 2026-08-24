@@ -149,7 +149,15 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                             f"{'PASS' if d.passed else 'FAIL'}"
                             f"{'(必需)' if d.mandatory else ''} {d.detail}")
                     if rep.verdict == esc_mod.ESCVerdict.SUFFICIENT.value:
-                        pass
+                        # D3 是非必需维度，所以"存在孤儿症状"也能拿到
+                        # SUFFICIENT。把这个事实记下来：单一根因解释不了
+                        # 全部症状时，后面修复失败不能把账算到它头上。
+                        _d3 = next((d for d in rep.dims if d.name == "D3"),
+                                   None)
+                        st.partial_fix_suspected = bool(_d3 and _d3.missing)
+                        if st.partial_fix_suspected:
+                            log(f"               D3 孤儿症状 {_d3.missing}"
+                                f" -> 疑似第二个故障，本轮修复失败不反证根因")
                     elif rep.verdict in (esc_mod.ESCVerdict.AMBIGUOUS.value,
                                          esc_mod.ESCVerdict.EXHAUSTED.value):
                         st.outcome_note = f"ESC {rep.verdict}: {rep.directives[:2]}"
@@ -270,6 +278,9 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                     continue
 
                 rc = st.claimed_fault_class or "unknown"
+                # 存在未被解释的症状时，"KPI 没回基线"更可能是第二个故障
+                # 还在，而不是这个根因判错了 —— 不能算进反证计数。
+                _counts = not st.partial_fix_suspected
                 st.record_attempt(RemediationAttempt(
                     root_cause=rc,
                     sql=(res.applied_sql[-1] if res.applied_sql else ""),
@@ -277,7 +288,11 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                     actual=st.current_kpi,
                     verdict="FAILED_NO_IMPROVEMENT",
                     rolled_back=True,
-                    inference=st.outcome_note or "修复后未达成功判据"))
+                    inference=st.outcome_note or "修复后未达成功判据",
+                    counts_against_root_cause=_counts))
+                if not _counts:
+                    log(f"               失败不计入 {rc} 的反证计数"
+                        f"（有未解释的症状，疑似第二个故障）")
                 # 知识单调增长：数据库回到原状，但"这条路走过、不通"留下了
                 st.proposal = {}
                 st.repair_attempts += 1
@@ -336,13 +351,10 @@ def run_diagnosis(env, obs, policy, max_steps: int = 40,
 
 
 def _map_symptoms(symptoms: list[str]) -> list[str]:
-    """把人话症状描述映射成因果图的节点 id。"""
-    out = set()
-    for s in symptoms:
-        if "p99" in s or "延迟" in s:
-            out.add("latency_p99_up")
-        if "cpu" in s.lower():
-            out.add("cpu_saturated")
-        if "错误" in s:
-            out.add("throughput_down")
-    return sorted(out) or ["latency_p99_up"]
+    """把人话症状描述映射成因果图的节点 id。
+
+    实现搬到 graph.map_symptoms —— ESC 的 D3 也要用同一份映射，
+    之前两边各有一份副本，改了一边另一边不会跟着动。
+    """
+    from knowledge.causal_graph import graph as _G
+    return _G.map_symptoms(symptoms, fallback=True)
