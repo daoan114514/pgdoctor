@@ -64,6 +64,21 @@ def _learned_adj() -> dict:
         return {}
 
 
+def _learned_likelihood_adj() -> dict:
+    """L3 学到的"某根因导致某症状"的调整量。
+
+    与 prior_adj 的分工：prior_adj 调的是根因自身的基础可能性，这个调
+    的是具体一条因果边的权重。同一个根因在不同症状组合下的可能性并不
+    相同，这层信息 prior_adj 表达不了 —— 之前这份数据写了从来没人读，
+    等于把 L3 学到的一半直接扔掉。
+    """
+    try:
+        from knowledge.evolution import load_delta
+        return load_delta().likelihood_adj
+    except Exception:
+        return {}
+
+
 def candidate_causes(symptoms: list[str], max_hops: int = 3,
                      top_k: int = 5, use_learned: bool = True) -> list[dict]:
     """从症状反向多跳遍历，得到候选根因并按可能性排序。
@@ -72,6 +87,7 @@ def candidate_causes(symptoms: list[str], max_hops: int = 3,
     """
     g = load()
     adj = _learned_adj() if use_learned else {}
+    ladj = _learned_likelihood_adj() if use_learned else {}
     scores: dict[str, float] = {}
     paths: dict[str, list[str]] = {}
 
@@ -79,8 +95,16 @@ def candidate_causes(symptoms: list[str], max_hops: int = 3,
         if s not in g:
             continue
         # 直接指向该症状的根因
-        frontier = [(u, g[u][s][k].get("likelihood", 0.5), [u])
-                    for u, v, k in g.in_edges(s, keys=True) if k == "CAUSES"]
+        frontier = []
+        for u, _v, k in g.in_edges(s, keys=True):
+            if k != "CAUSES":
+                continue
+            w = g[u][s][k].get("likelihood", 0.5)
+            if use_learned:
+                # 与 prior 同样的纪律：只调权重不改变集合，且夹在 (0,1)
+                # 内，学习不能让一条因果边彻底消失
+                w = min(0.99, max(0.01, w + ladj.get(f"{u}->{s}", 0.0)))
+            frontier.append((u, w, [u]))
         seen = set()
         hop = 0
         while frontier and hop < max_hops:

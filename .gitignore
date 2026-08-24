@@ -8,4 +8,3 @@ traces/*
 *.log
 .dev/*.log
 .dev/*.done
-knowledge/learned_backup/

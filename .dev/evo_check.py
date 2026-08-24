@@ -3,9 +3,11 @@
 自进化的判据不是"记下来了"，而是"下次不一样了"。
 所以每一层都要验两件事：学没学到、以及学到的有没有回流。
 """
+import atexit
 import json
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -14,13 +16,24 @@ from knowledge import evolution as ev
 from knowledge.causal_graph import graph as G
 
 REPO = Path("/home/daoan/pgdoctor")
-BACKUP = REPO / "knowledge" / "learned_backup"
+# 用干净的学习状态跑，同时绝不碰真实产物。
+#
+# 原来的写法是把 knowledge/learned/ 复制到 learned_backup/ 再删掉原目录，
+# 然后就没有然后了 —— 注释写着"跑完恢复"，代码里根本没有恢复动作
+# （BACKUP 只出现在赋值和这三行里）。于是每跑一次验收，真实积累的学习
+# 状态就被重放结果覆盖一次，learned_backup/ 只堆不清。更麻烦的是这让
+# 验收变成了自我实现：它先写数据、再断言自己刚写的东西。
+#
+# 改成把落盘目录重定向到临时目录，退出时还原，真实产物全程只读。
+_TMP = Path(tempfile.mkdtemp(prefix="evo_check_"))
+_ORIG_LEARNED = ev.LEARNED
+ev.LEARNED = _TMP
 
-# 用干净的学习状态，跑完恢复
-if ev.LEARNED.exists():
-    shutil.rmtree(BACKUP, ignore_errors=True)
-    shutil.copytree(ev.LEARNED, BACKUP)
-    shutil.rmtree(ev.LEARNED)
+
+@atexit.register
+def _restore_learned():
+    ev.LEARNED = _ORIG_LEARNED
+    shutil.rmtree(_TMP, ignore_errors=True)
 
 ok = True
 

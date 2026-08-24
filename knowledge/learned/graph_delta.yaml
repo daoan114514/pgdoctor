@@ -1,0 +1,28 @@
+likelihood_adj:
+  connection_exhaustion->throughput_down: 0.1
+  lock_contention->throughput_down: 0.25
+  stale_statistics->cpu_saturated: 0.15
+  stale_statistics->latency_p99_up: 0.15
+  stale_statistics->throughput_down: 0.05
+observed:
+  _no_conclusion:
+    hit: 0
+    miss: 6
+  connection_exhaustion:
+    hit: 2
+    miss: 0
+  lock_contention:
+    hit: 2
+    miss: 0
+  missing_index:
+    hit: 3
+    miss: 4
+  stale_statistics:
+    hit: 1
+    miss: 0
+prior_adj:
+  connection_exhaustion: 0.04
+  lock_contention: 0.075
+  missing_index: -0.05
+  stale_statistics: 0.075
+updated_at: 1787562904.215404
