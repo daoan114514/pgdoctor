@@ -17,10 +17,42 @@ import yaml
 HERE = Path(__file__).resolve().parent
 
 
+def _merge_promoted(edges: dict) -> dict:
+    """并入人工审批通过的学习边（promoted_edges.yaml）。
+
+    候选提案文件 learned/candidate_edges.yaml **永远不在这条路径上** ——
+    机器写候选，人 promote 之后才进这里，和数据库那侧"提案→过门→执行"
+    是同一个模式。
+
+    这里再挡一道，是纵深防御：只接受 causes_symptom / causes_cause /
+    confirmed_by，且 confirmed_by 一律降级为 supporting。structure.promote()
+    已经禁过一次，就算有人手改 promoted_edges.yaml，也塞不进一条 required
+    边或 REFUTED_BY 边 —— 前者等于让系统给自己降标准，后者会静默杀掉
+    正确假设。
+    """
+    try:
+        from knowledge.structure import load_promoted
+        extra = load_promoted()
+    except Exception:
+        return edges
+    if not extra:
+        return edges
+    out = {k: list(v or []) for k, v in edges.items()}
+    for key in ("causes_symptom", "causes_cause"):
+        for e in extra.get(key, []) or []:
+            out.setdefault(key, []).append(dict(e))
+    for e in extra.get("confirmed_by", []) or []:
+        d = dict(e)
+        d["necessity"] = "supporting"      # 学来的永远不能是必需证据
+        out.setdefault("confirmed_by", []).append(d)
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def load() -> nx.MultiDiGraph:
     nodes = yaml.safe_load((HERE / "nodes.yaml").read_text(encoding="utf-8"))
     edges = yaml.safe_load((HERE / "edges.yaml").read_text(encoding="utf-8"))
+    edges = _merge_promoted(edges)
     g = nx.MultiDiGraph()
 
     for kind, key in (("symptoms", "Symptom"), ("root_causes", "RootCause"),

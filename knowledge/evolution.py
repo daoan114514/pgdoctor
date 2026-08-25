@@ -2,7 +2,7 @@
 
 三层各自负责一件事：
   L2  技能沉淀    把成功的取证顺序固化成 playbook，下次照着走
-  L3  失败驱动    从结局回写因果图的先验与必需证据
+  L3  失败驱动    从结局回写因果图的先验；结构变更只提案不生效
   L4  查询库      沉淀真正有判别力的诊断查询
 
 共同点是它们都**不训练模型**，改的是外部知识。这样自进化是可审计的：
@@ -454,6 +454,13 @@ def learn(st, score, applied_sql: list[str], symptoms: list[str],
         out["queries"] = len(load_queries())
     except Exception as exc:
         out["query_error"] = str(exc)[:120]
+    # 结构提案：只写候选文件，绝不生效。见 knowledge/structure.py
+    try:
+        from knowledge.structure import observe_episode
+        out["structure"] = [p.pid for p in
+                            observe_episode(st, score, symptoms, truth)]
+    except Exception as exc:
+        out["structure_error"] = str(exc)[:120]
     return out
 
 

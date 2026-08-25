@@ -96,11 +96,37 @@ for label, pat, files in [
     h = has(pat, *files)
     print(f"  {'已实现' if h else '缺失  '}  {label:<20} {h or ''}")
 print()
-print("有意不做（不是缺口）：")
-print("  · 回写必需证据边 —— 学习只影响假设的生成与排序，绝不放松证据")
-print("    要求。让 L3 去改 required 边等于让系统学会给自己降标准。")
-print("  · 直接改种子图 —— 学到的东西存成 overlay，才分得清哪些是人写的")
-print("    ground truth、哪些是学来的，出问题也能单独回滚。")
+print("=" * 76)
+print("L3+ 结构提案：机器提出因果边，人审批后才生效")
+print("=" * 76)
+for label, pat, files in [
+    ("提案数据结构", "class EdgeProposal", ["knowledge/structure.py"]),
+    ("只在诊断正确时观察", "def _truth_of", ["knowledge/structure.py"]),
+    ("孤儿症状作信号源", "def observe_episode", ["knowledge/structure.py"]),
+    ("人工审批入口", "def promote", ["knowledge/structure.py"]),
+    ("驳回留痕", "def reject", ["knowledge/structure.py"]),
+    ("接进 learn()", "observe_episode", ["knowledge/evolution.py"]),
+    ("生效路径只读 promoted", "_merge_promoted",
+     ["knowledge/causal_graph/graph.py"]),
+    ("加载层二次拦截", 'd["necessity"] = "supporting"',
+     ["knowledge/causal_graph/graph.py"]),
+]:
+    h = has(pat, *files)
+    print(f"  {'已实现' if h else '缺失  '}  {label:<20} {h or ''}")
+
+print()
+print("三条硬禁（是禁止，不是阈值 —— 调参数也绕不过去）：")
+print("  · 绝不提案 REFUTED_BY —— 一条错的排除规则会静默杀掉正确假设：")
+print("    被排除的根因根本不会再进候选集，你连它被排除过都看不见。")
+print("  · 绝不提案 necessity=required —— 那等于让系统学会给自己降标准。")
+print("    学来的证据关系一律 supporting，ESC 的 D1 该查什么还查什么。")
+print("  · 误诊的 episode 一条都不观察 —— 拿巧合长边就是把噪声写成常识。")
+print()
+print("仍然有意不做：")
+print("  · 直接改种子图 —— 学到的边存进 promoted_edges.yaml，与手写的")
+print("    edges.yaml 分开，任何时候都能区分并单独回滚。")
+print("  · 自动 promote —— 结构变更不可逆且难追溯，必须由人担责，")
+print("    这和数据库那侧'提案→过门→执行'是同一个模式。")
 
 print()
 print("=" * 76)
