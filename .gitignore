@@ -9,3 +9,5 @@ traces/*
 .dev/*.log
 .dev/*.done
 knowledge/learned_backup/
+.idea/
+.vscode/
