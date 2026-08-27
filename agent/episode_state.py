@@ -55,6 +55,10 @@ class RemediationAttempt:
     verdict: str
     rolled_back: bool = False
     inference: str = ""
+    # 这次失败该不该算到"根因被反证"的头上。
+    # 多根因场景里修一个 -> KPI 回不到基线，失败的原因是另一个故障还在，
+    # 不是这个根因判错了。算进去会把正确的根因反证掉，而且是永久的。
+    counts_against_root_cause: bool = True
 
 
 @dataclass
@@ -79,6 +83,9 @@ class EpisodeState:
     # PLAN 时读到的上下文和第一次完全一样，只会把同样的错误再提一遍。
     last_gate_denial: dict = field(default_factory=dict)
     esc_retries: int = 0
+    # ESC 判 SUFFICIENT 但 D3 查出孤儿症状时置位：单一根因解释不了全部
+    # 症状，很可能还有第二个故障。此时修复失败不该反证当前根因。
+    partial_fix_suspected: bool = False
     max_repair_attempts: int = 2
     budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": 40})
     started_at: float = field(default_factory=time.time)
@@ -137,6 +144,13 @@ class EpisodeState:
         self.attempts.append(attempt)
 
     def attempts_for(self, root_cause: str) -> int:
+        """反证判定用：只数"能算到这个根因头上"的失败。"""
+        return sum(1 for a in self.attempts
+                   if a.root_cause == root_cause
+                   and a.counts_against_root_cause)
+
+    def attempts_logged_for(self, root_cause: str) -> int:
+        """日志与报告用：这个根因下一共试过几次（含不计入反证的）。"""
         return sum(1 for a in self.attempts if a.root_cause == root_cause)
 
     def refute_by_remediation(self, root_cause: str, note: str = "") -> None:

@@ -157,16 +157,10 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
 
     # ── D3 因果一致：有没有解释不了的孤儿症状 ─────────────────
     known = set(G.symptoms_of(rc))
-    observed = set(st.symptoms or [])
-    # st.symptoms 存的是人话描述，做一次粗映射
-    mapped = set()
-    for s in observed:
-        if "p99" in s or "延迟" in s:
-            mapped.add("latency_p99_up")
-        if "CPU" in s.upper():
-            mapped.add("cpu_saturated")
-        if "错误" in s:
-            mapped.add("throughput_down")
+    # 映射复用 graph.map_symptoms。这里原本内联了一份更旧的副本，
+    # 与 loop.py 那份会各自漂移，而漂移了没有任何东西会报错。
+    # fallback=False：判孤儿症状时绝不能凭空补一个没观测到的症状。
+    mapped = set(G.map_symptoms(st.symptoms or [], fallback=False))
     orphans = sorted(mapped - known) if mapped else []
     dims.append(DimResult("D3", not orphans, False,
                           f"观测症状 {sorted(mapped) or '—'}，该根因已知可解释 "
@@ -210,11 +204,35 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
                  if st.ledger.get(c) and
                  st.ledger[c].verdict == Verdict.CONFIRMED.value]
 
-    if mandatory_ok and (not applicable or dims[-1].passed):
-        verdict = ESCVerdict.SUFFICIENT.value
-    elif len(confirmed) > 1:
+    # 多根因判定必须排在 SUFFICIENT 之前。
+    #
+    # 原顺序是 SUFFICIENT 先判、多根因那条 elif 在后，于是只要被声明的
+    # 根因证据齐备就直接放行 —— 第二个已确认的根因被静默忽略。后果不是
+    # "少修一个"，而是：只修一个 -> VERIFY 见 KPI 没回基线 -> 判修复失败
+    # -> ROLLBACK 把那个正确的修复撤掉并记一次失败 -> 两次后
+    # REFUTED_BY_REMEDIATION 把正确根因永久封掉。"修了一半"被当成
+    # "修错了"，而且污染的是跨轮次持久的台账。
+    #
+    # 那条 elif 只在"多个确认 且 证据还不齐"时才够得着，而那种情况其实
+    # 是鉴别诊断没做干净，不是多根因。分支写对了，位置放错了。
+    pool = list(dict.fromkeys(([rc] if rc else []) + confirmed))
+    chain = G.collapse_chain(pool)
+
+    if chain["kind"] == "cascade" and chain["upstream"] != rc:
+        # 不是歧义，是同一条因果链：修下游只治标，根因会复发
+        verdict = ESCVerdict.INSUFFICIENT.value
+        directives.insert(
+            0, f"{chain['upstream']} 在因果链上位于 {rc} 上游"
+               f"（{' -> '.join(chain['path'])}），应改声明它 —— "
+               f"修下游只治标，根因会复发")
+    elif chain["kind"] == "independent":
         verdict = ESCVerdict.AMBIGUOUS.value
-        directives.insert(0, f"多个假设同时被确认: {confirmed}，无法区分")
+        directives.insert(
+            0, f"多个互不相关的根因同时被确认 {chain['independent']}，"
+               f"当前只支持单根因修复；按其中之一动手会修一半并被判成"
+               f"修复失败，升级人工")
+    elif mandatory_ok and (not applicable or dims[-1].passed):
+        verdict = ESCVerdict.SUFFICIENT.value
     elif st.budget["steps"] >= st.budget["max_steps"] * 0.8:
         verdict = ESCVerdict.EXHAUSTED.value
     else:

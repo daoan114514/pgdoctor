@@ -2,7 +2,7 @@
 
 三层各自负责一件事：
   L2  技能沉淀    把成功的取证顺序固化成 playbook，下次照着走
-  L3  失败驱动    从结局回写因果图的先验与必需证据
+  L3  失败驱动    从结局回写因果图的先验；结构变更只提案不生效
   L4  查询库      沉淀真正有判别力的诊断查询
 
 共同点是它们都**不训练模型**，改的是外部知识。这样自进化是可审计的：
@@ -39,6 +39,7 @@ class Playbook:
     typical_fix: str = ""
     fix_action_type: str = ""
     median_steps: int = 0
+    steps_samples: list = field(default_factory=list)   # 求真中位数用
     success_count: int = 0
     fail_count: int = 0
     # 在哪一版场景下学到的。场景改版后这条就不再成立，见 current_revisions()
@@ -133,9 +134,16 @@ def sediment_playbook(st, score, applied_sql: list[str]) -> Playbook | None:
         if applied_sql:
             pb.typical_fix = applied_sql[-1]
             pb.fix_action_type = st.proposal.get("action_type", "")
+        # 原来写的是 (median_steps + steps) // 2 —— 那是滑动平均不是中位数，
+        # 喂 [10,20,30,40] 会得到 31 而真中位数是 25。滑动平均对异常值敏感，
+        # 一次跑飞的 episode 会把"典型步数"永久拉高，而这个数是要写进提示
+        # 给模型当参考的。留最近 15 个样本算真中位数。
         steps = st.budget.get("steps", 0)
-        pb.median_steps = (steps if not pb.median_steps
-                           else (pb.median_steps + steps) // 2)
+        pb.steps_samples = (list(pb.steps_samples) + [steps])[-15:]
+        _s = sorted(pb.steps_samples)
+        _n = len(_s)
+        pb.median_steps = (_s[_n // 2] if _n % 2
+                           else (_s[_n // 2 - 1] + _s[_n // 2]) // 2)
         pb.success_count += 1
     else:
         pb.fail_count += 1
@@ -189,6 +197,15 @@ def _delta_path() -> Path:
     return LEARNED / "graph_delta.yaml"
 
 
+def _valid_symptom_ids() -> set:
+    try:
+        from knowledge.causal_graph import graph as _G
+        g = _G.load()
+        return {n for n, d in g.nodes(data=True) if d.get("kind") == "Symptom"}
+    except Exception:
+        return set()
+
+
 def load_delta() -> GraphDelta:
     p = _delta_path()
     if not p.exists():
@@ -200,6 +217,14 @@ def load_delta() -> GraphDelta:
         d.prior_adj.pop(rc, None)
         d.observed.pop(rc, None)
         d.learned_under.pop(rc, None)
+
+    # 自愈：丢掉症状侧不是图节点 id 的历史脏键。修复前用人话串拼键，
+    # 那些条目永远命不中，留着只会让人误以为学到了东西。
+    ids = _valid_symptom_ids()
+    if ids:
+        d.likelihood_adj = {
+            k: v for k, v in d.likelihood_adj.items()
+            if "->" in k and k.split("->", 1)[1] in ids}
     return d
 
 
@@ -268,29 +293,46 @@ def learn_from_episode(st, score, symptoms: list[str]) -> GraphDelta:
     obs["hit" if hit else "miss"] += 1
     _bump(d, claimed, LR if hit else -LR)
 
-    # 修复失败是比"诊断没中"更强的负信号：真按这个根因动手了还是没治好
+    # 修复失败是比"诊断没中"更强的负信号：真按这个根因动手了还是没治好。
+    # 但只算得上"可归因"的失败 —— 多根因场景里修一个、KPI 回不到基线，
+    # 失败的原因是另一个故障还在，不是这个根因判错了。把这种也算进去，
+    # 会和台账那条 bug 一样，反复压低一个其实正确的根因。
     for a in st.attempts:
-        if a.verdict.startswith("FAILED"):
-            _bump(d, a.root_cause, -LR / 2)
+        if not a.verdict.startswith("FAILED"):
+            continue
+        if not getattr(a, "counts_against_root_cause", True):
+            continue
+        _bump(d, a.root_cause, -LR / 2)
 
     d.updated_at = time.time()
     save_delta(d)
     return d
 
 
-def learn_truth(claimed: str | None, truth: str, symptoms: list[str]) -> None:
+def learn_truth(claimed: str | None, truth: str, symptoms: list[str],
+                penalize_claimed: bool = False) -> None:
     """已知正确答案时的定向修正（跑批场景里 ground truth 是已知的）。
 
     只在"误诊"时补一刀：把真凶升上来。命中的情况 learn_from_episode
     已经升过一次，这里再升就是同一次成功被计两遍。
+
+    penalize_claimed 默认 False：正常路径是 learn() 先调
+    learn_from_episode（诊断没中已经扣过 -LR），这里再扣就是同一次
+    误诊被罚两遍 —— 而真凶只升一次，惩罚与奖励不对称，几轮下来会把
+    被误认过的根因压得过低。只有单独调用本函数（不经 learn()）时才
+    需要置 True。
     """
     d = load_delta()
     if claimed == truth:
         return          # 已由 learn_from_episode 处理
-    if claimed:
+    if claimed and penalize_claimed:
         _bump(d, claimed, -LR)      # 错认的降
     _bump(d, truth, LR)             # 真凶升
-    for s in symptoms:
+    # 症状必须先归一到图上的节点 id。原来直接用 st.symptoms 的人话串
+    # 拼键（"lock_contention->错误 5086"），数值烧进了键里，每个 episode
+    # 都产生一个全新的键 —— 既累加不起来，下次也永远命不中。
+    from knowledge.causal_graph import graph as _G
+    for s in _G.map_symptoms(symptoms):
         key = f"{truth}->{s}"
         d.likelihood_adj[key] = round(
             min(MAX_ADJ, d.likelihood_adj.get(key, 0.0) + LR), 4)
@@ -467,6 +509,13 @@ def learn(st, score, applied_sql: list[str], symptoms: list[str],
         out["queries"] = len(load_queries())
     except Exception as exc:
         out["query_error"] = str(exc)[:120]
+    # 结构提案：只写候选文件，绝不生效。见 knowledge/structure.py
+    try:
+        from knowledge.structure import observe_episode
+        out["structure"] = [p.pid for p in
+                            observe_episode(st, score, symptoms, truth)]
+    except Exception as exc:
+        out["structure_error"] = str(exc)[:120]
     return out
 
 

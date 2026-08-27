@@ -17,10 +17,42 @@ import yaml
 HERE = Path(__file__).resolve().parent
 
 
+def _merge_promoted(edges: dict) -> dict:
+    """并入人工审批通过的学习边（promoted_edges.yaml）。
+
+    候选提案文件 learned/candidate_edges.yaml **永远不在这条路径上** ——
+    机器写候选，人 promote 之后才进这里，和数据库那侧"提案→过门→执行"
+    是同一个模式。
+
+    这里再挡一道，是纵深防御：只接受 causes_symptom / causes_cause /
+    confirmed_by，且 confirmed_by 一律降级为 supporting。structure.promote()
+    已经禁过一次，就算有人手改 promoted_edges.yaml，也塞不进一条 required
+    边或 REFUTED_BY 边 —— 前者等于让系统给自己降标准，后者会静默杀掉
+    正确假设。
+    """
+    try:
+        from knowledge.structure import load_promoted
+        extra = load_promoted()
+    except Exception:
+        return edges
+    if not extra:
+        return edges
+    out = {k: list(v or []) for k, v in edges.items()}
+    for key in ("causes_symptom", "causes_cause"):
+        for e in extra.get(key, []) or []:
+            out.setdefault(key, []).append(dict(e))
+    for e in extra.get("confirmed_by", []) or []:
+        d = dict(e)
+        d["necessity"] = "supporting"      # 学来的永远不能是必需证据
+        out.setdefault("confirmed_by", []).append(d)
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def load() -> nx.MultiDiGraph:
     nodes = yaml.safe_load((HERE / "nodes.yaml").read_text(encoding="utf-8"))
     edges = yaml.safe_load((HERE / "edges.yaml").read_text(encoding="utf-8"))
+    edges = _merge_promoted(edges)
     g = nx.MultiDiGraph()
 
     for kind, key in (("symptoms", "Symptom"), ("root_causes", "RootCause"),
@@ -64,6 +96,21 @@ def _learned_adj() -> dict:
         return {}
 
 
+def _learned_likelihood_adj() -> dict:
+    """L3 学到的"某根因导致某症状"的调整量。
+
+    与 prior_adj 的分工：prior_adj 调的是根因自身的基础可能性，这个调
+    的是具体一条因果边的权重。同一个根因在不同症状组合下的可能性并不
+    相同，这层信息 prior_adj 表达不了 —— 之前这份数据写了从来没人读，
+    等于把 L3 学到的一半直接扔掉。
+    """
+    try:
+        from knowledge.evolution import load_delta
+        return load_delta().likelihood_adj
+    except Exception:
+        return {}
+
+
 def candidate_causes(symptoms: list[str], max_hops: int = 3,
                      top_k: int = 5, use_learned: bool = True) -> list[dict]:
     """从症状反向多跳遍历，得到候选根因并按可能性排序。
@@ -72,6 +119,7 @@ def candidate_causes(symptoms: list[str], max_hops: int = 3,
     """
     g = load()
     adj = _learned_adj() if use_learned else {}
+    ladj = _learned_likelihood_adj() if use_learned else {}
     scores: dict[str, float] = {}
     paths: dict[str, list[str]] = {}
 
@@ -79,8 +127,16 @@ def candidate_causes(symptoms: list[str], max_hops: int = 3,
         if s not in g:
             continue
         # 直接指向该症状的根因
-        frontier = [(u, g[u][s][k].get("likelihood", 0.5), [u])
-                    for u, v, k in g.in_edges(s, keys=True) if k == "CAUSES"]
+        frontier = []
+        for u, _v, k in g.in_edges(s, keys=True):
+            if k != "CAUSES":
+                continue
+            w = g[u][s][k].get("likelihood", 0.5)
+            if use_learned:
+                # 与 prior 同样的纪律：只调权重不改变集合，且夹在 (0,1)
+                # 内，学习不能让一条因果边彻底消失
+                w = min(0.99, max(0.01, w + ladj.get(f"{u}->{s}", 0.0)))
+            frontier.append((u, w, [u]))
         seen = set()
         hop = 0
         while frontier and hop < max_hops:
@@ -212,6 +268,78 @@ def upstream_of(root_cause: str) -> list[dict]:
              "note": d.get("note", "")}
             for u, v, k, d in g.in_edges(root_cause, keys=True, data=True)
             if k == "CAUSES" and g.nodes.get(u, {}).get("kind") == "RootCause"]
+
+
+def _causes_reachable(g, src: str, dst: str) -> list[str] | None:
+    """沿 根因->根因 的 CAUSES 边找 src 到 dst 的路径，找不到返回 None。"""
+    stack = [(src, [src])]
+    seen = {src}
+    while stack:
+        n, path = stack.pop()
+        for _, v, k in g.out_edges(n, keys=True):
+            if k != "CAUSES" or g.nodes.get(v, {}).get("kind") != "RootCause":
+                continue
+            if v == dst:
+                return path + [v]
+            if v not in seen:
+                seen.add(v)
+                stack.append((v, path + [v]))
+    return None
+
+
+def collapse_chain(causes: list[str]) -> dict:
+    """多个根因同时被确认时，判断它们是不是同一条因果链。
+
+    级联和真·多根因是完全不同的两件事，处理方式也相反：
+      级联   —— 表面两个根因，实际一条链，该改声明最上游那个；
+                修下游只治标，根因会复发。
+      独立   —— 真的两个不相干的故障同时发生，按单根因修必然修一半。
+
+    返回 kind: single / cascade / independent
+    """
+    g = load()
+    cs = [c for c in dict.fromkeys(causes) if c in g]
+    if len(cs) <= 1:
+        return {"kind": "single", "upstream": cs[0] if cs else None,
+                "explained": [], "independent": [], "path": []}
+
+    for c in cs:
+        rest = [o for o in cs if o != c]
+        paths = [_causes_reachable(g, c, o) for o in rest]
+        if all(p is not None for p in paths):
+            longest = max(paths, key=len)
+            return {"kind": "cascade", "upstream": c, "explained": rest,
+                    "independent": [], "path": longest}
+
+    return {"kind": "independent", "upstream": None, "explained": [],
+            "independent": cs, "path": []}
+
+
+def map_symptoms(symptoms: list[str], fallback: bool = False) -> list[str]:
+    """把人话症状描述映射成因果图的节点 id。
+
+    这份映射原本在 loop.py 和 esc.py 各有一份副本，改一边另一边不动。
+    合并到这里 —— 它属于"图的词汇表"，本就该由图这边定义。
+
+    fallback: 假设生成需要至少一个种子症状，判孤儿症状则绝不能凭空补
+    一个，否则会造出根本没观测到的"孤儿"。
+    """
+    out = set()
+    for s in symptoms:
+        low = s.lower()
+        if "p99" in low or "延迟" in s or "latency" in low:
+            out.add("latency_p99_up")
+        if "cpu" in low:
+            out.add("cpu_saturated")
+        if "错误" in s or "error" in low or "吞吐" in s:
+            out.add("throughput_down")
+        if "阻塞" in s or "挂起" in s or "blocked" in low:
+            out.add("queries_blocked")
+        if "磁盘" in s or "disk" in low:
+            out.add("disk_growing")
+        if "连接" in s or "conn" in low:
+            out.add("conn_near_limit")
+    return sorted(out) or (["latency_p99_up"] if fallback else [])
 
 
 def stats() -> dict:
