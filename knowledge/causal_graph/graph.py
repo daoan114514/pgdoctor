@@ -199,6 +199,23 @@ def refuting_evidence(root_cause: str) -> list[dict]:
             if k == "REFUTED_BY"]
 
 
+def discriminators_of(root_cause: str) -> set[str]:
+    """哪些证据类型能把这个根因和别的候选分开。
+
+    DISCRIMINATES 边存的是"一条证据分开哪几个候选"，这里做反向索引。
+    ESC 的 D2 判"这次排除有没有依据"时要用：拿判别证据排除一个候选，
+    是有依据的，哪怕那条证据不在该候选自己的 confirmed_by 边上。
+    """
+    g = load()
+    out: set[str] = set()
+    for ev, _v, k, d in g.edges(keys=True, data=True):
+        if k != "DISCRIMINATES":
+            continue
+        if root_cause in (d.get("separates") or []):
+            out.add(ev)
+    return out
+
+
 def best_discriminator(candidates: list[str]) -> dict | None:
     """在候选集上找一次能分开最多假设的证据 —— 取证预算有限时最划算的那步。"""
     g = load()

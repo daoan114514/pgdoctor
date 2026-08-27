@@ -198,15 +198,44 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
 
     # ── D2 鉴别诊断（必需项）────────────────────────────────
     competitors = [c for c in cands if c != rc]
-    excluded = [c for c in competitors
-                if st.ledger.get(c) and st.ledger[c].verdict in
-                (Verdict.REFUTED.value, Verdict.REFUTED_BY_REMEDIATION.value)]
+    def _backed(h: str) -> bool:
+        """这个排除有没有证据支撑。
+
+        判据从因果图取：只要该假设的确认／反证证据类型在轨迹里出现过，
+        就算做过功。不看 note 写得多漂亮 —— 那是模型自述，正是 ESC
+        从设计上就不采信的东西。
+
+        REFUTED_BY_REMEDIATION 无条件算数：它来自一次真实的修复失败，
+        是比任何只读证据都强的依据。
+        """
+        e = st.ledger.get(h)
+        if e and e.verdict == Verdict.REFUTED_BY_REMEDIATION.value:
+            return True
+        # 三个来源都算：该假设自己的确认／反证证据，以及能把它和别的
+        # 候选分开的判别证据 —— 后者容易漏。误导性告警里
+        # idle_in_transaction 正是分开长事务与连接打满的那条，拿它排除
+        # connection_exhaustion 是有依据的，尽管它不在后者的 confirmed_by 上。
+        rel = (set(G.required_evidence(h)) | set(G.supporting_evidence(h))
+               | {r["evidence"] for r in G.refuting_evidence(h)}
+               | G.discriminators_of(h))
+        return bool(rel & set(got))
+
+    # 只数有依据的排除。原来只看 verdict 字符串，于是把竞争假设无脑标成
+    # REFUTED 就能让这道闸无条件通过，一条判别证据都不用取。
+    refuted_all = [c for c in competitors
+                   if st.ledger.get(c) and st.ledger[c].verdict in
+                   (Verdict.REFUTED.value,
+                    Verdict.REFUTED_BY_REMEDIATION.value)]
+    excluded = [c for c in refuted_all if _backed(c)]
+    unbacked = [c for c in refuted_all if c not in excluded]
     ratio = (len(excluded) / len(competitors)) if competitors else 1.0
     d2_ok = ratio >= min_refute_ratio
     dims.append(DimResult(
         "D2", d2_ok, True,
         f"竞争假设 {len(competitors)} 个，已排除 {len(excluded)} 个 "
-        f"({ratio:.0%})",
+        f"({ratio:.0%})"
+        + (f"；另有 {len(unbacked)} 个声称排除但无证据支撑：{unbacked}"
+           if unbacked else ""),
         [c for c in competitors if c not in excluded]))
     if not d2_ok:
         for c in competitors:
@@ -215,7 +244,9 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
             disc = G.best_discriminator([rc, c])
             hint = (f"（可用 {disc['obtained_by']} 取 {disc['evidence']}）"
                     if disc else "")
-            directives.append(f"竞争假设 {c} 尚未排除{hint}")
+            why = ("已声称排除但没有任何支撑证据，需实际取证"
+                   if c in unbacked else "尚未排除")
+            directives.append(f"竞争假设 {c} {why}{hint}")
 
     # ── D3 因果一致：有没有解释不了的孤儿症状 ─────────────────
     known = set(G.symptoms_of(rc))

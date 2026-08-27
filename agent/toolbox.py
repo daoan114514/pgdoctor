@@ -235,12 +235,13 @@ class Toolbox:
         v = Verdict(verdict)
         if v is Verdict.REFUTED_BY_REMEDIATION:
             raise ValueError("该裁决只能由修复失败产生，不能由 agent 直接声明")
-        if v is Verdict.CONFIRMED and len(note.strip()) < 15:
-            # 确认一个假设必须给出依据。实测出现过 verdict=CONFIRMED
-            # 而 note 为空的情况，等于凭空确认，会直接把 ESC 的 D2
-            # 推向 AMBIGUOUS。
+        if v in (Verdict.CONFIRMED, Verdict.REFUTED) and len(note.strip()) < 15:
+            # 确认与排除都必须给出依据。原来只查 CONFIRMED，于是"无脑把
+            # 竞争假设全标 REFUTED"就能喂饱 ESC 的 D2 —— 那道闸数的是
+            # 声明，不是依据。跑批里的受控策略正是这么通过的。
+            act = "确认" if v is Verdict.CONFIRMED else "排除"
             raise ValueError(
-                f"确认 {name} 必须在 note 里给出证据依据（当前为空或过短）")
+                f"{act} {name} 必须在 note 里给出证据依据（当前为空或过短）")
         cur = self.st.ledger.get(name)
         if cur and cur.verdict == Verdict.REFUTED_BY_REMEDIATION.value:
             # 否则重新调查一轮就能把修复反证覆盖掉，无限重试循环又回来了

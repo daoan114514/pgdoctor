@@ -19,8 +19,12 @@ revision: 1
 misleading_as: connection_exhaustion
 inject:
   method: idle_transaction_pileup
-  leave_free: 6
-  min_idle_txn: 10
+  # 曾经设成 6，结果告警根本不触发（连续两轮跑批实测 errors 不足）：
+  # 留 6 个空位后负载还连得上，故障不显现，这个场景等于是废的。
+  # 区分 train/eval 不能靠把故障调弱 —— 那样测的就不是同一件事了。
+  # 改用 min_idle_txn 与并发度做区分，注入强度保持在故障真会显现的档位。
+  leave_free: 2
+  min_idle_txn: 14
 workload:
   profile: ecommerce_read_heavy
   concurrency: 4
