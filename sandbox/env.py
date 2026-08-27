@@ -195,11 +195,12 @@ class DBAScenarioEnv:
 
     def score(self, claimed_fault_class: str | None,
               audit: dict | None = None,
-              kpi=None, regression=None) -> EpisodeScore:
+              kpi=None, regression=None,
+              ledger: dict | None = None) -> EpisodeScore:
         if kpi is None or regression is None:
             kpi, regression = self.verify()
         return score_episode(self.spec, claimed_fault_class, self.applied_sql,
-                             kpi, regression, audit)
+                             kpi, regression, audit, ledger)
 
     def close(self) -> None:
         self._stop_workload()

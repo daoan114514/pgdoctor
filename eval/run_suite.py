@@ -19,6 +19,19 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "eval" / "results"
 
 
+def _ledger_of(st, res=None) -> dict:
+    """取假设台账，供严格诊断算 F1。
+
+    拿不到就返回空 —— 那种情况下没有排除记录，diagnosis_strict 自然
+    不过，不会把"缺数据"误报成"做得好"。
+    """
+    for src in (st, res):
+        led = getattr(src, "ledger", None) if src is not None else None
+        if isinstance(led, dict):
+            return led
+    return {}
+
+
 @dataclass
 class EpisodeOutcome:
     scenario: str
@@ -29,6 +42,11 @@ class EpisodeOutcome:
     final_phase: str = ""
     claimed: str | None = None
     diagnosis: bool = False
+    # 严格诊断（把鉴别诊断质量算进去）与"没造成破坏"。后者是本项目
+    # 原先的 safe_pass 语义 —— 改名是因为 DBA-Bench 的 Safe Pass 要求
+    # 故障真被修好，两者不是一个指标，混用会让对比失去意义。
+    diagnosis_strict: bool = False
+    non_destructive: bool = False
     outcome: bool = False
     safe_pass: bool = False
     steps: int = 0
@@ -178,10 +196,13 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                                   use_cases=use_cases,
                                   use_cases_split="train")
             score = env.score(res.claimed_fault_class, audit=res.audit,
+                              ledger=_ledger_of(st, res),
                               kpi=res.final_kpi, regression=res.final_regression)
             out.final_phase = res.final_phase
             out.claimed = res.claimed_fault_class
             out.diagnosis = bool(score.diagnosis)
+            out.diagnosis_strict = bool(score.diagnosis_strict)
+            out.non_destructive = bool(score.non_destructive)
             out.outcome = bool(score.outcome)
             out.safe_pass = bool(score.safe_pass)
             out.steps = res.steps
@@ -288,7 +309,8 @@ def main() -> None:
                     not args.no_repair, args.max_steps)
         results.append(r)
         print(f"    fired={r.fired} claimed={r.claimed} "
-              f"D={r.diagnosis} O={r.outcome} S={r.safe_pass} "
+              f"D={r.diagnosis}(严{r.diagnosis_strict}) O={r.outcome} "
+              f"S={r.safe_pass}(无损{r.non_destructive}) "
               f"steps={r.steps} ${r.cost_usd} {r.error[:40]}", flush=True)
         if r.unusable and i < len(picks):
             # 撞到额度墙就整批中止。继续往下跑毫无意义：每个场景都要先花
@@ -318,8 +340,10 @@ def main() -> None:
     if dead:
         print(f"   （三率仅基于 {len(usable)} 个有效 episode 计算）")
     print(f"Diagnosis {sum(r.diagnosis for r in usable)}/{n}  "
+          f"[严格 {sum(r.diagnosis_strict for r in usable)}/{n}]  "
           f"Outcome {sum(r.outcome for r in usable)}/{n}  "
           f"SafePass {sum(r.safe_pass for r in usable)}/{n}  "
+          f"[无损 {sum(r.non_destructive for r in usable)}/{n}]  "
           f"危险动作提出 {sum(len(r.shield_blocked) for r in usable)} 次"
           f"（均被护盾拦下）")
     print(f"成本合计 ${sum(r.cost_usd for r in results):.4f} | "
