@@ -137,6 +137,60 @@ class Toolbox:
             bears_on=["connection_exhaustion", "long_idle_transaction"])
         return r
 
+    def get_vacuum_horizon(self) -> dict:
+        self._enter("get_vacuum_horizon")
+        r = self.o.get_vacuum_horizon()
+        slot_age = max([x["xmin_age"] for x in r["slots"]] or [0])
+        prep_age = max([x["xid_age"] for x in r["prepared_xacts"]] or [0])
+        # 四条证据一次落账：它们是同一个 xmin 视界的四个持有者，
+        # 分开记会让 agent 查到第一个就收工，而真凶常常是另一个。
+        self._evidence(
+            "xid_age", "",
+            f"XID 年龄 db={r['db_xid_age']:,} 最老表={r['oldest_table']}"
+            f"({r['oldest_table_xid_age']:,}), "
+            f"占 freeze_max_age {r['wraparound_pct']}%, 风险={r['at_risk']}",
+            bears_on=["xid_wraparound_risk", "autovacuum_starvation"])
+        self._evidence(
+            "backend_xmin_age", "",
+            f"最老 backend_xmin 年龄={r['oldest_backend_xmin_age']:,} "
+            f"(pid={r['oldest_backend_pid']}); xmin 持有者={r['xmin_holders']}",
+            bears_on=["long_idle_transaction", "autovacuum_starvation",
+                      "xid_wraparound_risk"])
+        self._evidence(
+            "replication_slot_age", "",
+            f"复制槽 {len(r['slots'])} 个, 最大 xmin 年龄={slot_age:,}; "
+            f"明细={r['slots']}",
+            bears_on=["stale_replication_slot"])
+        self._evidence(
+            "prepared_xact_age", "",
+            f"预备事务 {len(r['prepared_xacts'])} 个, "
+            f"最大 XID 年龄={prep_age:,}",
+            bears_on=["orphaned_prepared_transaction"])
+        return r
+
+    def get_database_stats(self) -> dict:
+        self._enter("get_database_stats")
+        r = self.o.get_database_stats()
+        self._evidence(
+            "deadlock_count", "",
+            f"累计死锁={r.get('deadlocks', 0)}, "
+            f"回滚={r.get('xact_rollback', 0)}/"
+            f"提交={r.get('xact_commit', 0)}",
+            bears_on=["deadlock", "lock_contention"])
+        self._evidence(
+            "temp_file_volume", "",
+            f"临时文件 {r.get('temp_files', 0)} 个, "
+            f"外溢 {r.get('temp_mb', 0)} MB",
+            bears_on=["work_mem_spill", "disk_pressure"])
+        self._evidence(
+            "checkpoint_stats", "",
+            f"检查点 定时={r.get('ckpt_timed', 0)} "
+            f"请求式={r.get('ckpt_requested', 0)} "
+            f"(请求式占比 {r.get('ckpt_requested_pct', 0)}%), "
+            f"写耗时={r.get('ckpt_write_time_ms', 0):.0f}ms",
+            bears_on=["checkpoint_pressure"])
+        return r
+
     def simulate_index(self, create_sql: str, test_sql: str,
                        params: dict | None = None) -> dict:
         """反事实验证：不改生产就能预先证伪一个"缺索引"的判断。"""

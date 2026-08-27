@@ -112,6 +112,19 @@ def _build_tools(tb: Toolbox) -> list:
              {})(
             wrap(lambda a: tb.get_connection_stats())),
 
+        tool("get_vacuum_horizon",
+             "谁挡着 xmin 前进：XID 年龄与回卷风险、复制槽 / 预备事务 / "
+             "长事务各自持住的 xmin 年龄。死元组回收不掉时先查这个 —— "
+             "挡住 vacuum 的不只是长事务",
+             {})(
+            wrap(lambda a: tb.get_vacuum_horizon())),
+
+        tool("get_database_stats",
+             "库级累计计数器：死锁数、临时文件外溢量、检查点定时/请求式"
+             "次数与耗时、I/O 等待时间",
+             {})(
+            wrap(lambda a: tb.get_database_stats())),
+
         tool("simulate_index", "用 hypopg 建假设索引并对比执行计划成本。"
              "不会真正修改数据库，可在动手前证伪一个缺索引判断",
              {"create_sql": str, "test_sql": str, "uid": int})(

@@ -420,8 +420,16 @@ TOOL_OF = {
     "lock_blocking_chain": "get_blocking_chain",
     "session_wait_profile": "get_active_sessions",
     "connection_count": "get_connection_stats",
+    "idle_in_transaction": "get_connection_stats",
     "slow_query_ranking": "get_top_queries",
     "counterfactual_index": "simulate_index",
+    "xid_age": "get_vacuum_horizon",
+    "backend_xmin_age": "get_vacuum_horizon",
+    "replication_slot_age": "get_vacuum_horizon",
+    "prepared_xact_age": "get_vacuum_horizon",
+    "deadlock_count": "get_database_stats",
+    "temp_file_volume": "get_database_stats",
+    "checkpoint_stats": "get_database_stats",
 }
 
 

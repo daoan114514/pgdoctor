@@ -23,6 +23,21 @@ causes_symptom:
   - {from: long_idle_transaction, to: queries_blocked, likelihood: 0.70}
   - {from: disk_pressure,         to: disk_growing,    likelihood: 0.95}
   - {from: xid_wraparound_risk,   to: disk_growing,    likelihood: 0.40}
+  # 手册：复制槽会同时滞留 WAL 与 xmin，磁盘涨的是 pg_wal 而不是表
+  - {from: stale_replication_slot, to: disk_growing,   likelihood: 0.90,
+     source: pgdoc:routine-vacuuming}
+  - {from: deadlock,              to: throughput_down, likelihood: 0.75,
+     source: pgdoc:explicit-locking,
+     note: "死锁被检测到即中止其中一个事务，表现为事务失败率上升"}
+  - {from: deadlock,              to: queries_blocked, likelihood: 0.50,
+     source: pgdoc:explicit-locking}
+  # 外溢到临时文件 = 本该在内存做的排序/哈希改走磁盘
+  - {from: work_mem_spill,        to: latency_p99_up,  likelihood: 0.80,
+     source: pgdoc:monitoring-stats}
+  - {from: work_mem_spill,        to: disk_growing,    likelihood: 0.45,
+     source: pgdoc:monitoring-stats}
+  - {from: checkpoint_pressure,   to: latency_p99_up,  likelihood: 0.55,
+     source: pgdoc:monitoring-stats}
 
 # 根因 -> 根因（级联）。这是图相对查找表的不可替代之处。
 causes_cause:
@@ -41,6 +56,22 @@ causes_cause:
   # 永远查不到。
   - {from: long_idle_transaction, to: connection_exhaustion, likelihood: 0.65,
      note: "未提交的事务不释放连接，堆积到一定数量即占满连接池"}
+  # 手册 Routine Vacuuming 的要点：挡住 vacuum 的不只是长事务。
+  # 复制槽与预备事务同样持住 xmin，而且比长事务更隐蔽 —— 它们不在
+  # pg_stat_activity 里，只看会话列表永远发现不了。
+  - {from: stale_replication_slot, to: autovacuum_starvation, likelihood: 0.80,
+     source: pgdoc:routine-vacuuming,
+     note: "槽持住 xmin，其后产生的死元组一律回收不掉"}
+  - {from: orphaned_prepared_transaction, to: autovacuum_starvation,
+     likelihood: 0.75, source: pgdoc:routine-vacuuming}
+  - {from: orphaned_prepared_transaction, to: xid_wraparound_risk,
+     likelihood: 0.55, source: pgdoc:routine-vacuuming,
+     note: "预备事务的 XID 一直不释放，datfrozenxid 推不动"}
+  - {from: stale_replication_slot, to: xid_wraparound_risk, likelihood: 0.45,
+     source: pgdoc:routine-vacuuming}
+  - {from: lock_contention,       to: deadlock,           likelihood: 0.20,
+     source: pgdoc:explicit-locking,
+     note: "加锁顺序不一致时，等待会升级成环"}
 
 # 根因 <- 确认证据。necessity=required 的是硬要求：
 # 证据充分性检查的 D1 直接读这里，缺一即判 INSUFFICIENT。
@@ -59,6 +90,29 @@ confirmed_by:
   - {cause: long_idle_transaction, evidence: session_wait_profile, necessity: required}
   - {cause: long_idle_transaction, evidence: idle_in_transaction, necessity: required}
   - {cause: autovacuum_starvation, evidence: stats_freshness, necessity: required}
+  # xid_wraparound_risk 与 disk_pressure 此前一条确认证据都没有 ——
+  # 图上有这个节点，却没有任何办法确认它，等于只能靠猜。
+  - {cause: xid_wraparound_risk, evidence: xid_age, necessity: required}
+  - {cause: xid_wraparound_risk, evidence: backend_xmin_age, necessity: supporting}
+  - {cause: stale_replication_slot, evidence: replication_slot_age,
+     necessity: required}
+  - {cause: orphaned_prepared_transaction, evidence: prepared_xact_age,
+     necessity: required}
+  - {cause: deadlock, evidence: deadlock_count, necessity: required}
+  - {cause: deadlock, evidence: session_wait_profile, necessity: supporting}
+  - {cause: work_mem_spill, evidence: temp_file_volume, necessity: required}
+  - {cause: checkpoint_pressure, evidence: checkpoint_stats, necessity: required}
+  - {cause: autovacuum_starvation, evidence: backend_xmin_age,
+     necessity: supporting}
+  - {cause: long_idle_transaction, evidence: backend_xmin_age,
+     necessity: supporting}
+  - {cause: disk_pressure, evidence: temp_file_volume, necessity: supporting}
+  # slow_query_ranking 此前是孤点：get_top_queries 产出它、ESC 的 D4 也在
+  # 找它，图上却一条边都没有 —— 等于 agent 查了也白查。它的作用是定位
+  # "是哪条查询在慢"，对查询级的三类根因都是佐证。
+  - {cause: missing_index,    evidence: slow_query_ranking, necessity: supporting}
+  - {cause: stale_statistics, evidence: slow_query_ranking, necessity: supporting}
+  - {cause: work_mem_spill,   evidence: slow_query_ranking, necessity: supporting}
 
 # 根因 <- 反证证据：拿到这条证据即可排除该根因
 refuted_by:
@@ -74,6 +128,16 @@ refuted_by:
      when: "连接数远低于上限"}
   - {cause: long_idle_transaction, evidence: idle_in_transaction,
      when: "idle in transaction 会话数接近 0"}
+  - {cause: xid_wraparound_risk, evidence: xid_age,
+     when: "XID 年龄远低于 autovacuum_freeze_max_age"}
+  - {cause: stale_replication_slot, evidence: replication_slot_age,
+     when: "没有复制槽，或槽的 xmin 年龄很小"}
+  - {cause: orphaned_prepared_transaction, evidence: prepared_xact_age,
+     when: "pg_prepared_xacts 为空"}
+  - {cause: deadlock, evidence: deadlock_count,
+     when: "故障窗口内 deadlocks 计数没有增长"}
+  - {cause: work_mem_spill, evidence: temp_file_volume,
+     when: "temp_bytes 为 0，没有任何外溢"}
 
 # 一条证据能一次分开哪几个候选 —— 驱动"下一步查什么最划算"。
 # 取证预算有限时，优先做信息增益最大的那次查询。
@@ -95,6 +159,27 @@ discriminates:
   # 唯一的区分点 —— 漏了它就只能靠猜。
   - {evidence: idle_in_transaction,
      separates: [long_idle_transaction, connection_exhaustion], power: 0.95}
+  # 挡住 vacuum 的三个持有者表象完全一样（都是"死元组回收不掉"），
+  # 但处置方式完全不同：终止会话 / 丢弃复制槽 / 了结预备事务。
+  # 这条边的价值在于它一次把三者分开。
+  - {evidence: backend_xmin_age,
+     separates: [long_idle_transaction, stale_replication_slot,
+                 orphaned_prepared_transaction], power: 0.90,
+     source: pgdoc:routine-vacuuming}
+  # 死锁与普通锁等待表象相似（都是查询挂住），但死锁会被自动中止，
+  # 计数器会涨；锁等待不会。这是唯一能机械区分的判据。
+  - {evidence: deadlock_count,
+     separates: [deadlock, lock_contention], power: 0.92,
+     source: pgdoc:explicit-locking}
+  - {evidence: temp_file_volume,
+     separates: [work_mem_spill, missing_index, stale_statistics], power: 0.75,
+     source: pgdoc:monitoring-stats}
+  - {evidence: xid_age,
+     separates: [xid_wraparound_risk, table_bloat], power: 0.85,
+     source: pgdoc:routine-vacuuming}
+  # 判别力刻意给得低：它只能告诉你"哪条查询慢"，分不出慢的原因
+  - {evidence: slow_query_ranking,
+     separates: [missing_index, stale_statistics, work_mem_spill], power: 0.45}
 
 # 根因 -> 修复。risk_tier 是给安全门的先验，门仍会独立评估。
 fixed_by:
@@ -104,3 +189,13 @@ fixed_by:
   - {cause: lock_contention,      fix: terminate_blocker}
   - {cause: long_idle_transaction, fix: terminate_blocker}
   - {cause: autovacuum_starvation, fix: enable_autovacuum}
+  # connection_exhaustion / xid_wraparound_risk / disk_pressure 此前
+  # 一个修复都没挂 —— 诊断得出来也不知道该干什么。
+  - {cause: connection_exhaustion, fix: terminate_idle_backend}
+  - {cause: xid_wraparound_risk,   fix: vacuum_freeze_database}
+  - {cause: disk_pressure,         fix: vacuum_table}
+  - {cause: stale_replication_slot, fix: drop_replication_slot}
+  - {cause: orphaned_prepared_transaction, fix: resolve_prepared_xact}
+  - {cause: work_mem_spill,        fix: raise_work_mem}
+  - {cause: deadlock,              fix: terminate_blocker}
+  - {cause: checkpoint_pressure,   fix: raise_max_wal_size}

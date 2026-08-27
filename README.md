@@ -139,6 +139,51 @@ toolset_for("connection_exhaustion")  # → ['get_connection_stats']
 toolset_for("lock_contention")        # → ['get_active_sessions', 'get_blocking_chain']
 ```
 
+#### 按官方手册扩图
+
+手工种子只有 32 节点 / 50 边，覆盖 9 个根因，其中 `xid_wraparound_risk`
+与 `disk_pressure` **一条确认证据都没有**——图上有这个节点，却没有任何
+办法确认它，等于只能靠猜。另有三个根因没挂任何修复，诊断出来也不知道
+该干什么。
+
+按 PostgreSQL 官方手册补到 **50 节点 / 96 边**，每条新增关系都记了出处
+（`source: pgdoc:*` 与原文引用）：
+
+| 来源 | 补进来的东西 |
+|---|---|
+| Routine Vacuuming | 挡住 vacuum 的**不只是长事务**：复制槽、预备事务同样持住 xmin，而且更隐蔽——它们不在 `pg_stat_activity` 里，只看会话列表永远发现不了 |
+| Monitoring Stats | 死锁计数、临时文件外溢、检查点压力、I/O 等待各自对应哪个视图哪一列 |
+| Explicit Locking | 死锁与普通锁等待的区别：前者被自动中止、计数器会涨 |
+
+净增 5 个根因（陈旧复制槽 / 预备事务残留 / 死锁 / work_mem 外溢 /
+检查点压力）、7 个证据、6 个修复。扩完之后**每个根因都可确认、可修复**。
+
+**扩图的硬约束是证据必须有工具能产出**——否则 ESC 只能退化成看模型
+自述，图再大也是摆设。所以同时加了两个观测工具：
+
+- `get_vacuum_horizon` —— 一次问清 xmin 视界的四个持有者。做成一个工具
+  而不是四个，是因为分开查会让 agent 查到第一个就收工，而真凶常常是
+  另一个。
+- `get_database_stats` —— 库级累计计数器。检查点那组列在 PG17 拆去了
+  `pg_stat_checkpointer`，PG16 在 `pg_stat_bgwriter` 里叫另一套名字；
+  沙箱是 16.15 而官方 current 文档是 18，**照文档抄会直接报列不存在**，
+  两套都试才跑得起来。
+
+七个新证据全部补了取值判据。不补的话它们会走 `_supports()` 的默认分支
+恒返回 True——"调过工具就算取证、不看取值"，正是刚给
+`idle_in_transaction` 修掉的那个 bug，一次性重犯七遍。
+
+`.dev/graph_expand_check.py` 30 项验收钉住两条约束：每个证据节点都挂到
+真实存在的 Toolbox 方法上、每个新证据的空值都不支持它对应的根因。这个
+检查上线当天就抓出两个既有 bug——`slow_query_ranking` 是孤点（工具产出
+它、ESC 的 D4 也在找它，图上却一条边都没有），`idle_in_transaction` 漏在
+L4 的 `TOOL_OF` 外（判别力统计从来没算过它）。
+
+> **代价要说清楚**：候选根因变多，`latency_p99_up` 从 4–5 个候选涨到
+> 11 个，ESC 的 D2 按 50% 算就要排除 5 个而不是 2 个。好在新加的两个
+> 工具一次调用能否掉 6 个假设，所以是自洽的；但 `min_refute_ratio=0.5`
+> 这个阈值是在 4 候选的世界里定的，扩图后值得重新校。
+
 ### 4. Subagent 隔离 + 共享便签
 
 每条假设一个独立上下文，各自只拿它需要的 3–4 个工具，只读连接，独立预算。**子 agent 连下裁决的权力都没有**——它只能通过 `report_verdict` 交回结构化结论，裁决在主 agent 看到所有证据后才做。

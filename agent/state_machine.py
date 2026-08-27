@@ -33,6 +33,8 @@ READ_TOOLS = {
     "explain_query", "get_active_sessions", "get_top_queries",
     "get_blocking_chain", "get_table_stats", "get_indexes",
     "get_connection_stats",
+    # 按官方手册扩图后新增：xmin 视界的四个持有者、库级累计计数器
+    "get_vacuum_horizon", "get_database_stats",
     "simulate_index", "fetch_raw",
 }
 REASON_TOOLS = {"note_evidence", "set_hypothesis", "declare_root_cause"}

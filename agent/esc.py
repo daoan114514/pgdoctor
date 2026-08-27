@@ -95,6 +95,44 @@ def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
         if root_cause == "long_idle_transaction":
             return n >= 3            # 得真有一批挂着的事务
         return True
+    if evidence_type == "xid_age":
+        m = re.search(r"占 freeze_max_age ([\d.]+)%", observation)
+        pct = float(m.group(1)) if m else 0.0
+        if root_cause == "xid_wraparound_risk":
+            return pct >= 50.0       # 过半才谈得上"逼近回卷"
+        return True
+    if evidence_type == "replication_slot_age":
+        m = re.search(r"复制槽 (\d+) 个, 最大 xmin 年龄=([\d,]+)", observation)
+        n = int(m.group(1)) if m else 0
+        age = int(m.group(2).replace(",", "")) if m else 0
+        if root_cause == "stale_replication_slot":
+            return n > 0 and age > 1_000_000
+        return True
+    if evidence_type == "prepared_xact_age":
+        m = re.search(r"预备事务 (\d+) 个", observation)
+        n = int(m.group(1)) if m else 0
+        if root_cause == "orphaned_prepared_transaction":
+            return n > 0
+        return True
+    if evidence_type == "deadlock_count":
+        m = re.search(r"累计死锁=(\d+)", observation)
+        n = int(m.group(1)) if m else 0
+        if root_cause == "deadlock":
+            return n > 0             # 一次都没发生过就不是死锁
+        return True
+    if evidence_type == "temp_file_volume":
+        m = re.search(r"外溢 ([\d.]+) MB", observation)
+        mb = float(m.group(1)) if m else 0.0
+        if root_cause == "work_mem_spill":
+            return mb > 0
+        return True
+    if evidence_type == "checkpoint_stats":
+        m = re.search(r"请求式占比 ([\d.]+)%", observation)
+        pct = float(m.group(1)) if m else 0.0
+        if root_cause == "checkpoint_pressure":
+            # 定时检查点是正常的，请求式占多数才说明 WAL 涨得过快
+            return pct >= 50.0
+        return True
     if evidence_type == "dead_tuple_ratio":
         return True
     if evidence_type == "connection_count":

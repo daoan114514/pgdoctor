@@ -57,6 +57,37 @@ root_causes:
     desc: 磁盘空间不足
     prior: 0.03
 
+  # ── 以下按 PostgreSQL 官方手册扩充，每条都记了出处 ──────────
+  # 手册 Routine Vacuuming 把"死元组回收不掉"归到同一个机制：只要还有
+  # 事务可能看见旧版本，VACUUM 就不能删。它列了四个 xmin 持有者，长事务
+  # 只是其中一个 —— 图上原来只有长事务，等于漏掉了另外两类真凶。
+  - id: stale_replication_slot
+    desc: 陈旧的复制槽持住 xmin 与 WAL，vacuum 回收不掉死元组
+    prior: 0.04
+    source: pgdoc:routine-vacuuming
+    doc_quote: "Drop any old replication slots. Use pg_replication_slots to
+      find slots where age(xmin) or age(catalog_xmin) is large."
+  - id: orphaned_prepared_transaction
+    desc: 未了结的两阶段提交事务长期挂着，同样挡住冻结
+    prior: 0.02
+    source: pgdoc:routine-vacuuming
+    doc_quote: "Resolve old prepared transactions. You can find these by
+      checking pg_prepared_xacts for rows where age(transactionid) is large."
+  - id: deadlock
+    desc: 死锁，PostgreSQL 自动中止其中一个事务
+    prior: 0.05
+    source: pgdoc:explicit-locking
+    doc_quote: "PostgreSQL automatically detects deadlock situations and
+      resolves them by aborting one of the transactions involved."
+  - id: work_mem_spill
+    desc: work_mem 不足，排序/哈希外溢到临时文件
+    prior: 0.06
+    source: pgdoc:monitoring-stats
+  - id: checkpoint_pressure
+    desc: 检查点被频繁请求触发，WAL 涨得比 checkpoint_timeout 快
+    prior: 0.04
+    source: pgdoc:monitoring-stats
+
 # 证据类型 —— id 与 Toolbox 的 evidence_type 一一对应
 evidence:
   - id: explain_seq_scan
@@ -97,6 +128,38 @@ evidence:
     desc: 当前连接数与上限、按状态与角色的分布
     obtained_by: get_connection_stats
 
+  # ── 两个新工具产出的证据类型 ────────────────────────────────
+  # 每一条都必须真有工具能产出，否则 ESC 只能退化成看模型自述 ——
+  # 这是本文件开头那条约束，扩图时最容易破的也是它。
+  - id: xid_age
+    desc: 数据库与最老表的 XID 年龄，以及占 autovacuum_freeze_max_age 的比例
+    obtained_by: get_vacuum_horizon
+    source: pgdoc:routine-vacuuming
+  - id: replication_slot_age
+    desc: 各复制槽的 age(xmin) / age(catalog_xmin) 与是否 active
+    obtained_by: get_vacuum_horizon
+    source: pgdoc:routine-vacuuming
+  - id: prepared_xact_age
+    desc: pg_prepared_xacts 里各预备事务的 age(transactionid)
+    obtained_by: get_vacuum_horizon
+    source: pgdoc:routine-vacuuming
+  - id: backend_xmin_age
+    desc: 最老的 backend_xmin 年龄 —— 谁在挡着 xmin 视界前进
+    obtained_by: get_vacuum_horizon
+    source: pgdoc:routine-vacuuming
+  - id: deadlock_count
+    desc: pg_stat_database.deadlocks 累计死锁数
+    obtained_by: get_database_stats
+    source: pgdoc:monitoring-stats
+  - id: temp_file_volume
+    desc: pg_stat_database.temp_files / temp_bytes，排序哈希外溢量
+    obtained_by: get_database_stats
+    source: pgdoc:monitoring-stats
+  - id: checkpoint_stats
+    desc: 定时与请求式检查点的次数与耗时，请求式占比
+    obtained_by: get_database_stats
+    source: pgdoc:monitoring-stats
+
 fixes:
   - id: create_covering_index
     action_type: create_index
@@ -127,3 +190,45 @@ fixes:
     risk_tier: CONFIRM
     template: "ALTER TABLE {table} SET (autovacuum_enabled = true)"
     rollback: "ALTER TABLE {table} SET (autovacuum_enabled = false)"
+
+  # ── 补上三个"诊断得出来却没法修"的根因 ─────────────────────
+  # 手册明确说了要用哪种 VACUUM：不能用 VACUUM FULL（它自己要消耗 XID，
+  # 反而加剧回卷），也不必 VACUUM FREEZE（做无用功）。
+  - id: vacuum_freeze_database
+    action_type: vacuum_analyze
+    risk_tier: CONFIRM
+    template: "VACUUM {table}"
+    rollback: "NO_ROLLBACK_NEEDED"
+    source: pgdoc:routine-vacuuming
+    doc_quote: "Execute VACUUM in the target database. A database-wide VACUUM
+      is simplest. Do not use VACUUM FULL, which requires an XID."
+  - id: drop_replication_slot
+    action_type: session_control
+    risk_tier: CONFIRM
+    template: "SELECT pg_drop_replication_slot('{slot}')"
+    # 丢掉槽之后备库需要重新做基础备份，撤不回来
+    rollback: "IRREVERSIBLE"
+    source: pgdoc:routine-vacuuming
+  - id: resolve_prepared_xact
+    action_type: session_control
+    risk_tier: CONFIRM
+    template: "ROLLBACK PREPARED '{gid}'"
+    rollback: "IRREVERSIBLE"
+    source: pgdoc:routine-vacuuming
+  - id: terminate_idle_backend
+    action_type: session_control
+    risk_tier: CONFIRM
+    template: "SELECT pg_terminate_backend({pid})"
+    rollback: "IRREVERSIBLE"
+  - id: raise_max_wal_size
+    action_type: set_parameter
+    risk_tier: CONFIRM
+    template: "ALTER SYSTEM SET max_wal_size = '{value}'"
+    rollback: "ALTER SYSTEM RESET max_wal_size"
+    source: pgdoc:monitoring-stats
+  - id: raise_work_mem
+    action_type: set_parameter
+    risk_tier: CONFIRM
+    template: "SET work_mem = '{value}'"
+    rollback: "RESET work_mem"
+    source: pgdoc:monitoring-stats

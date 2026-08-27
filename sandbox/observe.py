@@ -234,6 +234,145 @@ class Observer:
                           json.dumps(out, ensure_ascii=False), out)
         return out
 
+    def get_vacuum_horizon(self) -> dict:
+        """谁挡着 xmin 前进 —— 一次问清膨胀与回卷这一整族根因。
+
+        PostgreSQL 手册 "Routine Vacuuming" 把"死元组回收不掉"归到同一
+        个机制上：只要还有事务可能看见旧版本，VACUUM 就不能删。手册列出
+        四个持有者，本方法逐个查：
+
+          长事务        pg_stat_activity.backend_xmin
+          复制槽        pg_replication_slots.xmin / catalog_xmin
+          预备事务      pg_prepared_xacts.transactionid
+          数据库年龄    pg_database.datfrozenxid（回卷风险的直接判据）
+
+        手册原文对应的排查步骤："Drop any old replication slots. Use
+        pg_replication_slots to find slots where age(xmin) or
+        age(catalog_xmin) is large." / "Resolve old prepared transactions.
+        You can find these by checking pg_prepared_xacts for rows where
+        age(transactionid) is large."
+
+        做成一个工具而不是四个：它们是同一个 xmin 视界的四个持有者，
+        分开查会让 agent 查到第一个就收工 —— 而真正的根因常常是另一个。
+        """
+        out: dict = {}
+        try:
+            r = db.query("SELECT datname, age(datfrozenxid) FROM pg_database "
+                         "WHERE datname = current_database()", role="ro")
+            out["db_xid_age"] = int(r[0][1]) if r else 0
+        except Exception:
+            out["db_xid_age"] = 0
+        try:
+            r = db.query(
+                "SELECT c.oid::regclass::text, "
+                "greatest(age(c.relfrozenxid), coalesce(age(t.relfrozenxid),0)) a "
+                "FROM pg_class c LEFT JOIN pg_class t ON c.reltoastrelid = t.oid "
+                "WHERE c.relkind IN ('r','m') ORDER BY a DESC LIMIT 1", role="ro")
+            out["oldest_table"] = r[0][0] if r else None
+            out["oldest_table_xid_age"] = int(r[0][1]) if r else 0
+        except Exception:
+            out["oldest_table"], out["oldest_table_xid_age"] = None, 0
+        try:
+            out["freeze_max_age"] = int(
+                db.query("SHOW autovacuum_freeze_max_age", role="ro")[0][0])
+        except Exception:
+            out["freeze_max_age"] = 200_000_000
+        try:
+            out["slots"] = [
+                {"name": n, "xmin_age": int(x or 0),
+                 "catalog_xmin_age": int(cx or 0), "active": bool(a)}
+                for n, x, cx, a in db.query(
+                    "SELECT slot_name, age(xmin), age(catalog_xmin), active "
+                    "FROM pg_replication_slots", role="ro")]
+        except Exception:
+            out["slots"] = []
+        try:
+            out["prepared_xacts"] = [
+                {"gid": g, "xid_age": int(a or 0)}
+                for g, a in db.query(
+                    "SELECT gid, age(transactionid) FROM pg_prepared_xacts",
+                    role="ro")]
+        except Exception:
+            out["prepared_xacts"] = []
+        try:
+            r = db.query(
+                "SELECT pid, age(backend_xmin) a FROM pg_stat_activity "
+                "WHERE backend_xmin IS NOT NULL ORDER BY a DESC LIMIT 1",
+                role="ro")
+            out["oldest_backend_pid"] = int(r[0][0]) if r else None
+            out["oldest_backend_xmin_age"] = int(r[0][1]) if r else 0
+        except Exception:
+            out["oldest_backend_pid"], out["oldest_backend_xmin_age"] = None, 0
+
+        # 回卷风险按手册的阈值判：autovacuum_freeze_max_age 是"再不 vacuum
+        # 就该强制 vacuum 了"的线，越过它说明 autovacuum 已经跟不上。
+        out["wraparound_pct"] = round(
+            out["db_xid_age"] / max(out["freeze_max_age"], 1) * 100, 1)
+        out["at_risk"] = out["wraparound_pct"] >= 100
+        holders = []
+        if out["oldest_backend_xmin_age"] > 1_000_000:
+            holders.append("long_transaction")
+        if any(s["xmin_age"] > 1_000_000 or s["catalog_xmin_age"] > 1_000_000
+               for s in out["slots"]):
+            holders.append("replication_slot")
+        if any(x["xid_age"] > 1_000_000 for x in out["prepared_xacts"]):
+            holders.append("prepared_transaction")
+        out["xmin_holders"] = holders
+        self.trace.record("get_vacuum_horizon", {},
+                          json.dumps(out, ensure_ascii=False, default=str), out)
+        return out
+
+    def get_database_stats(self) -> dict:
+        """库级累计计数器：死锁、临时文件外溢、检查点压力、I/O 等待。
+
+        这些都是 pg_stat_database / 检查点视图里的**累计值**，单次读数说明
+        不了问题，要看它在故障窗口内涨了多少 —— 所以一并返回，让 agent
+        自己对比两次读数。
+
+        检查点那组列在 PG17 拆去了 pg_stat_checkpointer，PG16 及更早在
+        pg_stat_bgwriter 里叫另一套名字。沙箱是 16.15，官方 current 文档
+        是 18 —— 照文档抄会直接报列不存在，所以两套都试。
+        """
+        out: dict = {}
+        try:
+            r = db.query(
+                "SELECT deadlocks, temp_files, temp_bytes, "
+                "blk_read_time, blk_write_time, xact_commit, xact_rollback "
+                "FROM pg_stat_database WHERE datname = current_database()",
+                role="ro")[0]
+            out.update({"deadlocks": int(r[0]), "temp_files": int(r[1]),
+                        "temp_bytes": int(r[2]),
+                        "blk_read_time_ms": float(r[3] or 0),
+                        "blk_write_time_ms": float(r[4] or 0),
+                        "xact_commit": int(r[5]), "xact_rollback": int(r[6])})
+        except Exception as exc:
+            out["error"] = str(exc)[:120]
+        try:                                  # PG17+
+            r = db.query("SELECT num_timed, num_requested, write_time, "
+                         "sync_time FROM pg_stat_checkpointer", role="ro")[0]
+            out.update({"ckpt_timed": int(r[0]), "ckpt_requested": int(r[1]),
+                        "ckpt_write_time_ms": float(r[2] or 0),
+                        "ckpt_sync_time_ms": float(r[3] or 0)})
+        except Exception:
+            try:                              # PG16 及更早
+                r = db.query(
+                    "SELECT checkpoints_timed, checkpoints_req, "
+                    "checkpoint_write_time, checkpoint_sync_time "
+                    "FROM pg_stat_bgwriter", role="ro")[0]
+                out.update({"ckpt_timed": int(r[0]),
+                            "ckpt_requested": int(r[1]),
+                            "ckpt_write_time_ms": float(r[2] or 0),
+                            "ckpt_sync_time_ms": float(r[3] or 0)})
+            except Exception:
+                pass
+        # 请求式检查点占比高 = WAL 涨得比 checkpoint_timeout 快
+        t, q = out.get("ckpt_timed", 0), out.get("ckpt_requested", 0)
+        out["ckpt_requested_pct"] = round(q / max(t + q, 1) * 100, 1)
+        out["temp_mb"] = round(out.get("temp_bytes", 0) / 1048576, 1)
+        self.trace.record("get_database_stats", {},
+                          json.dumps(out, ensure_ascii=False), out)
+        return out
+
     def simulate_index(self, create_sql: str, test_sql: str,
                        params: dict | None = None) -> dict:
         """hypopg 假设索引：不改生产就能预先证伪一个缺索引的判断。ESC 的 D5。"""
