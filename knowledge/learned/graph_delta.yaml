@@ -24,20 +24,20 @@ observed:
     hit: 0
     miss: 7
   connection_exhaustion:
-    hit: 2
+    hit: 3
     miss: 0
   lock_contention:
-    hit: 3
+    hit: 5
     miss: 0
   missing_index:
-    hit: 3
+    hit: 4
     miss: 4
   stale_statistics:
-    hit: 2
+    hit: 4
     miss: 0
 prior_adj:
   connection_exhaustion: 0.04
-  lock_contention: 0.05
-  missing_index: -0.125
-  stale_statistics: 0.05
-updated_at: 1787477809.5075982
+  lock_contention: 0.075
+  missing_index: -0.075
+  stale_statistics: 0.075
+updated_at: 1787480603.0292628

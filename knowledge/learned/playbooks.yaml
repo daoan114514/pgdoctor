@@ -1,56 +1,94 @@
 connection_exhaustion:
-  decisive_evidence: []
-  evidence_order: []
-  fail_count: 2
-  fix_action_type: ''
-  learned_under: 1
-  median_steps: 0
-  root_cause: connection_exhaustion
-  success_count: 0
-  typical_fix: ''
-  updated_at: 1787464579.5529242
-lock_contention:
-  decisive_evidence: []
-  evidence_order: []
-  fail_count: 3
-  fix_action_type: ''
-  learned_under: 2
-  median_steps: 0
-  root_cause: lock_contention
-  success_count: 0
-  typical_fix: ''
-  updated_at: 1787477026.9872222
-missing_index:
   decisive_evidence:
-  - explain_seq_scan
-  - index_existence
+  - connection_count
   - lock_blocking_chain
+  - index_existence
+  - row_estimate_deviation
   evidence_order:
   - session_wait_profile
-  - monitor_snapshot
   - slow_query_ranking
-  - slow_query
-  - explain_seq_scan
-  - index_existence
-  - stats_freshness
+  - connection_count
   - lock_blocking_chain
+  - index_existence
+  - explain_unavailable
+  - explain_plan
+  - row_estimate_deviation
+  fail_count: 2
+  fix_action_type: session_control
+  learned_under: 1
+  median_steps: 12
+  root_cause: connection_exhaustion
+  success_count: 1
+  typical_fix: "SELECT pg_terminate_backend(pid) \nFROM pg_stat_activity \nWHERE state\
+    \ = 'idle' \n  AND usename = 'app_user'\n  AND backend_type = 'client backend'\n\
+    \  AND pid != pg_backend_pid()"
+  updated_at: 1787479606.5175867
+lock_contention:
+  decisive_evidence:
+  - lock_blocking_chain
+  - index_existence
+  - index_existence
+  - connection_count
+  evidence_order:
+  - session_wait_profile
+  - slow_query_ranking
+  - lock_blocking_chain
+  - explain_unavailable
+  - index_existence
+  - connection_count
+  - stats_freshness
+  fail_count: 3
+  fix_action_type: session_control
+  learned_under: 2
+  median_steps: 13
+  root_cause: lock_contention
+  success_count: 2
+  typical_fix: SELECT pg_terminate_backend(49999);
+  updated_at: 1787479949.9100075
+missing_index:
+  decisive_evidence:
+  - lock_blocking_chain
+  - index_existence
+  - explain_seq_scan
+  - row_estimate_deviation
+  evidence_order:
+  - session_wait_profile
+  - slow_query_ranking
+  - lock_blocking_chain
+  - index_existence
+  - explain_unavailable
+  - explain_seq_scan
+  - row_estimate_deviation
+  - stats_freshness
   fail_count: 4
   fix_action_type: create_index
   learned_under: 1
-  median_steps: 13
+  median_steps: 12
   root_cause: missing_index
-  success_count: 3
-  typical_fix: CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id,
+  success_count: 4
+  typical_fix: CREATE INDEX CONCURRENTLY idx_orders_user_id_status ON orders (user_id,
     status)
-  updated_at: 1787464593.7163928
+  updated_at: 1787480308.4521067
 stale_statistics:
-  decisive_evidence: []
-  evidence_order: []
-  fail_count: 2
-  fix_action_type: ''
+  decisive_evidence:
+  - row_estimate_deviation
+  - lock_blocking_chain
+  - index_existence
+  - index_existence
+  evidence_order:
+  - session_wait_profile
+  - slow_query_ranking
+  - explain_plan
+  - row_estimate_deviation
+  - lock_blocking_chain
+  - index_existence
+  - stats_freshness
+  - connection_count
+  fail_count: 3
+  fix_action_type: vacuum_analyze
   learned_under: 2
-  median_steps: 0
+  median_steps: 14
   root_cause: stale_statistics
-  success_count: 0
-  typical_fix: ''
-  updated_at: 1787477807.8511682
+  success_count: 1
+  typical_fix: ANALYZE orders;
+  updated_at: 1787480602.0351286
