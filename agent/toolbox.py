@@ -205,6 +205,24 @@ class Toolbox:
                        bears_on=["missing_index"])
         return r
 
+    def fetch_raw(self, ref: str) -> dict:
+        """按 raw_ref 回取落盘的原文。
+
+        工具层就地萃取只返回结构化摘要，原文按 ref 落盘 —— 这是上下文
+        治理的前半截。后半截一直缺着：白名单里有 fetch_raw，Toolbox 却
+        没有这个方法，所以模型拿到 raw_ref 也回取不了。失败方向是安全的
+        （白名单是超集，多余条目只会调不到），但"按需回取"因此一直只是
+        说法，现在补实。
+        """
+        self._enter("fetch_raw")
+        try:
+            text = self.o.fetch_raw(ref)
+        except Exception as exc:
+            return {"ref": ref, "error": f"{type(exc).__name__}: {exc}"[:160]}
+        # 回取的目的是看细节，但也不能把整份原文灌回上下文
+        return {"ref": ref, "chars": len(text), "text": text[:4000],
+                "truncated": len(text) > 4000}
+
     # ── 推理（内部动作，不碰数据库）────────────────────────
     def note_evidence(self, kind: str, observation: str,
                       bears_on: list[str] | None = None) -> str:

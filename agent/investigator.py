@@ -26,6 +26,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ResultMessag
                               tool)
 
 from agent.hooks import make_phase_hook
+from agent.permissions import INVESTIGATOR_DENIED, Role
 from agent.state_machine import Phase
 from agent.toolbox import Toolbox
 
@@ -35,7 +36,8 @@ SERVER = "pgdoctor"
 SUB_MODEL = os.getenv("PGDOCTOR_SUB_MODEL", "claude-haiku-4-5-20251001")
 
 # 子 agent 不允许碰的：裁决与提案是主 agent 的事
-SUB_DENIED = {"set_hypothesis", "declare_root_cause", "submit_proposal"}
+# 保留这个名字给既有引用；权威定义在 agent.permissions
+SUB_DENIED = set(INVESTIGATOR_DENIED)
 
 # 每个假设只给它真正需要的取证工具。
 # 上一轮给了全部 8 个，结果子 agent 把 turn 全耗在逐个检索工具 schema 上，
@@ -245,7 +247,7 @@ async def investigate(hypothesis: str, brief: str, tb: Toolbox,
         allowed_tools=names,
         # 阶段仍是 INVESTIGATE，再叠加子 agent 的额外禁用集
         hooks=make_phase_hook(Phase.INVESTIGATE, blocked,
-                              extra_denied=SUB_DENIED),
+                              role=Role.INVESTIGATOR),
         max_turns=max_turns,
         permission_mode="bypassPermissions",
         setting_sources=None,

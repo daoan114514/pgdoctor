@@ -131,6 +131,11 @@ def _build_tools(tb: Toolbox) -> list:
             wrap(lambda a: tb.simulate_index(a["create_sql"], a["test_sql"],
                                              {"uid": a.get("uid", 4242)}))),
 
+        tool("fetch_raw", "按 raw_ref 回取此前落盘的原始输出（如完整"
+             "执行计划）。摘要不够用时才调，正常诊断不需要。",
+             {"ref": str})(
+            wrap(lambda a: tb.fetch_raw(a["ref"]))),
+
         tool("set_hypothesis", "给某个假设下裁决。verdict 取 CONFIRMED / "
              "REFUTED / INCONCLUSIVE。必须给出依据。",
              {"name": str, "verdict": str, "note": str})(

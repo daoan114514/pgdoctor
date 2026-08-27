@@ -16,11 +16,10 @@ from __future__ import annotations
 
 from claude_agent_sdk import HookMatcher
 
-from agent.state_machine import ALLOWED_TOOLS, Phase
+from agent.permissions import BUILTIN_ALLOW, Role, allowed_tools
+from agent.state_machine import Phase
 
 SERVER = "pgdoctor"
-# 加载工具 schema 需要它；其余内建工具（Bash/Read/Write…）一律拒绝
-BUILTIN_ALLOW = {"ToolSearch"}
 
 
 def _bare(name: str) -> str:
@@ -38,14 +37,17 @@ def _allow() -> dict:
 
 
 def make_phase_hook(phase: Phase, blocked_log: list | None = None,
-                    extra_denied: set[str] | None = None) -> dict:
-    """按阶段拦截越界工具调用。
+                    extra_denied: set[str] | None = None,
+                    role: Role = Role.MAIN,
+                    hypothesis: str | None = None) -> dict:
+    """按角色与阶段拦截越界工具调用。
 
-    extra_denied 用于 subagent：调查子 agent 只允许取证，连
-    set_hypothesis / declare_root_cause / submit_proposal 都不给 ——
-    它的职责是把证据带回来，裁决由主 agent 汇总时做。
+    权限本身不在这里定义 —— 全部来自 agent.permissions，那里是唯一
+    权威。这个函数只负责把它执行到每一次工具调用上。
+
+    extra_denied 保留为兼容入口；新代码传 role 即可。
     """
-    allowed = set(ALLOWED_TOOLS[phase])
+    allowed = allowed_tools(phase, role, hypothesis)
     denied = set(extra_denied or ())
 
     async def guard(input_data, tool_use_id, context):
@@ -71,8 +73,8 @@ def make_phase_hook(phase: Phase, blocked_log: list | None = None,
             return _deny(msg)
 
         if bare not in allowed:
-            msg = (f"阶段 {phase.value} 不允许调用 {bare}；"
-                   f"可用: {sorted(allowed) or '(无)'}")
+            msg = (f"{role.value} 角色在 {phase.value} 阶段不允许调用 "
+                   f"{bare}；可用: {sorted(allowed) or '(无)'}")
             if blocked_log is not None:
                 blocked_log.append(f"{bare}: {msg}")
             return _deny(msg)
