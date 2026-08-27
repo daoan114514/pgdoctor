@@ -192,7 +192,7 @@ fixed_by:
   # connection_exhaustion / xid_wraparound_risk / disk_pressure 此前
   # 一个修复都没挂 —— 诊断得出来也不知道该干什么。
   - {cause: connection_exhaustion, fix: terminate_idle_backend}
-  - {cause: xid_wraparound_risk,   fix: vacuum_freeze_database}
+  - {cause: xid_wraparound_risk,   fix: vacuum_database}
   - {cause: disk_pressure,         fix: vacuum_table}
   - {cause: stale_replication_slot, fix: drop_replication_slot}
   - {cause: orphaned_prepared_transaction, fix: resolve_prepared_xact}

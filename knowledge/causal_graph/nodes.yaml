@@ -194,7 +194,7 @@ fixes:
   # ── 补上三个"诊断得出来却没法修"的根因 ─────────────────────
   # 手册明确说了要用哪种 VACUUM：不能用 VACUUM FULL（它自己要消耗 XID，
   # 反而加剧回卷），也不必 VACUUM FREEZE（做无用功）。
-  - id: vacuum_freeze_database
+  - id: vacuum_database
     action_type: vacuum_analyze
     risk_tier: CONFIRM
     template: "VACUUM {table}"

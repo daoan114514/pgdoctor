@@ -85,7 +85,14 @@ def replay_all(candidates: list[str] | None = None,
 def sensitivity(ratios: list[float] | None = None) -> dict:
     """ESC 排除率阈值的敏感性分析 —— 纯离线，零成本。
 
-    回答"阈值定多严才既拦得住偷懒、又不把正常诊断卡死"。
+    只统计裁决分布，**不与 ground truth 比对**。这个区别曾经代价很大：
+    D2 因为症状没归一到图节点 id 而无条件通过（44/44），这个函数照样
+    能跑，跑出来的是一条完全平坦的曲线 —— 而"所有阈值结果都一样"读起来
+    像个无聊结论，不像故障信号。那道闸因此一直没通电也没人发现。
+
+    要区分"阈值没被压到"和"阈值压到了但拦错了人"，必须把裁决和真实
+    根因对起来算四个格子（放行且对／放行但错／拦截但对／拦截且错）。
+    那个在 .dev/threshold_ablation.py，它才是能证伪的那个。
     """
     ratios = ratios or [0.0, 0.34, 0.5, 0.67, 1.0]
     out: dict[str, dict] = {}

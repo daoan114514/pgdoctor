@@ -156,9 +156,24 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
                          directives=["尚未声明根因"])
 
     got = _collected(st)
+    # 症状必须先归一到图上的节点 id 再去查候选根因。st.symptoms 存的是
+    # 人话串（实测 "错误 5285"，数值还烧在里面），直接喂给 candidate_causes
+    # 一个都命不中、返回空列表 —— 而竞争假设为空时 D2 的排除率按代码里
+    # 的 `if competitors else 1.0` 默认取 1.0，于是这道"必需且不可补偿"
+    # 的闸变成无条件通过。
+    #
+    # 44 个 episode 重放实测：D2 通过率 44/44，它一次都没拦下过任何东西，
+    # 全部 5 次拦截都来自 D1。同一个 bug 还顺带废掉了 AMBIGUOUS —— 多根因
+    # 检测也在这个列表上算，列表空了 confirmed 就永远是空的，于是有 episode
+    # 同时 CONFIRMED 了 lock_contention 与 missing_index 却照样一路放行。
+    #
+    # D3 与 evolution.learn_truth 都已经改用 map_symptoms，这里是漏网的。
+    # fallback=True：查候选时宁可退回默认症状，也不能因为没归一上就把
+    # 竞争假设集算成空 —— 那正是这个 bug 的形态。
+    _sym = G.map_symptoms(st.symptoms or [], fallback=True)
     cands = candidates or [c["root_cause"] for c in
-                           G.candidate_causes(st.symptoms or
-                                              ["latency_p99_up", "cpu_saturated"])]
+                           G.candidate_causes(
+                               _sym or ["latency_p99_up", "cpu_saturated"])]
     dims: list[DimResult] = []
     directives: list[str] = []
 
