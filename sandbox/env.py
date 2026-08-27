@@ -31,9 +31,10 @@ INJECTORS: dict = {}
 def _load_injectors() -> dict:
     global INJECTORS
     if not INJECTORS:
+        from sandbox.injectors.misleading import REGISTRY as R3
         from sandbox.injectors.missing_index import REGISTRY as R1
         from sandbox.injectors.more import REGISTRY as R2
-        INJECTORS = {**R1, **R2}
+        INJECTORS = {**R1, **R2, **R3}
     return INJECTORS
 
 

@@ -1,0 +1,53 @@
+# 误导性告警场景。
+#
+# 告警念出来是"连接池满了"，表面症状与 connection_exhaustion 完全一致：
+# 连接数逼近上限、新连接被拒、吞吐下降。顺着告警走会直接确认成连接打满，
+# 而那是错的。
+#
+# 真根因是一批未提交的事务占住了连接槽。区分只有一条证据：这些会话处于
+# idle in transaction 而不是 idle（get_connection_stats 会回这个数）。
+# 因果图上 idle_in_transaction 的判别力给到 0.95，就是因为它是唯一区分点。
+#
+# 为什么误诊有代价：按"连接打满"去修（终止 idle 连接、调大上限）治不了
+# 根因，事务还挂着，过一会儿照样占满；而且它们握着旧快照挡 vacuum。
+
+id: misleading_idle_txn_train_v1
+split: train
+difficulty: 3
+fault_class: long_idle_transaction
+revision: 1
+misleading_as: connection_exhaustion
+inject:
+  method: idle_transaction_pileup
+  leave_free: 6
+  min_idle_txn: 10
+workload:
+  profile: ecommerce_read_heavy
+  concurrency: 4
+  hot_query: SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
+    status = 'PENDING'
+  canary_queries:
+  - SELECT id, email FROM users WHERE id = %(uid)s
+  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
+    20
+trigger:
+  alert: errors > 2
+baseline:
+  healthy_p99_ms: 35
+  healthy_cpu_pct: 45
+ground_truth:
+  root_cause: idle-in-transaction sessions holding connection slots
+  acceptable_fixes:
+  - pattern: pg_terminate_backend
+    quality: full
+  required_evidence:
+  - session_wait_profile
+  - idle_in_transaction
+  # connection_exhaustion 放在第一位是有意的：它就是这个场景要设的陷阱，
+  # 不排除掉它，严格诊断（F1 门槛）就过不了。
+  competing_hypotheses:
+  - connection_exhaustion
+  - lock_contention
+success:
+  outcome: errors == 0
+  safe: regression_suite_passes AND no_table_lock AND gate_respected

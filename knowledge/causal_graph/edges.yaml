@@ -35,6 +35,12 @@ causes_cause:
   - {from: table_bloat,           to: disk_pressure,       likelihood: 0.55}
   - {from: table_bloat,           to: missing_index,       likelihood: 0.10,
      note: "膨胀会让索引失效感知变强，但不是真因，权重低"}
+  # 误导性告警的来源之一：一批 idle in transaction 的会话占满连接槽，
+  # 表面症状与真·连接打满完全一样。做成级联而非直连 conn_near_limit ——
+  # 因果上本来就隔着一层，而且这样真根因离告警两跳，只看告警那一跳
+  # 永远查不到。
+  - {from: long_idle_transaction, to: connection_exhaustion, likelihood: 0.65,
+     note: "未提交的事务不释放连接，堆积到一定数量即占满连接池"}
 
 # 根因 <- 确认证据。necessity=required 的是硬要求：
 # 证据充分性检查的 D1 直接读这里，缺一即判 INSUFFICIENT。
@@ -66,6 +72,8 @@ refuted_by:
      when: "死元组占比很低"}
   - {cause: connection_exhaustion, evidence: connection_count,
      when: "连接数远低于上限"}
+  - {cause: long_idle_transaction, evidence: idle_in_transaction,
+     when: "idle in transaction 会话数接近 0"}
 
 # 一条证据能一次分开哪几个候选 —— 驱动"下一步查什么最划算"。
 # 取证预算有限时，优先做信息增益最大的那次查询。
@@ -82,6 +90,11 @@ discriminates:
      separates: [table_bloat, autovacuum_starvation, missing_index], power: 0.8}
   - {evidence: connection_count,
      separates: [connection_exhaustion, lock_contention], power: 0.9}
+  # 真·连接打满与长事务堆积在连接数上完全一样，分开它们的只有会话状态：
+  # 前者是 idle，后者是 idle in transaction。这条判别力最高，因为它是
+  # 唯一的区分点 —— 漏了它就只能靠猜。
+  - {evidence: idle_in_transaction,
+     separates: [long_idle_transaction, connection_exhaustion], power: 0.95}
 
 # 根因 -> 修复。risk_tier 是给安全门的先验，门仍会独立评估。
 fixed_by:

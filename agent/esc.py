@@ -86,6 +86,15 @@ def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
             return False
         return ("会采用=true" in o or "would_be_used': true" in o
                 or "采用=True" in observation)
+    if evidence_type == "idle_in_transaction":
+        # 这条原来走默认分支恒为真 —— 只要调过工具就算取证，不看取值。
+        # 在"长事务堆积伪装成连接打满"这类场景里恰恰是致命的：真·连接
+        # 打满时 idle in transaction 接近 0，却照样能"支持"长事务根因。
+        m = re.search(r"idle in transaction=(\d+)", observation)
+        n = int(m.group(1)) if m else 0
+        if root_cause == "long_idle_transaction":
+            return n >= 3            # 得真有一批挂着的事务
+        return True
     if evidence_type == "dead_tuple_ratio":
         return True
     if evidence_type == "connection_count":
