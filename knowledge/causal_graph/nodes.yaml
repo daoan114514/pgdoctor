@@ -203,7 +203,7 @@ fixes:
     doc_quote: "Execute VACUUM in the target database. A database-wide VACUUM
       is simplest. Do not use VACUUM FULL, which requires an XID."
   - id: drop_replication_slot
-    action_type: session_control
+    action_type: replication_control
     risk_tier: CONFIRM
     template: "SELECT pg_drop_replication_slot('{slot}')"
     # 丢掉槽之后备库需要重新做基础备份，撤不回来
@@ -215,6 +215,10 @@ fixes:
     template: "ROLLBACK PREPARED '{gid}'"
     rollback: "IRREVERSIBLE"
     source: pgdoc:routine-vacuuming
+    # 护盾不放行 TransactionStmt。这是对的：了结别人的两阶段提交事务
+    # 意味着替一个分布式事务的协调者做决定，agent 没有这个信息。
+    # agent 可以在报告里指出该这么修，但不能提交为提案。
+    execution: escalate_only
   - id: terminate_idle_backend
     action_type: session_control
     risk_tier: CONFIRM
@@ -226,6 +230,10 @@ fixes:
     template: "ALTER SYSTEM SET max_wal_size = '{value}'"
     rollback: "ALTER SYSTEM RESET max_wal_size"
     source: pgdoc:monitoring-stats
+    # 护盾把 ALTER SYSTEM 列为灾难动作（改全局配置且需重载）。
+    # max_wal_size 是集群级设置，没有会话级的等价物 —— 也就是说
+    # checkpoint_pressure 这一类**结构上就只能升级人工**。
+    execution: escalate_only
   - id: raise_work_mem
     action_type: set_parameter
     risk_tier: CONFIRM

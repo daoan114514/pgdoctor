@@ -202,7 +202,13 @@ def assess(p: RemediationProposal) -> GateDecision:
         reasons.append("终止会话不可撤销，会让对方事务回滚，需人工确认")
     elif actual in ("config_reload", "maintenance", "replication_control"):
         tier = Tier.CONFIRM
-        reasons.append(f"{actual} 类动作影响面较大，需确认")
+        if actual == "replication_control":
+            # 丢弃复制槽撤不回来：备库从此断流，必须重做基础备份。
+            # 和终止会话同理，标成不可逆由人担责，而不是假装能回滚。
+            risk["reversible"] = False
+            reasons.append("丢弃复制槽不可撤销，备库需重做基础备份，需人工确认")
+        else:
+            reasons.append(f"{actual} 类动作影响面较大，需确认")
     elif risk["touches_data"]:
         tier = Tier.CONFIRM
         reasons.append("直接修改数据行")
