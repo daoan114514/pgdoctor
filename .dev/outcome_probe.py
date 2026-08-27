@@ -17,6 +17,7 @@ from sandbox.env import DBAScenarioEnv
 CASES = [
     ("lock_contention_eval_v1", "终止阻塞源会话"),
     ("stale_statistics_eval_v1", "ANALYZE 刷新统计"),
+    ("misleading_idle_txn_eval_v1", "终止挂起的事务（而非调大连接上限）"),
 ]
 
 
@@ -37,6 +38,26 @@ def apply_fix(fault: str) -> str:
             except Exception as exc:
                 failed.append(f"{pid}: {str(exc)[:60]}")
         return f"终止了 {killed}" + (f"；失败 {failed}" if failed else "")
+    if fault == "long_idle_transaction":
+        # 与 lock_contention 的正解形似而不同：这里的会话并不持有行锁，
+        # 判据是"事务挂着不动"本身。按"连接打满"去修（只终止 idle 连接、
+        # 调大上限）对它们完全无效 —— 这正是这个场景要考的那个区别。
+        rows = db.query(
+            "SELECT pid FROM pg_stat_activity "
+            "WHERE state = 'idle in transaction' "
+            "AND datname = current_database() "
+            "AND pid <> pg_backend_pid()")
+        if not rows:
+            return "没有找到挂起的事务"
+        killed, failed = [], []
+        for (pid,) in rows:
+            try:
+                db.execute("SELECT pg_terminate_backend(%s)", (pid,), role="rw")
+                killed.append(pid)
+            except Exception as exc:
+                failed.append(f"{pid}: {str(exc)[:60]}")
+        return (f"终止了 {len(killed)} 个挂起事务"
+                + (f"；失败 {failed}" if failed else ""))
     if fault == "stale_statistics":
         db.execute("ANALYZE orders", role="rw")
         return "ANALYZE orders 完成"
