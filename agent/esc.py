@@ -156,8 +156,15 @@ def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
 #
 # 这张表会和 _supports 漂移，所以 .dev/refute_truth.py 里有同步检查。
 _VALUE_CHECKED: dict[str, str] = {
-    "explain_seq_scan": "missing_index",
-    "index_existence": "missing_index",
+    # 只登记**真正双向**的判据：有明确阈值，且反面有明确含义。
+    #
+    # explain_seq_scan / index_existence 故意不在这里。它们在 _supports
+    # 里是存在性判断而非取值判断 —— index_existence 的注释自己写着
+    # "拿到了清单即算取证，具体覆盖性由 explain 的 Seq Scan 佐证"，
+    # 只要拿到索引列表就返回 True；而统计过期场景下计划本来就是 Seq Scan
+    # 且过滤大量行，那确实"像"缺索引，区分它俩靠的是 row_estimate_deviation。
+    # 拿这两条判方向，会让"排除缺索引"永远算不上有依据 —— 实测因此多拦了
+    # 45 个完全正确的诊断，正确诊断放行率从 45% 掉到 22%。
     "counterfactual_index": "missing_index",
     "stats_freshness": "stale_statistics",
     "lock_blocking_chain": "lock_contention",

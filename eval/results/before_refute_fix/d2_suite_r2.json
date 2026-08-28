@@ -19,7 +19,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 5 个，已排除 0 个 (0%)",
+   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
    "declare_blocked": false,
    "n_evidence": 5
   },
@@ -41,7 +41,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 5 个，已排除 1 个 (20%)",
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
    "n_evidence": 9
   },
@@ -54,18 +54,18 @@
    "depth": 2,
    "claimed": "connection_exhaustion",
    "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
    "dims": {
     "D1": true,
-    "D2": false,
+    "D2": true,
     "D3": true,
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 5 个，已排除 2 个 (40%)",
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 9
+   "n_evidence": 13
   },
   {
    "run": 2,
@@ -85,7 +85,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 5 个，已排除 3 个 (60%)",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -107,7 +107,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 5 个，已排除 4 个 (80%)",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -175,7 +175,7 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 9
   },
   {
    "run": 2,
@@ -197,7 +197,7 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 13
   },
   {
    "run": 2,
@@ -219,7 +219,7 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 13
   },
   {
    "run": 2,
@@ -941,7 +941,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
    "n_evidence": 9
   },
@@ -954,16 +954,16 @@
    "depth": 2,
    "claimed": "connection_exhaustion",
    "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
    "dims": {
     "D1": true,
-    "D2": false,
+    "D2": true,
     "D3": true,
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -985,7 +985,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1007,7 +1007,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1175,7 +1175,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1197,7 +1197,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1725,7 +1725,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1747,7 +1747,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1884,16 +1884,16 @@
    "depth": 2,
    "claimed": "stale_statistics",
    "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
    "dims": {
     "D1": true,
-    "D2": false,
+    "D2": true,
     "D3": true,
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
    "n_evidence": 12
   },
@@ -1915,7 +1915,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
@@ -1937,7 +1937,7 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },

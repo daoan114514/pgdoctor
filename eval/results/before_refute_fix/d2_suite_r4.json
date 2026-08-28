@@ -2,228 +2,8 @@
  "n": 100,
  "rows": [
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "connection_exhaustion",
-   "kind": "correct",
-   "depth": 0,
-   "claimed": "connection_exhaustion",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 5 个，已排除 0 个 (0%)",
-   "declare_blocked": false,
-   "n_evidence": 5
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "connection_exhaustion",
-   "kind": "correct",
-   "depth": 1,
-   "claimed": "connection_exhaustion",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 5 个，已排除 1 个 (20%)",
-   "declare_blocked": false,
-   "n_evidence": 9
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "connection_exhaustion",
-   "kind": "correct",
-   "depth": 2,
-   "claimed": "connection_exhaustion",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 5 个，已排除 2 个 (40%)",
-   "declare_blocked": false,
-   "n_evidence": 9
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "connection_exhaustion",
-   "kind": "correct",
-   "depth": 3,
-   "claimed": "connection_exhaustion",
-   "correct": true,
-   "verdict": "SUFFICIENT",
-   "passed": true,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 5 个，已排除 3 个 (60%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "connection_exhaustion",
-   "kind": "correct",
-   "depth": null,
-   "claimed": "connection_exhaustion",
-   "correct": true,
-   "verdict": "SUFFICIENT",
-   "passed": true,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 5 个，已排除 4 个 (80%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "lock_contention",
-   "kind": "trapped",
-   "depth": 0,
-   "claimed": "lock_contention",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": false,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
-   "declare_blocked": false,
-   "n_evidence": 5
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "lock_contention",
-   "kind": "trapped",
-   "depth": 1,
-   "claimed": "lock_contention",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": false,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
-   "declare_blocked": false,
-   "n_evidence": 8
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "lock_contention",
-   "kind": "trapped",
-   "depth": 2,
-   "claimed": "lock_contention",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": false,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
-   "declare_blocked": false,
-   "n_evidence": 12
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "lock_contention",
-   "kind": "trapped",
-   "depth": 3,
-   "claimed": "lock_contention",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": false,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
-   "declare_blocked": false,
-   "n_evidence": 12
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_eval_v1",
-   "truth": "connection_exhaustion",
-   "target": "lock_contention",
-   "kind": "trapped",
-   "depth": null,
-   "claimed": "lock_contention",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": false,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
-   "declare_blocked": false,
-   "n_evidence": 12
-  },
-  {
-   "run": 2,
-   "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "connection_exhaustion",
    "kind": "correct",
@@ -244,8 +24,8 @@
    "n_evidence": 5
   },
   {
-   "run": 2,
-   "scenario": "connection_exhaustion_train_v1",
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
    "truth": "connection_exhaustion",
    "target": "connection_exhaustion",
    "kind": "correct",
@@ -266,7 +46,227 @@
    "n_evidence": 8
   },
   {
-   "run": 2,
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "connection_exhaustion",
+   "kind": "correct",
+   "depth": 2,
+   "claimed": "connection_exhaustion",
+   "correct": true,
+   "verdict": "SUFFICIENT",
+   "passed": true,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
+   "declare_blocked": false,
+   "n_evidence": 9
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "connection_exhaustion",
+   "kind": "correct",
+   "depth": 3,
+   "claimed": "connection_exhaustion",
+   "correct": true,
+   "verdict": "SUFFICIENT",
+   "passed": true,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "connection_exhaustion",
+   "kind": "correct",
+   "depth": null,
+   "claimed": "connection_exhaustion",
+   "correct": true,
+   "verdict": "SUFFICIENT",
+   "passed": true,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "lock_contention",
+   "kind": "trapped",
+   "depth": 0,
+   "claimed": "lock_contention",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": false,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
+   "declare_blocked": false,
+   "n_evidence": 5
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "lock_contention",
+   "kind": "trapped",
+   "depth": 1,
+   "claimed": "lock_contention",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": false,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
+   "declare_blocked": false,
+   "n_evidence": 6
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "lock_contention",
+   "kind": "trapped",
+   "depth": 2,
+   "claimed": "lock_contention",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": false,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "lock_contention",
+   "kind": "trapped",
+   "depth": 3,
+   "claimed": "lock_contention",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": false,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_eval_v1",
+   "truth": "connection_exhaustion",
+   "target": "lock_contention",
+   "kind": "trapped",
+   "depth": null,
+   "claimed": "lock_contention",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": false,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_train_v1",
+   "truth": "connection_exhaustion",
+   "target": "connection_exhaustion",
+   "kind": "correct",
+   "depth": 0,
+   "claimed": "connection_exhaustion",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
+   "declare_blocked": false,
+   "n_evidence": 5
+  },
+  {
+   "run": 4,
+   "scenario": "connection_exhaustion_train_v1",
+   "truth": "connection_exhaustion",
+   "target": "connection_exhaustion",
+   "kind": "correct",
+   "depth": 1,
+   "claimed": "connection_exhaustion",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
+   "declare_blocked": false,
+   "n_evidence": 9
+  },
+  {
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "connection_exhaustion",
@@ -288,7 +288,7 @@
    "n_evidence": 9
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "connection_exhaustion",
@@ -310,7 +310,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "connection_exhaustion",
@@ -332,7 +332,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "lock_contention",
@@ -354,7 +354,7 @@
    "n_evidence": 5
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "lock_contention",
@@ -373,10 +373,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 6
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "lock_contention",
@@ -395,10 +395,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "lock_contention",
@@ -420,7 +420,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "connection_exhaustion_train_v1",
    "truth": "connection_exhaustion",
    "target": "lock_contention",
@@ -442,7 +442,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -464,7 +464,7 @@
    "n_evidence": 5
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -486,7 +486,7 @@
    "n_evidence": 11
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -508,7 +508,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -530,7 +530,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -552,7 +552,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -568,7 +568,7 @@
    "n_evidence": 7
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -581,10 +581,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 8
+   "n_evidence": 10
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -597,10 +597,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 12
+   "n_evidence": 11
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -613,10 +613,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 13
+   "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_eval_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -629,10 +629,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 13
+   "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -654,7 +654,7 @@
    "n_evidence": 5
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -676,7 +676,7 @@
    "n_evidence": 11
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -695,10 +695,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 11
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -720,7 +720,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "lock_contention",
@@ -742,7 +742,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -758,7 +758,7 @@
    "n_evidence": 7
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -771,10 +771,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 12
+   "n_evidence": 8
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -787,10 +787,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 13
+   "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -806,7 +806,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "lock_contention_train_v1",
    "truth": "lock_contention",
    "target": "missing_index",
@@ -822,7 +822,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -838,7 +838,7 @@
    "n_evidence": 10
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -851,10 +851,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 18
+   "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -867,10 +867,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 18
+   "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -886,7 +886,7 @@
    "n_evidence": 18
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -902,7 +902,7 @@
    "n_evidence": 18
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -924,7 +924,7 @@
    "n_evidence": 5
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -941,12 +941,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
-   "n_evidence": 9
+   "n_evidence": 8
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -954,21 +954,21 @@
    "depth": 2,
    "claimed": "connection_exhaustion",
    "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
    "dims": {
     "D1": true,
-    "D2": false,
+    "D2": true,
     "D3": true,
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 13
+   "n_evidence": 9
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -985,12 +985,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_eval_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -1007,12 +1007,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -1028,7 +1028,7 @@
    "n_evidence": 10
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -1041,10 +1041,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 18
+   "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -1057,10 +1057,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 18
+   "n_evidence": 14
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -1073,10 +1073,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 18
+   "n_evidence": 14
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "long_idle_transaction",
@@ -1092,7 +1092,7 @@
    "n_evidence": 18
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -1114,7 +1114,7 @@
    "n_evidence": 5
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -1133,10 +1133,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
-   "n_evidence": 13
+   "n_evidence": 9
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -1155,10 +1155,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 13
+   "n_evidence": 9
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -1175,12 +1175,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "misleading_idle_txn_train_v1",
    "truth": "long_idle_transaction",
    "target": "connection_exhaustion",
@@ -1197,12 +1197,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['lock_contention']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_eval_v1",
    "truth": "missing_index",
    "target": "missing_index",
@@ -1224,8 +1224,228 @@
    "n_evidence": 7
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "missing_index",
+   "kind": "correct",
+   "depth": 1,
+   "claimed": "missing_index",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": false
+   },
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
+   "declare_blocked": false,
+   "n_evidence": 12
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "missing_index",
+   "kind": "correct",
+   "depth": 2,
+   "claimed": "missing_index",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": false
+   },
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "missing_index",
+   "kind": "correct",
+   "depth": 3,
+   "claimed": "missing_index",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": false
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "missing_index",
+   "kind": "correct",
+   "depth": null,
+   "claimed": "missing_index",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": false
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "stale_statistics",
+   "kind": "trapped",
+   "depth": 0,
+   "claimed": "stale_statistics",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
+   "declare_blocked": false,
+   "n_evidence": 7
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "stale_statistics",
+   "kind": "trapped",
+   "depth": 1,
+   "claimed": "stale_statistics",
+   "correct": false,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
+   "declare_blocked": false,
+   "n_evidence": 10
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "stale_statistics",
+   "kind": "trapped",
+   "depth": 2,
+   "claimed": "stale_statistics",
+   "correct": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
+   "declare_blocked": false,
+   "n_evidence": 12
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "stale_statistics",
+   "kind": "trapped",
+   "depth": 3,
+   "claimed": "stale_statistics",
+   "correct": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_eval_v1",
+   "truth": "missing_index",
+   "target": "stale_statistics",
+   "kind": "trapped",
+   "depth": null,
+   "claimed": "stale_statistics",
+   "correct": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
+   "dims": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true
+   },
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
+   "declare_blocked": false,
+   "n_evidence": 13
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_orders_user_status_v1",
+   "truth": "missing_index",
+   "target": "missing_index",
+   "kind": "correct",
+   "depth": 0,
+   "claimed": "missing_index",
+   "correct": true,
+   "verdict": "INSUFFICIENT",
+   "passed": false,
+   "dims": {
+    "D1": true,
+    "D2": false,
+    "D3": true,
+    "D4": true,
+    "D5": false
+   },
+   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
+   "declare_blocked": false,
+   "n_evidence": 7
+  },
+  {
+   "run": 4,
+   "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "missing_index",
    "kind": "correct",
@@ -1246,227 +1466,7 @@
    "n_evidence": 11
   },
   {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "missing_index",
-   "kind": "correct",
-   "depth": 2,
-   "claimed": "missing_index",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": false
-   },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "missing_index",
-   "kind": "correct",
-   "depth": 3,
-   "claimed": "missing_index",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": false
-   },
-   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "missing_index",
-   "kind": "correct",
-   "depth": null,
-   "claimed": "missing_index",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": false
-   },
-   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "stale_statistics",
-   "kind": "trapped",
-   "depth": 0,
-   "claimed": "stale_statistics",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
-   "declare_blocked": false,
-   "n_evidence": 7
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "stale_statistics",
-   "kind": "trapped",
-   "depth": 1,
-   "claimed": "stale_statistics",
-   "correct": false,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
-   "declare_blocked": false,
-   "n_evidence": 12
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "stale_statistics",
-   "kind": "trapped",
-   "depth": 2,
-   "claimed": "stale_statistics",
-   "correct": false,
-   "verdict": "SUFFICIENT",
-   "passed": true,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
-   "declare_blocked": false,
-   "n_evidence": 12
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "stale_statistics",
-   "kind": "trapped",
-   "depth": 3,
-   "claimed": "stale_statistics",
-   "correct": false,
-   "verdict": "SUFFICIENT",
-   "passed": true,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_eval_v1",
-   "truth": "missing_index",
-   "target": "stale_statistics",
-   "kind": "trapped",
-   "depth": null,
-   "claimed": "stale_statistics",
-   "correct": false,
-   "verdict": "SUFFICIENT",
-   "passed": true,
-   "dims": {
-    "D1": true,
-    "D2": true,
-    "D3": true,
-    "D4": true,
-    "D5": true
-   },
-   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
-   "declare_blocked": false,
-   "n_evidence": 13
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_orders_user_status_v1",
-   "truth": "missing_index",
-   "target": "missing_index",
-   "kind": "correct",
-   "depth": 0,
-   "claimed": "missing_index",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": false
-   },
-   "d2_detail": "竞争假设 4 个，已排除 0 个 (0%)",
-   "declare_blocked": false,
-   "n_evidence": 7
-  },
-  {
-   "run": 2,
-   "scenario": "missing_index_orders_user_status_v1",
-   "truth": "missing_index",
-   "target": "missing_index",
-   "kind": "correct",
-   "depth": 1,
-   "claimed": "missing_index",
-   "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
-   "dims": {
-    "D1": true,
-    "D2": false,
-    "D3": true,
-    "D4": true,
-    "D5": false
-   },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
-   "declare_blocked": false,
-   "n_evidence": 12
-  },
-  {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "missing_index",
@@ -1485,10 +1485,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 13
+   "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "missing_index",
@@ -1510,7 +1510,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "missing_index",
@@ -1532,7 +1532,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "stale_statistics",
@@ -1545,7 +1545,7 @@
    "dims": {
     "D1": true,
     "D2": false,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1554,7 +1554,7 @@
    "n_evidence": 7
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "stale_statistics",
@@ -1567,7 +1567,7 @@
    "dims": {
     "D1": true,
     "D2": false,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1576,7 +1576,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "stale_statistics",
@@ -1589,16 +1589,16 @@
    "dims": {
     "D1": true,
     "D2": true,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 13
+   "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "stale_statistics",
@@ -1611,7 +1611,7 @@
    "dims": {
     "D1": true,
     "D2": true,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1620,7 +1620,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "missing_index_orders_user_status_v1",
    "truth": "missing_index",
    "target": "stale_statistics",
@@ -1633,7 +1633,7 @@
    "dims": {
     "D1": true,
     "D2": true,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1642,7 +1642,7 @@
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1664,7 +1664,7 @@
    "n_evidence": 7
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1683,10 +1683,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 10
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1705,10 +1705,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 13
+   "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1725,12 +1725,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1747,12 +1747,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1768,7 +1768,7 @@
    "n_evidence": 8
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1784,7 +1784,7 @@
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1797,10 +1797,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 12
+   "n_evidence": 14
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1816,7 +1816,7 @@
    "n_evidence": 14
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_eval_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1832,7 +1832,7 @@
    "n_evidence": 14
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1854,7 +1854,7 @@
    "n_evidence": 7
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1873,10 +1873,10 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 10
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1884,21 +1884,21 @@
    "depth": 2,
    "claimed": "stale_statistics",
    "correct": true,
-   "verdict": "INSUFFICIENT",
-   "passed": false,
+   "verdict": "SUFFICIENT",
+   "passed": true,
    "dims": {
     "D1": true,
-    "D2": false,
+    "D2": true,
     "D3": true,
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 1 个 (25%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
    "n_evidence": 12
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1915,12 +1915,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "stale_statistics",
@@ -1937,12 +1937,12 @@
     "D4": true,
     "D5": true
    },
-   "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)；另有 1 个声称排除但无证据支撑：['work_mem_spill']",
+   "d2_detail": "竞争假设 4 个，已排除 3 个 (75%)",
    "declare_blocked": false,
    "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1958,7 +1958,7 @@
    "n_evidence": 8
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1974,7 +1974,7 @@
    "n_evidence": 11
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -1987,10 +1987,10 @@
    "dims": {},
    "d2_detail": "",
    "declare_blocked": true,
-   "n_evidence": 12
+   "n_evidence": 13
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "missing_index",
@@ -2006,7 +2006,7 @@
    "n_evidence": 14
   },
   {
-   "run": 2,
+   "run": 4,
    "scenario": "stale_statistics_train_v1",
    "truth": "stale_statistics",
    "target": "missing_index",

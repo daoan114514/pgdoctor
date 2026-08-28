@@ -89,8 +89,11 @@ for seg in segs[1:]:
     rc = re.search(r'if root_cause == "([a-z_]+)"', seg)
     if rc:
         conditional.add((ev, rc.group(1)))
-missing = declared - set(_VALUE_CHECKED) - {"dead_tuple_ratio",
-                                            "connection_count"}
+# 有意不登记的：前两条 _supports 里压根没做取值检查；后两条做的是
+# 存在性判断而非双向取值判断，拿来判方向会误伤正当的排除。
+EXEMPT = {"dead_tuple_ratio", "connection_count",
+          "explain_seq_scan", "index_existence"}
+missing = declared - set(_VALUE_CHECKED) - EXEMPT
 check("_supports 里的证据类型都在表里（或明确豁免）", not missing,
       f"漏登记: {sorted(missing)}" if missing else
       f"{len(_VALUE_CHECKED)} 项已登记，2 项豁免（无取值检查）")
@@ -108,6 +111,36 @@ check("idle_in_transaction 对长事务已登记", _value_checked(
     "idle_in_transaction", "long_idle_transaction"))
 check("idle_in_transaction 对别的根因不登记", not _value_checked(
     "idle_in_transaction", "missing_index"))
+
+print("\n[5] 回归保护：排除 missing_index 不能被方向检查误伤")
+# 实测踩过：把 explain_seq_scan / index_existence 也拿来判方向，导致
+# "声称锁竞争、排除缺索引"被判成无依据 —— 500 例里多拦了 45 个完全
+# 正确的诊断，正确诊断放行率从 45% 掉到 22%。
+#
+# 根子是那两条在 _supports 里是存在性判断而非双向取值判断：
+# index_existence 的注释自己写着"拿到了清单即算取证"；而统计过期场景下
+# 计划本来就是 Seq Scan 且过滤大量行，那确实"像"缺索引。
+st2 = EpisodeState(episode_id="rt5", scenario_id="lock_contention_eval_v1")
+st2.symptoms = ["错误 5285"]
+st2.claimed_fault_class = "lock_contention"
+st2.note("a", "lock_blocking_chain", "阻塞链 3 条，最久等待 8 分钟", "", [])
+st2.note("a", "session_wait_profile", "等待事件={'Lock'}", "", [])
+st2.note("a", "explain_seq_scan",
+         "4143ms, Seq Scan, Rows Removed by Filter=12,000,606, 用到索引=无",
+         "", [])
+st2.note("a", "index_existence",
+         "orders 上的索引: ['idx_orders_user_status', 'orders_pkey']", "", [])
+st2.set_verdict("lock_contention", Verdict.CONFIRMED,
+                note="阻塞链 3 条，会话卡在 Lock 等待")
+st2.set_verdict("missing_index", Verdict.REFUTED,
+                note="覆盖索引存在，计划变慢另有原因")
+rep = esc.check(st2)
+d2 = next(d for d in rep.dims if d.name == "D2")
+print(f"      {d2.detail}")
+check("排除 missing_index 计入排除率",
+      "missing_index" not in d2.detail.split("无证据支撑：")[-1]
+      or "无证据支撑" not in d2.detail,
+      "explain_seq_scan / index_existence 是存在性判断，不能拿来判方向")
 
 print()
 print("=" * 66)
