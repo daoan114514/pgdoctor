@@ -107,4 +107,20 @@ for i, sf in enumerate(scenarios, 1):
 OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(json.dumps({"n": len(rows), "rows": rows},
                           ensure_ascii=False, indent=1), encoding="utf-8")
+# 少产出必须大声失败。第 3 轮曾只产出 80 例（两个场景注入超时），而跑批
+# 照常打印"完成"、正常退出 —— 评测台自己出问题时没有任何东西在监督它，
+# 而少掉的那 20 例会给整轮统计带上说不清来源的偏差。
+expect = len(scenarios) * 2 * len(DEPTHS)
+if len(rows) != expect:
+    from collections import Counter as _C
+    per = _C(r["scenario"] for r in rows)
+    short = {s["id"]: per.get(s["id"], 0) for s in scenarios
+             if per.get(s["id"], 0) != 2 * len(DEPTHS)}
+    print(f"\n产出不足：{len(rows)}/{expect} 例，缺口场景 {short}")
+    Path(OUT).write_text(json.dumps({"rows": rows, "incomplete": True,
+                                     "expected": expect, "short": short},
+                                    ensure_ascii=False, indent=1),
+                         encoding="utf-8")
+    sys.exit(2)
+
 print(f"\n共 {len(rows)} 例，耗时 {time.time() - t_start:.0f}s -> {OUT}")

@@ -148,7 +148,11 @@ class LockContentionInjector(Injector):
         self._thread = threading.Thread(target=self._hold, args=(params,),
                                         daemon=True)
         self._thread.start()
-        for _ in range(120):         # 等锁真正拿到（区间锁要扫十万行）
+        # 注意 _holder_pid 是在 SELECT pg_backend_pid() 之后立刻就设上的，
+        # 那时 FOR UPDATE 的扫描还没开始 —— 拿它当"锁已拿到"的判据是错的，
+        # 注释写着"等锁真正拿到"，等的却是 pid。真正的到位判据是
+        # verify_injected，由 env.reset() 轮询。这里只等线程起来。
+        for _ in range(120):
             time.sleep(0.25)
             if self._holder_pid:
                 break

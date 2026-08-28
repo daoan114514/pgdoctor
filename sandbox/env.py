@@ -93,7 +93,7 @@ class DBAScenarioEnv:
             print(msg, flush=True)
 
     # ── 生命周期 ──────────────────────────────────────────────
-    def reset(self, seed: int = 0) -> Observation:
+    def reset(self, seed: int = 0, verify_timeout_s: float = 60.0) -> Observation:
         import random
 
         notes = []
@@ -123,7 +123,17 @@ class DBAScenarioEnv:
         self.probe_uid = params.get("probe_uid")
         self._injector = injector
         self.injection = injector.inject(params)
-        if not injector.verify_injected(params):
+        # 轮询而不是查一次。注入不是瞬时完成的：锁竞争要扫十几万行才拿
+        # 到行锁、统计过期要灌几十万行、连接打满要建近百条连接，而
+        # verify_injected 判的是"到位没有"。掐一个时间点问一次，赶上慢的
+        # 那次就误报"注入未生效" —— 实测第 3 轮因此丢掉 20 例，同种子
+        # 重跑却是好的。偶发丢数据比直接失败更危险，它是静默的。
+        deadline = time.time() + verify_timeout_s
+        ok = injector.verify_injected(params)
+        while not ok and time.time() < deadline:
+            time.sleep(1.0)
+            ok = injector.verify_injected(params)
+        if not ok:
             raise RuntimeError(f"故障注入未生效: {fault_class}")
         self._log(f"[env] 已注入: {self.injection.notes}")
 
