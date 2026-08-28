@@ -96,6 +96,15 @@ class Toolbox:
             f"{table}: live={s.n_live_tup:,} dead={s.n_dead_tup:,} "
             f"dead_ratio={s.dead_ratio} last_analyze={s.last_analyze[:19] or '空'}",
             bears_on=["stale_statistics", "table_bloat"])
+        # 死元组占比要单独记一条。它和"统计新不新鲜"是两回事：图上
+        # table_bloat 的必需证据是 dead_tuple_ratio，而这条以前从没有
+        # 任何工具产出过 —— 数据取到了却混在 stats_freshness 的观测串里，
+        # 于是 table_bloat 这个根因结构上无法被诊断，D1 永远失败。
+        self._evidence(
+            "dead_tuple_ratio", "",
+            f"{table}: live={s.n_live_tup:,} dead={s.n_dead_tup:,} "
+            f"dead_ratio={s.dead_ratio}",
+            bears_on=["table_bloat", "autovacuum_starvation"])
         return asdict(s)
 
     def get_top_queries(self, n: int = 5) -> list[dict]:
@@ -135,6 +144,17 @@ class Toolbox:
             f"idle in transaction={r['idle_in_transaction']}, "
             f"按角色={r['by_user']}",
             bears_on=["connection_exhaustion", "long_idle_transaction"])
+        # 挂起事务数要单独记一条。它是分开"真·连接打满"与"长事务堆积"
+        # 的**唯一**判别证据（因果图上 power 给到 0.95），而这条以前从没
+        # 有任何工具产出过 —— 数字取到了却只混在 connection_count 的观测
+        # 串里，于是 long_idle_transaction 结构上无法被诊断。误导性告警
+        # 场景的真根因正是它，也就是说那个场景在真实跑批里解不开。
+        self._evidence(
+            "idle_in_transaction", "",
+            f"连接 {r['used']}/{r['max_connections']}, "
+            f"idle in transaction={r['idle_in_transaction']}, "
+            f"按状态={r['by_state']}",
+            bears_on=["long_idle_transaction", "connection_exhaustion"])
         return r
 
     def get_vacuum_horizon(self) -> dict:

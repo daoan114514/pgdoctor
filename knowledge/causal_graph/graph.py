@@ -287,6 +287,28 @@ def upstream_of(root_cause: str) -> list[dict]:
             if k == "CAUSES" and g.nodes.get(u, {}).get("kind") == "RootCause"]
 
 
+def downstream_of(root_cause: str) -> set[str]:
+    """这个根因会导致哪些别的根因 —— 沿 CAUSES 边一路向下。
+
+    ESC 的 D2 用它剔除竞争假设：下游后果不是"竞争解释"，是已经被解释
+    掉的结果。声称长事务时连接打满确实在发生，要求 agent 去"排除"它，
+    等于要求它否认一个正在发生的事实。
+    """
+    g = load()
+    if root_cause not in g:
+        return set()
+    out, stack = set(), [root_cause]
+    while stack:
+        n = stack.pop()
+        for _, v, k in g.out_edges(n, keys=True):
+            if k != "CAUSES" or g.nodes.get(v, {}).get("kind") != "RootCause":
+                continue
+            if v not in out and v != root_cause:
+                out.add(v)
+                stack.append(v)
+    return out
+
+
 def _causes_reachable(g, src: str, dst: str) -> list[str] | None:
     """沿 根因->根因 的 CAUSES 边找 src 到 dst 的路径，找不到返回 None。"""
     stack = [(src, [src])]

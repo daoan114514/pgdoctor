@@ -128,6 +128,13 @@ refuted_by:
      when: "连接数远低于上限"}
   - {cause: long_idle_transaction, evidence: idle_in_transaction,
      when: "idle in transaction 会话数接近 0"}
+  # 反事实模拟是 DB 域独有的反证手段：不碰生产就能预先否掉一个方案。
+  # _supports 早就实现了这条判断，图上一直没有对应的边 —— 而 D2 判
+  # "这次排除有没有依据"是照着图查的，缺边就等于这条反证不算数。
+  - {cause: missing_index, evidence: counterfactual_index,
+     when: "hypopg 模拟显示优化器不会采用该索引"}
+  - {cause: checkpoint_pressure, evidence: checkpoint_stats,
+     when: "请求式检查点占比不高，写入时间正常"}
   - {cause: xid_wraparound_risk, evidence: xid_age,
      when: "XID 年龄远低于 autovacuum_freeze_max_age"}
   - {cause: stale_replication_slot, evidence: replication_slot_age,

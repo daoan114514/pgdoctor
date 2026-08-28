@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agent import esc
-from agent.esc import _VALUE_CHECKED, _supports, _value_checked
+from agent.esc import _CHECKED_TYPES, _supports, _value_checked
 from agent.episode_state import EpisodeState, Verdict
 from knowledge.causal_graph import graph as G
 
@@ -68,49 +68,47 @@ check("这次排除计入排除率",
       d2.detail.split("无证据支撑：")[-1],
       "session_wait_profile=等待事件无，是正当的反证")
 
-print("\n[3] _VALUE_CHECKED 与 _supports 必须同步")
-# _supports 里每个按根因分支的证据类型，都得在表里登记；否则方向检查
-# 会漏掉它，或者把"没查"当成"支持"。这张表和函数分居两处，必然会漂移。
+print("\n[3] 图与 _supports 必须对得上")
+# 方向判据现在从图的 REFUTED_BY 边推导，手工表没了。该查的变成两件事：
+# 图上声明能反证的组合，_supports 里有没有真写检查；以及 _supports 里
+# 写了检查的类型，图上有没有对应的反证边（没有的话那段代码永远不会被
+# 方向判断用到，是死逻辑）。
 src = (Path(__file__).resolve().parent.parent / "agent/esc.py").read_text(
     encoding="utf-8")
-body = src.split("def _supports")[1].split("def _collected")[0]
+body = src.split("def _supports")[1].split("def _value_checked")[0]
 import re
-# 按分支切开再比对。第一版用一条跨行正则，结果匹配到了**下一个**分支的
-# root_cause 条件（explain_seq_scan 被配成 stale_statistics），检查照样
-# 通过 —— 因为表里那项是 None，短路了。又是一个"过了但理由是错的"测试。
-segs = re.split(r'\n    if evidence_type == ', body)
-declared, conditional = set(), set()
-for seg in segs[1:]:
-    m = re.match(r'"([a-z_]+)"', seg)
-    if not m:
-        continue
-    ev = m.group(1)
-    declared.add(ev)
-    rc = re.search(r'if root_cause == "([a-z_]+)"', seg)
-    if rc:
-        conditional.add((ev, rc.group(1)))
-# 有意不登记的：前两条 _supports 里压根没做取值检查；后两条做的是
-# 存在性判断而非双向取值判断，拿来判方向会误伤正当的排除。
-EXEMPT = {"dead_tuple_ratio", "connection_count",
-          "explain_seq_scan", "index_existence"}
-missing = declared - set(_VALUE_CHECKED) - EXEMPT
-check("_supports 里的证据类型都在表里（或明确豁免）", not missing,
-      f"漏登记: {sorted(missing)}" if missing else
-      f"{len(_VALUE_CHECKED)} 项已登记，2 项豁免（无取值检查）")
+declared = set(re.findall(r'evidence_type == "([a-z_]+)"', body))
 
-for ev, rc in conditional:
-    if ev in _VALUE_CHECKED:
-        want = _VALUE_CHECKED[ev]
-        check(f"  {ev} 的登记根因与代码一致", want == rc,
-              f"表里 {want}，代码里 {rc}")
+g = G.load()
+causes = [n for n, d in g.nodes(data=True) if d.get("kind") == "RootCause"]
+graph_refuters = {r["evidence"] for c in causes
+                  for r in G.refuting_evidence(c)}
+
+no_impl = sorted(graph_refuters - declared)
+check("图上声明能反证的证据，_supports 里都写了检查", not no_impl, no_impl)
+
+not_declared = sorted(graph_refuters - _CHECKED_TYPES)
+check("图上声明能反证的证据，都在 _CHECKED_TYPES 里", not not_declared,
+      not_declared)
+
+dead = sorted(_CHECKED_TYPES - graph_refuters)
+print(f"      _supports 有检查但图上无反证边（不参与方向判断）: {dead}")
+
+pairs = [(r["evidence"], c) for c in causes for r in G.refuting_evidence(c)]
+live = [(e, c) for e, c in pairs if _value_checked(e, c)]
+check("推导出的方向判据非空", len(live) >= 10, f"{len(live)} 组")
 
 print("\n[4] 未登记的组合不做方向判断")
-check("session_wait_profile 未登记", not _value_checked(
-    "session_wait_profile", "lock_contention"))
-check("idle_in_transaction 对长事务已登记", _value_checked(
+check("session_wait_profile 不参与方向判断（图上无反证边）",
+      not _value_checked("session_wait_profile", "lock_contention"))
+check("idle_in_transaction 对长事务参与", _value_checked(
     "idle_in_transaction", "long_idle_transaction"))
-check("idle_in_transaction 对别的根因不登记", not _value_checked(
+check("idle_in_transaction 对别的根因不参与", not _value_checked(
     "idle_in_transaction", "missing_index"))
+check("explain_seq_scan 不参与（存在性判断，图上无反证边）",
+      not _value_checked("explain_seq_scan", "missing_index"))
+check("row_estimate_deviation 对统计过期参与（这才是真判别特征）",
+      _value_checked("row_estimate_deviation", "stale_statistics"))
 
 print("\n[5] 回归保护：排除 missing_index 不能被方向检查误伤")
 # 实测踩过：把 explain_seq_scan / index_existence 也拿来判方向，导致

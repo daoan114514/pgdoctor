@@ -133,54 +133,74 @@ def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
             # 定时检查点是正常的，请求式占多数才说明 WAL 涨得过快
             return pct >= 50.0
         return True
+    if evidence_type == "row_estimate_deviation":
+        # 统计过期的**真正**判别特征。观测串自己写着"偏差 >10 倍通常
+        # 意味着统计信息失真"，图上的反证条件是"偏差不大"，阈值取 10。
+        if root_cause == "stale_statistics":
+            m = re.search(r"最大偏差 ([\d.]+) 倍", observation)
+            return float(m.group(1)) >= 10.0 if m else False
+        return True
+    if evidence_type == "explain_plan":
+        # 这个类型只在计划**不是** Seq Scan 时才产出。图上的反证条件是
+        # "执行计划已走索引"，所以对缺索引而言它天然是反面证据 ——
+        # 但仍看实际取值，"other" 类计划也会落到这里。
+        if root_cause == "missing_index":
+            return "用到索引=无" in observation
+        return True
     if evidence_type == "dead_tuple_ratio":
+        # 图上的反证条件是"死元组占比很低"。阈值取 0.2 —— PostgreSQL 的
+        # autovacuum_vacuum_scale_factor 默认就是 0.2，低于它连 autovacuum
+        # 自己都不认为该清理。注意 dead_ratio 是分数不是百分数。
+        if root_cause == "table_bloat":
+            m = re.search(r"dead_ratio=([\d.]+)", observation)
+            return float(m.group(1)) >= 0.2 if m else False
         return True
     if evidence_type == "connection_count":
+        # 图上的反证条件是"连接数远低于上限"。观测串里直接带了
+        # 逼近上限=True/False，不必自己算阈值。
+        if root_cause == "connection_exhaustion":
+            return "逼近上限=True" in observation
         return True
     return True
 
 
-# 每条证据的取值检查，是**针对哪一个根因**写的。
+# 哪些 (证据, 根因) 组合可以用来判"这次排除的取值方向对不对"。
 #
-# 为什么需要这张表：_supports 对没实现检查的组合一律返回 True，那是
-# "这条不查"的意思，不是"这条证据支持该假设"。把两者混为一谈会误伤
-# 正当的排除 —— 实测拿 session_wait_profile="等待事件=无" 排除锁竞争
-# 被判成无依据，而那是完全正当的一次排除。
+# 从因果图的 REFUTED_BY 边推导，不再手工维护。手工那版和 _supports
+# 漂移，害我连着犯了三次错：把"这条不查"当成"这条支持"、把"代码里没有
+# 根因守卫"当成"语义上对所有根因成立"、把存在性判断当成双向取值判断。
 #
-# 注意这里没有"无条件"这一档。explain_seq_scan / index_existence /
-# counterfactual_index 在 _supports 里确实没有 root_cause 守卫，但那
-# 不等于语义上对每个根因都成立 —— 那几个分支写的是"Seq Scan 且过滤掉
-# 大量行 ⇒ 缺索引"，只是作者从来只在这个语境下调用，没加守卫。把它们
-# 当成无条件，会让"拿 Seq Scan 排除统计过期"被误判成方向相反，一条
-# 完全正常的诊断因此被拦（multicause_check 场景 3 就是这么炸的）。
+# 用 REFUTED_BY 推导是语义上正确的：那条边的含义就是"这条证据在某个取值
+# 下能反证这个根因"，正是方向判断需要的前提。图上没有这条边，就说明没人
+# 声明过它能反证，那就不该拿它判方向。
 #
-# 这张表会和 _supports 漂移，所以 .dev/refute_truth.py 里有同步检查。
-_VALUE_CHECKED: dict[str, str] = {
-    # 只登记**真正双向**的判据：有明确阈值，且反面有明确含义。
-    #
-    # explain_seq_scan / index_existence 故意不在这里。它们在 _supports
-    # 里是存在性判断而非取值判断 —— index_existence 的注释自己写着
-    # "拿到了清单即算取证，具体覆盖性由 explain 的 Seq Scan 佐证"，
-    # 只要拿到索引列表就返回 True；而统计过期场景下计划本来就是 Seq Scan
-    # 且过滤大量行，那确实"像"缺索引，区分它俩靠的是 row_estimate_deviation。
-    # 拿这两条判方向，会让"排除缺索引"永远算不上有依据 —— 实测因此多拦了
-    # 45 个完全正确的诊断，正确诊断放行率从 45% 掉到 22%。
-    "counterfactual_index": "missing_index",
-    "stats_freshness": "stale_statistics",
-    "lock_blocking_chain": "lock_contention",
-    "idle_in_transaction": "long_idle_transaction",
-    "xid_age": "xid_wraparound_risk",
-    "replication_slot_age": "stale_replication_slot",
-    "prepared_xact_age": "orphaned_prepared_transaction",
-    "deadlock_count": "deadlock",
-    "temp_file_volume": "work_mem_spill",
-    "checkpoint_stats": "checkpoint_pressure",
-}
+# 副作用之一是 stats_freshness 自动落选 —— 这是对的。项目自己早就得出
+# 结论"统计过期的判别特征是估计与实际的偏差，不是时间戳"（实测偏差
+# 4200 倍而 last_analyze 看着是新的），拿它判方向等于退回那个已知的错误。
 
 
 def _value_checked(evidence_type: str, root_cause: str) -> bool:
-    """这个组合的取值到底查没查。"""
-    return _VALUE_CHECKED.get(evidence_type) == root_cause
+    """这个组合能不能用来判取值方向。
+
+    两个条件都要满足：图上声明了这条证据能反证该根因，且 _supports 里
+    真的为这个组合写了取值检查（没写的话它一律返回 True，那是"不查"
+    的意思，拿来当"支持"会误伤正当的排除）。
+    """
+    if evidence_type not in _CHECKED_TYPES:
+        return False
+    return any(r["evidence"] == evidence_type
+               for r in G.refuting_evidence(root_cause))
+
+
+# _supports 里真的实现了取值检查的证据类型。没在这里的，_supports 一律
+# 返回 True 表示"不查" —— 那不是"支持"。
+_CHECKED_TYPES = frozenset({
+    "explain_seq_scan", "stats_freshness", "lock_blocking_chain",
+    "counterfactual_index", "idle_in_transaction", "xid_age",
+    "replication_slot_age", "prepared_xact_age", "deadlock_count",
+    "temp_file_volume", "checkpoint_stats", "row_estimate_deviation",
+    "explain_plan", "dead_tuple_ratio", "connection_count",
+})
 
 
 def _collected(st: EpisodeState) -> dict[str, list[dict]]:
@@ -240,7 +260,16 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
         directives.append(f"证据 {ev} 的取值并不支持 {rc}，请复核或改换假设")
 
     # ── D2 鉴别诊断（必需项）────────────────────────────────
-    competitors = [c for c in cands if c != rc]
+    # 剔除自己造成的下游后果：它们不是竞争解释，是已经被解释掉的结果。
+    # 声称长事务时连接打满确实在发生（图上 long_idle_transaction -->
+    # connection_exhaustion 是条级联边），要求 agent 去"排除"它等于要求
+    # 它否认一个正在发生的事实 —— 而 connection_count 也确实显示连接满了，
+    # 于是这次排除永远拿不到依据，正解被判负。
+    #
+    # 裁决阶段早就用 collapse_chain 处理级联（"修下游只治标"），D2 这层
+    # 一直没有，同一个概念只实现了一半。
+    _downstream = G.downstream_of(rc)
+    competitors = [c for c in cands if c != rc and c not in _downstream]
     def _backed(h: str) -> bool:
         """这个排除有没有证据支撑。
 
