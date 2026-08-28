@@ -17,10 +17,14 @@ class MissingIndexInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
+        # 这一类的结构是固定的（就是丢掉那条索引），能随机的只有
+        # 热查询打在哪段 user_id 上 —— 它决定扫描的行分布，从而决定
+        # 劣化幅度。写死一个 uid 意味着每次扫的是同一批行。
         return {
             "index": inj["index"],
             "table": inj.get("table", "orders"),
             "columns": inj.get("columns", ["status"]),
+            "probe_uid": rng.randint(1000, 9000),
         }
 
     def inject(self, params: dict) -> InjectionRecord:

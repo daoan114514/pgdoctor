@@ -26,7 +26,11 @@ from agent.loop import run_episode
 from sandbox.env import DBAScenarioEnv
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "eval/results/d2_suite.json"
+# 第几轮。同一批场景换种子重跑，注入参数与排除对象都会变 ——
+# 这是"每轮不一样"的来源，也是防背答案那条铁律要求的。
+RUN_SEED = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+OUT = ROOT / (f"eval/results/d2_suite_r{RUN_SEED}.json" if RUN_SEED
+              else "eval/results/d2_suite.json")
 
 # 每个场景配一个"陷阱"：最容易被误认成的那个根因。
 # 这是这批数据的核心 —— 只有落进陷阱的样本才可能出现"D1 过但结论错"。
@@ -43,8 +47,8 @@ rows = []
 t_start = time.time()
 
 scenarios = sorted(ROOT.glob("sandbox/scenarios/*.yaml"))
-print(f"场景 {len(scenarios)} 个 × 目标 2 × 深度 {len(DEPTHS)} "
-      f"= {len(scenarios) * 2 * len(DEPTHS)} 例\n")
+print(f"第 {RUN_SEED} 轮 —— 场景 {len(scenarios)} 个 × 目标 2 × "
+      f"深度 {len(DEPTHS)} = {len(scenarios) * 2 * len(DEPTHS)} 例\n")
 
 for i, sf in enumerate(scenarios, 1):
     spec = yaml.safe_load(sf.read_text(encoding="utf-8"))
@@ -55,11 +59,14 @@ for i, sf in enumerate(scenarios, 1):
     try:
         with DBAScenarioEnv(str(sf), warmup_s=8.0, degrade_timeout_s=75.0,
                             quiet=True) as env:
-            obs = env.reset()
+            obs = env.reset(seed=RUN_SEED)
             print(f"        注入完成 {time.time() - t0:.0f}s  告警={obs.fired}")
             for target, kind in ((truth, "correct"), (trap, "trapped")):
                 for k in DEPTHS:
-                    pol = DifferentialDepthPolicy(target, refute_k=k)
+                    pol = DifferentialDepthPolicy(
+                        target, refute_k=k,
+                        seed=RUN_SEED * 1000 + i * 10 + (0 if kind == "correct"
+                                                         else 1))
                     try:
                         res, st = run_episode(
                             env, obs, pol, max_steps=30, allow_repair=False,
@@ -78,6 +85,7 @@ for i, sf in enumerate(scenarios, 1):
                     # 毫无线索的。
                     d2 = next((d for d in rep.dims if d.name == "D2"), None)
                     rows.append({
+                        "run": RUN_SEED,
                         "scenario": spec["id"], "truth": truth,
                         "target": target, "kind": kind, "depth": k,
                         "claimed": st.claimed_fault_class,

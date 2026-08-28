@@ -30,10 +30,15 @@ class DifferentialDepthPolicy(Policy):
     refute_k    排除几个竞争假设。None 表示全排
     """
 
-    def __init__(self, target: str, refute_k: int | None = None):
+    def __init__(self, target: str, refute_k: int | None = None,
+                 seed: int | None = None):
         self.target = target
         self.refute_k = refute_k
-        self.name = f"depth[{target},k={refute_k}]"
+        # 排除哪 k 个是随机选的，不是固定取前 k 个。不同竞争假设的判别
+        # 证据难易差很多（lock_blocking_chain 是瞬时的，connection_count
+        # 随时可取），固定顺序会把这种差异系统性地藏起来。
+        self.seed = seed
+        self.name = f"depth[{target},k={refute_k},s={seed}]"
 
     # 证据类型 -> 怎么取。照着因果图的 obtained_by 调，不硬编码一份。
     def _gather(self, tb: Toolbox, st: EpisodeState, ctx: dict,
@@ -100,7 +105,12 @@ class DifferentialDepthPolicy(Policy):
 
             competitors = [h for h in st.ledger if h != self.target]
             k = len(competitors) if self.refute_k is None else self.refute_k
-            picked = competitors[:max(0, k)]
+            k = max(0, min(k, len(competitors)))
+            if self.seed is None or k >= len(competitors):
+                picked = competitors[:k]
+            else:
+                import random as _r
+                picked = _r.Random(self.seed).sample(competitors, k)
 
             # 要排除谁，就先去取能排除它的证据。D2 收紧之后只数有依据的
             # 排除，光标 REFUTED 不算 —— 这也正是应该的：排除和确认一样

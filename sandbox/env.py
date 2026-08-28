@@ -119,6 +119,8 @@ class DBAScenarioEnv:
             raise KeyError(f"没有注册 {fault_class} 的注入器")
         injector = injector_cls(self.spec)
         params = injector.params(random.Random(seed))
+        # 注入器给出的探针 uid 透给策略，让热查询每轮打在不同的行段上
+        self.probe_uid = params.get("probe_uid")
         self._injector = injector
         self.injection = injector.inject(params)
         if not injector.verify_injected(params):

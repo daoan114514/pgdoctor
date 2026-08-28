@@ -140,6 +140,42 @@ def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
     return True
 
 
+# 每条证据的取值检查，是**针对哪一个根因**写的。
+#
+# 为什么需要这张表：_supports 对没实现检查的组合一律返回 True，那是
+# "这条不查"的意思，不是"这条证据支持该假设"。把两者混为一谈会误伤
+# 正当的排除 —— 实测拿 session_wait_profile="等待事件=无" 排除锁竞争
+# 被判成无依据，而那是完全正当的一次排除。
+#
+# 注意这里没有"无条件"这一档。explain_seq_scan / index_existence /
+# counterfactual_index 在 _supports 里确实没有 root_cause 守卫，但那
+# 不等于语义上对每个根因都成立 —— 那几个分支写的是"Seq Scan 且过滤掉
+# 大量行 ⇒ 缺索引"，只是作者从来只在这个语境下调用，没加守卫。把它们
+# 当成无条件，会让"拿 Seq Scan 排除统计过期"被误判成方向相反，一条
+# 完全正常的诊断因此被拦（multicause_check 场景 3 就是这么炸的）。
+#
+# 这张表会和 _supports 漂移，所以 .dev/refute_truth.py 里有同步检查。
+_VALUE_CHECKED: dict[str, str] = {
+    "explain_seq_scan": "missing_index",
+    "index_existence": "missing_index",
+    "counterfactual_index": "missing_index",
+    "stats_freshness": "stale_statistics",
+    "lock_blocking_chain": "lock_contention",
+    "idle_in_transaction": "long_idle_transaction",
+    "xid_age": "xid_wraparound_risk",
+    "replication_slot_age": "stale_replication_slot",
+    "prepared_xact_age": "orphaned_prepared_transaction",
+    "deadlock_count": "deadlock",
+    "temp_file_volume": "work_mem_spill",
+    "checkpoint_stats": "checkpoint_pressure",
+}
+
+
+def _value_checked(evidence_type: str, root_cause: str) -> bool:
+    """这个组合的取值到底查没查。"""
+    return _VALUE_CHECKED.get(evidence_type) == root_cause
+
+
 def _collected(st: EpisodeState) -> dict[str, list[dict]]:
     """从执行轨迹里归集实际拿到的证据。读便签，不读 agent 的说法。"""
     out: dict[str, list[dict]] = {}
@@ -218,7 +254,26 @@ def check(st: EpisodeState, candidates: list[str] | None = None,
         rel = (set(G.required_evidence(h)) | set(G.supporting_evidence(h))
                | {r["evidence"] for r in G.refuting_evidence(h)}
                | G.discriminators_of(h))
-        return bool(rel & set(got))
+        hit = rel & set(got)
+        if not hit:
+            return False
+        # 取值方向也要对：拿来排除 h 的证据，如果它的取值其实**支持** h，
+        # 那这次排除是反的，不能算数。
+        #
+        # 实测的形态：声称 connection_exhaustion，拿 idle_in_transaction=86
+        # 去"排除" long_idle_transaction —— 而 86 个挂起事务恰恰是长事务
+        # 的证据，图上的反证条件写的是"接近 0"。不查这一层，D2 就是在
+        # 奖励"把对的答案排掉"。
+        #
+        # 确认那边早就有 _supports 逐类查取值，这里是对称的那一半。
+        for ev in hit:
+            # 只在真的查了取值的组合上判方向。没查的组合 _supports 返回
+            # True 是"不查"的意思，拿它当"支持"会误伤正当的排除。
+            if not _value_checked(ev, h):
+                continue
+            if any(_supports(ev, e["observation"], h) for e in got.get(ev, [])):
+                return False
+        return True
 
     # 只数有依据的排除。原来只看 verdict 字符串，于是把竞争假设无脑标成
     # REFUTED 就能让这道闸无条件通过，一条判别证据都不用取。

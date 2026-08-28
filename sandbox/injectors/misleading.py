@@ -39,7 +39,10 @@ class IdleTransactionPileupInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
-        return {"leave_free": int(inj.get("leave_free", 8)),
+        # 只向下抖 leave_free：这个场景吃过亏 —— 设成 6 时告警连续两轮
+        # 不触发，故障不显现，场景等于是废的。往严的方向抖是安全的。
+        base = int(inj.get("leave_free", 8))
+        return {"leave_free": max(1, base - rng.randint(0, 1)),
                 "min_idle_txn": int(inj.get("min_idle_txn", 10))}
 
     def inject(self, params: dict) -> InjectionRecord:

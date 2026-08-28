@@ -29,8 +29,11 @@ class StaleStatisticsInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
+        base = int(inj.get("rows", 4_000_000))
+        # 只向上抖：灌得越多分布越偏，故障只会更明显不会更弱。
+        # 向下抖有把统计失真压到判据以下的风险，那就变成废场景了。
         return {"table": inj.get("table", "orders"),
-                "rows": int(inj.get("rows", 4_000_000))}
+                "rows": int(base * rng.uniform(1.0, 1.5))}
 
     def inject(self, params: dict) -> InjectionRecord:
         t = params["table"]
@@ -101,11 +104,15 @@ class LockContentionInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
+        base_max = int(inj.get("lock_id_max", 0))
         return {"table": inj.get("table", "orders"),
-                "hold_rows": int(inj.get("hold_rows", 5000)),
+                "hold_rows": int(int(inj.get("hold_rows", 5000))
+                                 * rng.uniform(1.0, 1.6)),
                 # 锁住 id <= lock_id_max 的整段区间。必须覆盖热查询的
                 # 取值空间，否则两者只是概率性相交，故障弱到量不出来。
-                "lock_id_max": int(inj.get("lock_id_max", 0)),
+                # 因此只向上抖 —— 锁得更多只会更严重。
+                "lock_id_max": int(base_max * rng.uniform(1.0, 1.4))
+                if base_max else 0,
                 "duration_s": float(inj.get("duration_s", 600))}
 
     def _hold(self, params: dict) -> None:
@@ -193,7 +200,10 @@ class ConnectionExhaustionInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
-        return {"leave_free": int(inj.get("leave_free", 8))}
+        # leave_free 越小故障越重，所以只向下抖，且不低于 1 ——
+        # 留 0 个空位连 agent 自己的只读连接都建不了，就没法诊断了。
+        base = int(inj.get("leave_free", 8))
+        return {"leave_free": max(1, base - rng.randint(0, 1))}
 
     def inject(self, params: dict) -> InjectionRecord:
         """填到真的连不上为止，而不是按公式算目标数。
