@@ -3,155 +3,155 @@ CAUSES:stale_statistics->throughput_down:
   dst: throughput_down
   first_seen: 1787798383.0136933
   kind: CAUSES
-  last_seen: 1787901453.5419044
+  last_seen: 1787986439.1760073
   note: D3 反复报的孤儿症状
   pid: CAUSES:stale_statistics->throughput_down
   src: stale_statistics
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:connection_exhaustion->counterfactual_index:
   contradict: 0
   dst: counterfactual_index
   first_seen: 1787798365.2236824
   kind: CONFIRMED_BY
-  last_seen: 1787901445.0224495
+  last_seen: 1787986428.450519
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:connection_exhaustion->counterfactual_index
   src: connection_exhaustion
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:connection_exhaustion->index_existence:
   contradict: 0
   dst: index_existence
   first_seen: 1787798365.2236805
   kind: CONFIRMED_BY
-  last_seen: 1787901445.0224495
+  last_seen: 1787986428.450519
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:connection_exhaustion->index_existence
   src: connection_exhaustion
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:connection_exhaustion->lock_blocking_chain:
   contradict: 0
   dst: lock_blocking_chain
   first_seen: 1787798365.2236698
   kind: CONFIRMED_BY
-  last_seen: 1787901445.0224495
+  last_seen: 1787986428.450519
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:connection_exhaustion->lock_blocking_chain
   src: connection_exhaustion
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:connection_exhaustion->session_wait_profile:
   contradict: 0
   dst: session_wait_profile
   first_seen: 1787798365.2236848
   kind: CONFIRMED_BY
-  last_seen: 1787901445.0224495
+  last_seen: 1787986428.450519
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:connection_exhaustion->session_wait_profile
   src: connection_exhaustion
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:connection_exhaustion->slow_query_ranking:
   contradict: 0
   dst: slow_query_ranking
   first_seen: 1787798365.2236738
   kind: CONFIRMED_BY
-  last_seen: 1787901445.0224495
+  last_seen: 1787986428.450519
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:connection_exhaustion->slow_query_ranking
   src: connection_exhaustion
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:connection_exhaustion->stats_freshness:
   contradict: 0
   dst: stats_freshness
   first_seen: 1787798374.6269903
   kind: CONFIRMED_BY
-  last_seen: 1787901445.0224495
+  last_seen: 1787986428.450519
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:connection_exhaustion->stats_freshness
   src: connection_exhaustion
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:lock_contention->connection_count:
   contradict: 0
   dst: connection_count
   first_seen: 1787798378.906195
   kind: CONFIRMED_BY
-  last_seen: 1787901450.8588192
+  last_seen: 1787986435.8761137
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:lock_contention->connection_count
   src: lock_contention
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:lock_contention->counterfactual_index:
   contradict: 0
   dst: counterfactual_index
   first_seen: 1787798378.90621
   kind: CONFIRMED_BY
-  last_seen: 1787901450.8588192
+  last_seen: 1787986435.8761137
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:lock_contention->counterfactual_index
   src: lock_contention
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:lock_contention->index_existence:
   contradict: 0
   dst: index_existence
   first_seen: 1787798378.9062066
   kind: CONFIRMED_BY
-  last_seen: 1787901450.8588192
+  last_seen: 1787986435.8761137
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:lock_contention->index_existence
   src: lock_contention
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:lock_contention->slow_query_ranking:
   contradict: 0
   dst: slow_query_ranking
   first_seen: 1787798378.9062016
   kind: CONFIRMED_BY
-  last_seen: 1787901450.8588192
+  last_seen: 1787986435.8761137
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:lock_contention->slow_query_ranking
   src: lock_contention
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:lock_contention->stats_freshness:
   contradict: 0
   dst: stats_freshness
   first_seen: 1787798378.9062157
   kind: CONFIRMED_BY
-  last_seen: 1787901450.8588192
+  last_seen: 1787986435.8761137
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:lock_contention->stats_freshness
   src: lock_contention
   status: proposed
-  support: 40
+  support: 42
 CONFIRMED_BY:missing_index->lock_blocking_chain:
   contradict: 0
   dst: lock_blocking_chain
   first_seen: 1787798361.9528773
   kind: CONFIRMED_BY
-  last_seen: 1787901460.9910803
+  last_seen: 1787986448.527309
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:missing_index->lock_blocking_chain
   src: missing_index
   status: proposed
-  support: 60
+  support: 63
 CONFIRMED_BY:missing_index->session_wait_profile:
   contradict: 0
   dst: session_wait_profile
   first_seen: 1787798361.9528875
   kind: CONFIRMED_BY
-  last_seen: 1787901460.9910803
+  last_seen: 1787986448.527309
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:missing_index->session_wait_profile
   src: missing_index
   status: proposed
-  support: 60
+  support: 63
 CONFIRMED_BY:missing_index->slow_query_ranking:
   contradict: 0
   dst: slow_query_ranking
@@ -168,67 +168,67 @@ CONFIRMED_BY:missing_index->stats_freshness:
   dst: stats_freshness
   first_seen: 1787798361.9528909
   kind: CONFIRMED_BY
-  last_seen: 1787901460.9910803
+  last_seen: 1787986448.527309
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:missing_index->stats_freshness
   src: missing_index
   status: proposed
-  support: 60
+  support: 63
 CONFIRMED_BY:stale_statistics->connection_count:
   contradict: 0
   dst: connection_count
   first_seen: 1787798383.013734
   kind: CONFIRMED_BY
-  last_seen: 1787901453.5419044
+  last_seen: 1787986439.1760073
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:stale_statistics->connection_count
   src: stale_statistics
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:stale_statistics->explain_plan:
   contradict: 0
   dst: explain_plan
   first_seen: 1787798383.0137277
   kind: CONFIRMED_BY
-  last_seen: 1787901453.5419044
+  last_seen: 1787986439.1760073
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:stale_statistics->explain_plan
   src: stale_statistics
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:stale_statistics->index_existence:
   contradict: 0
   dst: index_existence
   first_seen: 1787798383.013736
   kind: CONFIRMED_BY
-  last_seen: 1787901453.5419044
+  last_seen: 1787986439.1760073
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:stale_statistics->index_existence
   src: stale_statistics
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:stale_statistics->lock_blocking_chain:
   contradict: 0
   dst: lock_blocking_chain
   first_seen: 1787798383.0137253
   kind: CONFIRMED_BY
-  last_seen: 1787901453.5419044
+  last_seen: 1787986439.1760073
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:stale_statistics->lock_blocking_chain
   src: stale_statistics
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:stale_statistics->session_wait_profile:
   contradict: 0
   dst: session_wait_profile
   first_seen: 1787798383.0137382
   kind: CONFIRMED_BY
-  last_seen: 1787901453.5419044
+  last_seen: 1787986439.1760073
   note: 成功 episode 里反复出现但图上无边
   pid: CONFIRMED_BY:stale_statistics->session_wait_profile
   src: stale_statistics
   status: proposed
-  support: 20
+  support: 21
 CONFIRMED_BY:stale_statistics->slow_query_ranking:
   contradict: 0
   dst: slow_query_ranking

@@ -2,13 +2,20 @@ id: connection_exhaustion_train_v1
 split: train
 difficulty: 3
 fault_class: connection_exhaustion
-revision: 1
+revision: 2
 inject:
   method: hold_idle_connections
+  # 不要拿 leave_free 当区分轴。这个故障是二值的 —— 池子要么满到出错、
+  # 要么不出错，可用区间实际上只有 1。实测调到 3 就 errors=0、告警不触发，
+  # 场景直接废掉（misleading_idle_txn_train 用 6 时犯过同一个错）。
+  # 区分实例改用并发度，见下方 workload.concurrency。
   leave_free: 1
 workload:
   profile: ecommerce_read_heavy
-  concurrency: 4
+  # 与 eval 的 4 不同 —— 这才是本场景与 eval 的区分轴。更多 worker 抢更少
+  # 的空位，故障只会更明显不会消失；并发度也会改变症状指纹（qps、错误
+  # 分布），而案例库正是按指纹检索的，对防污染同样有效。
+  concurrency: 8
   hot_query: SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
     status = 'PENDING'
   canary_queries:

@@ -1,0 +1,33 @@
+# 评测集的实例锁。改了实例定义（注入参数/负载/判据）就必须 bump
+# 场景里的 revision，否则 harness_lint 报错 —— 否则以后没人分得清
+# 哪批结果对应哪个版本。改完跑 python3 .dev/relock.py 更新本文件。
+connection_exhaustion_eval_v1:
+  fingerprint: 74e7d07e4bf5097e
+  revision: 1
+connection_exhaustion_train_v1:
+  fingerprint: 6d1ae79d99cf4ecc
+  revision: 2
+lock_contention_eval_v1:
+  fingerprint: cd1731667d39caed
+  revision: 2
+lock_contention_train_v1:
+  fingerprint: 6c774f4311a8ea4e
+  revision: 2
+misleading_idle_txn_eval_v1:
+  fingerprint: af88d51ef16f2484
+  revision: 1
+misleading_idle_txn_train_v1:
+  fingerprint: dde5b568307abdb7
+  revision: 1
+missing_index_eval_v1:
+  fingerprint: e7fea9581d2b39df
+  revision: 2
+missing_index_orders_user_status_v1:
+  fingerprint: 3eba932efb4d3a6c
+  revision: 1
+stale_statistics_eval_v1:
+  fingerprint: de4abdbd53559019
+  revision: 2
+stale_statistics_train_v1:
+  fingerprint: 7587f73a7a773cbc
+  revision: 2

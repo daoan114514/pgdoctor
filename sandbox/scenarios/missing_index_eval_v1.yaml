@@ -2,32 +2,36 @@ id: missing_index_eval_v1
 split: eval
 difficulty: 1
 fault_class: missing_index
-revision: 1
+revision: 2
 inject:
+  # 与 train 丢的是**不同**的索引。两边曾经逐字节相同 —— 那样 train 与
+  # eval 就是同一个实例的两个文件，案例库按 split 过滤的防污染也就形同
+  # 虚设：train 上学到的案例在 eval 上本来就该完美命中。
   method: drop_index
-  index: idx_orders_user_status
+  index: idx_orders_created_at
   table: orders
   columns:
-  - user_id
-  - status
+  - created_at
 workload:
   profile: ecommerce_read_heavy
   concurrency: 8
-  hot_query: SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
-    status = 'PENDING'
+  hot_query: SELECT id, total, user_id FROM orders WHERE created_at > now() -
+    interval '30 days' AND status = 'PENDING'
   canary_queries:
   - SELECT id, email FROM users WHERE id = %(uid)s
-  - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
-    20
+  # 原本这条是 created_at 范围查询 —— 而本场景丢的正是 created_at 上的
+  # 索引，金丝雀自己就会变慢，回归套件会把故障的破坏算到 agent 头上。
+  # 换成主键查找，与注入的故障无关。
+  - SELECT id, total FROM orders WHERE id = %(uid)s
 trigger:
   alert: p99_ms > 300 AND cpu_pct > 150
 baseline:
   healthy_p99_ms: 35
   healthy_cpu_pct: 45
 ground_truth:
-  root_cause: missing index on orders(user_id, status)
+  root_cause: missing index on orders(created_at)
   acceptable_fixes:
-  - pattern: CREATE INDEX .* ON orders ?\((user_id, ?status|status, ?user_id)
+  - pattern: CREATE INDEX .* ON orders ?\(created_at
     quality: full
   required_evidence:
   - explain_seq_scan

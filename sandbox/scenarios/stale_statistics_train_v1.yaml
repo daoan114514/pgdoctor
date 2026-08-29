@@ -29,9 +29,11 @@ ground_truth:
     quality: full
   - pattern: VACUUM\s+ANALYZE\s+orders
     quality: full
+  # 与因果图保持一致（harness_lint 硬校验）。同一个文件下方的 note 早就
+  # 写对了「判别特征是偏差不是时间戳」，这个字段却一直停在旧判据上 ——
+  # 自相矛盾，而且没有任何代码读它，所以谁也没发现。
   required_evidence:
-  - stats_freshness
-  - explain_plan
+  - row_estimate_deviation
   competing_hypotheses:
   - missing_index
   - lock_contention
