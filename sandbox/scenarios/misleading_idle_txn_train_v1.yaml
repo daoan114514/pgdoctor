@@ -15,7 +15,7 @@ id: misleading_idle_txn_train_v1
 split: train
 difficulty: 3
 fault_class: long_idle_transaction
-revision: 1
+revision: 2
 misleading_as: connection_exhaustion
 inject:
   method: idle_transaction_pileup
@@ -23,11 +23,14 @@ inject:
   # 留 6 个空位后负载还连得上，故障不显现，这个场景等于是废的。
   # 区分 train/eval 不能靠把故障调弱 —— 那样测的就不是同一件事了。
   # 改用 min_idle_txn 与并发度做区分，注入强度保持在故障真会显现的档位。
-  leave_free: 2
+  # 与 eval 相同的 1 —— 这条轴上栽过两次（6 从不触发、2 时好时坏），
+  # 它是刀刃参数，只有 1 可靠。区分实例改用下方的并发度。
+  leave_free: 1
   min_idle_txn: 14
 workload:
   profile: ecommerce_read_heavy
-  concurrency: 4
+  # 与 eval 的 4 不同 —— 这才是本场景与 eval 的区分轴。
+  concurrency: 8
   hot_query: SELECT id, total, created_at FROM orders WHERE user_id = %(uid)s AND
     status = 'PENDING'
   canary_queries:

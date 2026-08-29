@@ -204,10 +204,11 @@ class ConnectionExhaustionInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
-        # leave_free 越小故障越重，所以只向下抖，且不低于 1 ——
-        # 留 0 个空位连 agent 自己的只读连接都建不了，就没法诊断了。
-        base = int(inj.get("leave_free", 8))
-        return {"leave_free": max(1, base - rng.randint(0, 1))}
+        # 不抖 leave_free。实测它是刀刃参数：调到 3 告警从不触发，
+        # 留 2 时同一个值有的种子出错有的不出错 —— 出不出错取决于时序。
+        # 随机化它等于往评测里注入不确定性，而评测的第一要求是可复现。
+        # 区分实例改用场景里的并发度。
+        return {"leave_free": int(inj.get("leave_free", 8))}
 
     def inject(self, params: dict) -> InjectionRecord:
         """填到真的连不上为止，而不是按公式算目标数。

@@ -39,10 +39,11 @@ class IdleTransactionPileupInjector(Injector):
 
     def params(self, rng) -> dict:
         inj = self.spec["inject"]
-        # 只向下抖 leave_free：这个场景吃过亏 —— 设成 6 时告警连续两轮
-        # 不触发，故障不显现，场景等于是废的。往严的方向抖是安全的。
-        base = int(inj.get("leave_free", 8))
-        return {"leave_free": max(1, base - rng.randint(0, 1)),
+        # 不抖 leave_free。这个场景在这条轴上栽过两次：设成 6 时告警连续
+        # 两轮不触发；改成 2 之后，同一个值有的种子出错有的不出错 ——
+        # 它是刀刃参数，出不出错取决于时序而非取值。随机化它等于往评测里
+        # 注入不确定性。区分实例改用场景里的并发度。
+        return {"leave_free": int(inj.get("leave_free", 8)),
                 "min_idle_txn": int(inj.get("min_idle_txn", 10))}
 
     def inject(self, params: dict) -> InjectionRecord:
