@@ -1325,7 +1325,7 @@
    },
    "d2_detail": "竞争假设 4 个，已排除 2 个 (50%)",
    "declare_blocked": false,
-   "n_evidence": 12
+   "n_evidence": 14
   },
   {
    "run": 5,
@@ -1385,7 +1385,7 @@
    "dims": {
     "D1": false,
     "D2": false,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1407,7 +1407,7 @@
    "dims": {
     "D1": false,
     "D2": false,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1429,7 +1429,7 @@
    "dims": {
     "D1": false,
     "D2": true,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1451,7 +1451,7 @@
    "dims": {
     "D1": false,
     "D2": true,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
@@ -1473,7 +1473,7 @@
    "dims": {
     "D1": false,
     "D2": true,
-    "D3": true,
+    "D3": false,
     "D4": true,
     "D5": true
    },
