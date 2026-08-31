@@ -259,6 +259,26 @@ def _cap_for(rc: str) -> float:
     return min(MAX_ADJ, _base_prior(rc) * MAX_REL_ADJ)
 
 
+def _bump_edge(d: GraphDelta, rc: str, symptoms: list[str],
+               amount: float) -> None:
+    """调整 根因->症状 边的权重。
+
+    这是**能推动候选排序**的那个通道：打分 score = w × (0.5 + prior)，
+    边权 w 的跨度是 9.8×，而先验分量只有 1.63× —— 先验项结构上跨不过
+    一条边的差距，所以学习必须落到边权上才有意义。
+
+    双向：命中就加强，误诊就削弱。原来只有 learn_truth 会加、且只加不减，
+    跑久了每条学过的边都饱和到上限，区分度归零。
+    """
+    from knowledge.causal_graph import graph as _G
+
+    for sym in _G.map_symptoms(symptoms or [], fallback=False):
+        key = f"{rc}->{sym}"
+        cur = d.likelihood_adj.get(key, 0.0)
+        d.likelihood_adj[key] = round(
+            max(-MAX_ADJ, min(MAX_ADJ, cur + amount)), 4)
+
+
 def _bump(d: GraphDelta, rc: str, amount: float) -> None:
     cap = _cap_for(rc)
     cur = d.prior_adj.get(rc, 0.0)
@@ -292,6 +312,11 @@ def learn_from_episode(st, score, symptoms: list[str]) -> GraphDelta:
     obs = d.observed.setdefault(claimed, {"hit": 0, "miss": 0})
     obs["hit" if hit else "miss"] += 1
     _bump(d, claimed, LR if hit else -LR)
+    # 先验通道推不动排序（边权跨度 9.8× 对先验分量 1.63×），所以同一个
+    # 信号也要落到边权上。原来只有 learn_truth 写边权，而它开头就是
+    # `if claimed == truth: return` —— 占绝大多数的正确诊断一条边都不更新，
+    # likelihood_adj 因此一直是空的，L3 也就一直推不动排序。
+    _bump_edge(d, claimed, symptoms, LR if hit else -LR)
 
     # 修复失败是比"诊断没中"更强的负信号：真按这个根因动手了还是没治好。
     # 但只算得上"可归因"的失败 —— 多根因场景里修一个、KPI 回不到基线，
@@ -331,11 +356,9 @@ def learn_truth(claimed: str | None, truth: str, symptoms: list[str],
     # 症状必须先归一到图上的节点 id。原来直接用 st.symptoms 的人话串
     # 拼键（"lock_contention->错误 5086"），数值烧进了键里，每个 episode
     # 都产生一个全新的键 —— 既累加不起来，下次也永远命不中。
-    from knowledge.causal_graph import graph as _G
-    for s in _G.map_symptoms(symptoms):
-        key = f"{truth}->{s}"
-        d.likelihood_adj[key] = round(
-            min(MAX_ADJ, d.likelihood_adj.get(key, 0.0) + LR), 4)
+    # 走同一个双向工具函数。原来这里是 min(MAX_ADJ, cur + LR) —— 只增不减，
+    # 跑久了每条学过的边都会饱和到上限，那时这层信息的区分度就归零了。
+    _bump_edge(d, truth, symptoms, LR)
     d.updated_at = time.time()
     save_delta(d)
 
