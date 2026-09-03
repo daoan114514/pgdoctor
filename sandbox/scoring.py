@@ -217,6 +217,7 @@ def score_episode(
     regression: RegressionResult,
     audit: dict | None = None,
     ledger: dict | None = None,
+    baseline: metrics.KPI | dict | None = None,
 ) -> EpisodeScore:
     """三率判分，口径对齐 DBA-Bench。
 
@@ -258,7 +259,8 @@ def score_episode(
 
     # Outcome —— 外部可测的真实 KPI，不采信 agent 的自述
     try:
-        outcome = metrics.eval_expr(spec["success"]["outcome"], kpi)
+        outcome = metrics.eval_expr(spec["success"]["outcome"], kpi,
+                                    baseline=baseline)
     except Exception as exc:
         outcome = False
         details["outcome_error"] = str(exc)

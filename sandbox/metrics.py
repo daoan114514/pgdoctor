@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
 from dataclasses import dataclass
@@ -36,13 +37,47 @@ class KPI:
 
 
 def container_cpu_pct(container: str = CONTAINER) -> float:
-    """容器 CPU 占用。docker stats 的百分比是相对单核累加的，可能 >100。"""
+    """PostgreSQL CPU 占用；优先容器，原生/WSL 服务回退到进程采样。
+
+    两种口径都是按单核累加，因此并行查询时可以超过 100%。只在数据库
+    位于本机时做进程回退；远程库不能拿客户端机器的 CPU 冒充服务端指标。
+    """
     try:
         out = subprocess.run(
             ["docker", "stats", "--no-stream", "--format", "{{.CPUPerc}}", container],
             capture_output=True, text=True, timeout=20,
         )
-        return float(out.stdout.strip().rstrip("%") or 0.0)
+        value = out.stdout.strip().rstrip("%")
+        if out.returncode == 0 and value:
+            return float(value)
+    except Exception:
+        pass
+
+    try:
+        from sandbox import db
+        if db.PG_HOST not in {"localhost", "127.0.0.1", "::1"}:
+            return -1.0
+        import psutil
+
+        wanted = os.getenv("PGDOCTOR_POSTGRES_PROCESS", "postgres")
+        processes = []
+        for proc in psutil.process_iter(["name"]):
+            try:
+                if proc.info.get("name") == wanted:
+                    proc.cpu_percent(None)
+                    processes.append(proc)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if not processes:
+            return -1.0
+        time.sleep(0.2)
+        total = 0.0
+        for proc in processes:
+            try:
+                total += proc.cpu_percent(None)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return round(total, 1)
     except Exception:
         return -1.0
 
@@ -90,15 +125,74 @@ def collect(kind: str = "hot", include_all_errors: bool = True) -> KPI:
     )
 
 
-def eval_expr(expr: str, kpi: KPI) -> bool:
+def baseline_refs(baseline: "KPI | dict | None") -> dict:
+    """把一组健康基线 KPI 摊成 `healthy_<字段>` 引用。
+
+    加 healthy_ 前缀而不是直接复用字段名，是为了让判据一眼看得出比的是
+    基线还是当前值 —— 两者同名的话，`cpu_pct < cpu_pct` 这种写法会既
+    合法又毫无意义。
+    """
+    if baseline is None:
+        return {}
+    raw = baseline.as_dict() if hasattr(baseline, "as_dict") else dict(baseline)
+    return {f"healthy_{k}": float(v) for k, v in raw.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
+def _threshold(rhs: str, refs: dict) -> float:
+    """解析比较符右边：一个数，或者"倍数 × 某个健康基线"。
+
+    只放开这一种乘法，不做通用表达式求值 —— 场景 DSL 仍然是数据。
+    """
+    import re
+
+    rhs = rhs.strip()
+    if re.fullmatch(r"[\d.]+", rhs):
+        return float(rhs)
+    m = (re.fullmatch(r"([\d.]+)\s*\*\s*(\w+)", rhs) or
+         re.fullmatch(r"(\w+)\s*\*\s*([\d.]+)", rhs))
+    if not m:
+        raise ValueError(f"不支持的阈值写法: {rhs!r}")
+    left, right = m.group(1), m.group(2)
+    if _is_number(left):
+        name, factor = right, left
+    else:
+        name, factor = left, right
+    if name not in refs:
+        # 分开报：没传基线和字段名写错是两种完全不同的错，混成一句会让
+        # 排查从"谁没传参"变成"判据是不是写错了"。
+        raise ValueError(
+            f"判据引用了健康基线 {name}，但本次求值没有提供基线"
+            if not refs else f"未知的健康基线字段: {name}")
+    return float(factor) * refs[name]
+
+
+def _is_number(tok: str) -> bool:
+    try:
+        float(tok)
+    except ValueError:
+        return False
+    return True
+
+
+def eval_expr(expr: str, kpi: KPI,
+              baseline: "KPI | dict | None" = None) -> bool:
     """判定 success.outcome / trigger.alert 这类表达式。
 
-    只支持 `<字段> <比较符> <数值>` 用 AND/OR 连接的形式 —— 故意做得很窄，
-    场景 DSL 是数据不是代码，不该有能力执行任意表达式。
+    只支持 `<字段> <比较符> <数值>`，或 `<字段> <比较符> <倍数> * healthy_<字段>`，
+    用 AND/OR 连接 —— 故意做得很窄，场景 DSL 是数据不是代码，不该有能力
+    执行任意表达式。
+
+    右边允许乘一个健康基线，是因为绝对阈值不可移植：`cpu_pct < 100` 在
+    参考机上健康态实测 38%，在 18 核开发机上健康态实测 72–123%，于是
+    正确的修复被判成"KPI 未恢复"、连正确的索引一起回滚掉。基线取的是
+    本 episode 注入前实测的那一组，不是场景里写死的 `baseline.healthy_*`，
+    换机器会自动跟着走。
     """
     import re
 
     vals = kpi.as_dict()
+    refs = baseline_refs(baseline)
     tokens = re.split(r"\s+(AND|OR)\s+", expr.strip(), flags=re.I)
     result: bool | None = None
     op: str | None = None
@@ -106,12 +200,13 @@ def eval_expr(expr: str, kpi: KPI) -> bool:
         if tok.upper() in ("AND", "OR"):
             op = tok.upper()
             continue
-        m = re.match(r"^\s*(\w+)\s*(<=|>=|<|>|==)\s*([\d.]+)\s*$", tok)
+        m = re.match(r"^\s*(\w+)\s*(<=|>=|<|>|==)\s*(.+?)\s*$", tok)
         if not m:
             raise ValueError(f"不支持的条件表达式: {tok!r}")
-        field, cmp_, num = m.group(1), m.group(2), float(m.group(3))
+        field, cmp_ = m.group(1), m.group(2)
         if field not in vals:
             raise ValueError(f"未知指标字段: {field}")
+        num = _threshold(m.group(3), refs)
         v = float(vals[field])
         cur = {"<": v < num, ">": v > num, "<=": v <= num,
                ">=": v >= num, "==": v == num}[cmp_]

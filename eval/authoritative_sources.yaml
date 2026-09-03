@@ -1,0 +1,73 @@
+schema_version: 1
+verified_at: '2026-09-03'
+sources:
+  pg_explain:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - Using EXPLAIN
+    url: https://www.postgresql.org/docs/16/using-explain.html
+    supports: Sequential/index scans, rows removed by filters, and estimated-versus-actual rows are structured plan evidence.
+  pg_planner_stats:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - Statistics Used by the Planner
+    url: https://www.postgresql.org/docs/16/planner-stats.html
+    supports: ANALYZE statistics drive selectivity and row-count estimates used for plan choice.
+  pg_routine_vacuuming:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 17 - Routine Vacuuming
+    url: https://www.postgresql.org/docs/17/routine-vacuuming.html
+    supports: Vacuum, physical space reuse, autovacuum starvation, XID wraparound, long transactions, slots, and prepared transactions.
+  pg_locks:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - Viewing Locks
+    url: https://www.postgresql.org/docs/16/monitoring-locks.html
+    supports: pg_locks and pg_stat_activity expose outstanding locks and waiting sessions.
+  pg_blocking_pids:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - System Information Functions
+    url: https://www.postgresql.org/docs/16/functions-info.html
+    supports: pg_blocking_pids identifies hard and soft blockers for a waiting backend.
+  pg_statistics:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - Cumulative Statistics System
+    url: https://www.postgresql.org/docs/16/monitoring-stats.html
+    supports: pg_stat_database exposes deadlock and temporary-file counters with reset epochs.
+  pg_work_mem:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - Resource Consumption
+    url: https://www.postgresql.org/docs/16/runtime-config-resource.html
+    supports: Sort and hash operations spill to temporary files after their work_mem budget, with multiplicative concurrency risk.
+  pg_checkpoints:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - WAL Configuration
+    url: https://www.postgresql.org/docs/16/wal-configuration.html
+    supports: Frequent requested checkpoints increase I/O; checkpoint warnings suggest reviewing max_wal_size while preserving disk headroom.
+  pg_replication_slots:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - Log-Shipping Standby Servers
+    url: https://www.postgresql.org/docs/16/warm-standby.html
+    supports: Inactive replication slots can retain WAL until pg_wal fills and can hold rows needed by consumers.
+  pg_replication_slots_view:
+    publisher: PostgreSQL Global Development Group
+    title: PostgreSQL 16 - pg_replication_slots
+    url: https://www.postgresql.org/docs/16/view-pg-replication-slots.html
+    supports: restart_lsn, xmin, catalog_xmin, active, and wal_status expose slot retention state.
+  gcp_txid_wraparound:
+    publisher: Google Cloud
+    title: Overcome transaction ID wraparound protection
+    url: https://cloud.google.com/sql/docs/postgres/txid-wraparound
+    supports: Production warning/error signatures and the long transaction, prepared transaction, replication slot, and replica feedback blocker workflow.
+  aws_autovacuum:
+    publisher: Amazon Web Services
+    title: Working with PostgreSQL autovacuum on Amazon RDS
+    url: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Appendix.PostgreSQL.CommonDBATasks.Autovacuum.html
+    supports: MaximumUsedTransactionIDs alarms and adaptive autovacuum guidance for wraparound prevention.
+  pg_connection_incident:
+    publisher: PostgreSQL Global Development Group mailing list
+    title: Getting error too many clients already despite a database connection limit
+    url: https://www.postgresql.org/message-id/CADM4kyuO39mr8E_xDw4GGi2v9gCK0dq52fKj40FcsXJeKxgRrA%40mail.gmail.com
+    supports: A real connection burst incident emitted too-many-clients and reserved-slot fatal messages.
+  dba_bench:
+    publisher: arXiv
+    title: DBA-Bench - A Production-Fidelity Benchmark for LLM-Based Database Operations Agents
+    url: https://arxiv.org/abs/2607.22165
+    supports: Outcome-first live evaluation and separate Diagnosis, Outcome, and Safe Pass metrics.

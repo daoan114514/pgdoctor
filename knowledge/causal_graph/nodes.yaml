@@ -26,6 +26,9 @@ symptoms:
   - id: throughput_down
     desc: 吞吐下降
     measured_by: qps
+  - id: autovacuum_unhealthy
+    desc: 表级 autovacuum 被关闭或无法跟上回收需求
+    measured_by: autovacuum_health
 
 root_causes:
   - id: missing_index
@@ -44,6 +47,7 @@ root_causes:
   - id: autovacuum_starvation
     desc: autovacuum 跟不上或被关闭
     prior: 0.08
+    severity: P0
   - id: connection_exhaustion
     desc: 连接池打满，新连接被拒
     prior: 0.08
@@ -56,6 +60,7 @@ root_causes:
   - id: disk_pressure
     desc: 磁盘空间不足
     prior: 0.03
+    severity: P0
 
   # ── 以下按 PostgreSQL 官方手册扩充，每条都记了出处 ──────────
   # 手册 Routine Vacuuming 把"死元组回收不掉"归到同一个机制：只要还有
@@ -64,12 +69,14 @@ root_causes:
   - id: stale_replication_slot
     desc: 陈旧的复制槽持住 xmin 与 WAL，vacuum 回收不掉死元组
     prior: 0.04
+    severity: P0
     source: pgdoc:routine-vacuuming
     doc_quote: "Drop any old replication slots. Use pg_replication_slots to
       find slots where age(xmin) or age(catalog_xmin) is large."
   - id: orphaned_prepared_transaction
     desc: 未了结的两阶段提交事务长期挂着，同样挡住冻结
     prior: 0.02
+    severity: P0
     source: pgdoc:routine-vacuuming
     doc_quote: "Resolve old prepared transactions. You can find these by
       checking pg_prepared_xacts for rows where age(transactionid) is large."
@@ -93,40 +100,63 @@ evidence:
   - id: explain_seq_scan
     desc: EXPLAIN 显示 Seq Scan 且过滤掉大量行
     obtained_by: explain_query
+    predicate_id: explain_seq_scan_v2
   - id: explain_plan
     desc: EXPLAIN 显示走了索引
     obtained_by: explain_query
+    predicate_id: explain_plan_v2
   - id: index_existence
     desc: pg_indexes 上是否存在可覆盖该谓词的索引
     obtained_by: get_indexes
+    predicate_id: index_existence_v2
   - id: stats_freshness
     desc: last_analyze 是否新鲜
     obtained_by: get_table_stats
+    predicate_id: stats_freshness_v2
   - id: row_estimate_deviation
     desc: EXPLAIN 里估计行数与实际行数的偏差倍数。统计过期的真正判别
       特征 —— 时间戳"看着新"也可能因为刚灌过数据而严重失真
     obtained_by: explain_query
+    predicate_id: row_estimate_deviation_v2
   - id: lock_blocking_chain
     desc: pg_locks 阻塞链，谁挡住了谁
     obtained_by: get_blocking_chain
+    predicate_id: lock_blocking_chain_v2
   - id: session_wait_profile
     desc: 活动会话的等待事件分布
     obtained_by: get_active_sessions
+    predicate_id: session_wait_profile_v2
   - id: slow_query_ranking
     desc: pg_stat_statements 里按累计耗时排序的慢查询
     obtained_by: get_top_queries
+    predicate_id: slow_query_ranking_v2
   - id: counterfactual_index
     desc: hypopg 模拟索引后优化器是否改用它、成本降幅多少
     obtained_by: simulate_index
+    predicate_id: counterfactual_index_v2
   - id: dead_tuple_ratio
-    desc: 死元组占比
+    desc: 死元组占比，只表示清理压力，不能单独证明或反证物理膨胀
     obtained_by: get_table_stats
+    predicate_id: dead_tuple_ratio_v2
+  - id: physical_bloat_ratio
+    desc: pgstattuple_approx 测得的 dead tuple 与可复用空闲空间占物理表大小比例
+    obtained_by: get_physical_bloat
+    predicate_id: physical_bloat_ratio_v2
+    algorithm: pgstattuple_approx_reclaimable_pct_v1
+    unavailable_status: UNKNOWN
+  - id: autovacuum_health
+    desc: 表级 autovacuum 有效开关、触发阈值、死元组积压与当前 worker 状态
+    obtained_by: get_table_stats
+    predicate_id: autovacuum_health_v2
+    source: pgdoc:routine-vacuuming
   - id: idle_in_transaction
     desc: 处于 idle in transaction 的会话数
     obtained_by: get_connection_stats
+    predicate_id: idle_in_transaction_v2
   - id: connection_count
     desc: 当前连接数与上限、按状态与角色的分布
     obtained_by: get_connection_stats
+    predicate_id: connection_count_v2
 
   # ── 两个新工具产出的证据类型 ────────────────────────────────
   # 每一条都必须真有工具能产出，否则 ESC 只能退化成看模型自述 ——
@@ -134,50 +164,103 @@ evidence:
   - id: xid_age
     desc: 数据库与最老表的 XID 年龄，以及占 autovacuum_freeze_max_age 的比例
     obtained_by: get_vacuum_horizon
+    predicate_id: xid_age_v2
     source: pgdoc:routine-vacuuming
   - id: replication_slot_age
     desc: 各复制槽的 age(xmin) / age(catalog_xmin) 与是否 active
     obtained_by: get_vacuum_horizon
+    predicate_id: replication_slot_age_v2
     source: pgdoc:routine-vacuuming
   - id: prepared_xact_age
-    desc: pg_prepared_xacts 里各预备事务的 age(transactionid)
+    desc: pg_prepared_xacts 里各预备事务的 age(transactionid) 与挂起时长
     obtained_by: get_vacuum_horizon
+    predicate_id: prepared_xact_age_v2
     source: pgdoc:routine-vacuuming
   - id: backend_xmin_age
     desc: 最老的 backend_xmin 年龄 —— 谁在挡着 xmin 视界前进
     obtained_by: get_vacuum_horizon
+    predicate_id: backend_xmin_age_v2
     source: pgdoc:routine-vacuuming
   - id: deadlock_count
-    desc: pg_stat_database.deadlocks 累计死锁数
+    desc: pg_stat_database.deadlocks 在故障窗口内的增量
     obtained_by: get_database_stats
+    predicate_id: deadlock_count_v2
     source: pgdoc:monitoring-stats
   - id: temp_file_volume
-    desc: pg_stat_database.temp_files / temp_bytes，排序哈希外溢量
+    desc: 故障窗口内 temp_files / temp_bytes 增量，表示排序哈希外溢量
     obtained_by: get_database_stats
+    predicate_id: temp_file_volume_v2
     source: pgdoc:monitoring-stats
   - id: checkpoint_stats
-    desc: 定时与请求式检查点的次数与耗时，请求式占比
+    desc: 故障窗口内定时与请求式检查点增量、耗时增量及请求式占比
     obtained_by: get_database_stats
+    predicate_id: checkpoint_stats_v2
     source: pgdoc:monitoring-stats
+  - id: disk_usage
+    desc: PostgreSQL 数据目录所在文件系统的使用率与剩余空间
+    obtained_by: get_database_stats
+    predicate_id: disk_usage_v2
 
 fixes:
   - id: create_covering_index
     action_type: create_index
-    risk_tier: CONFIRM
+    intervention_kind: CORRECTIVE
+    execution: gated
+    preconditions:
+      - {id: concrete_index_definition_bound, required: true}
+      - {predicate_id: counterfactual_index_v2, result: SUPPORTS,
+         target_kind: INTERVENTION, required: true}
+    expected_effect_nodes: [missing_index, latency_p99_up, cpu_saturated]
+    # 小表可自动，大表由 GATE 按实际规模抬到 CONFIRM。
+    risk_tier: AUTO
     template: "CREATE INDEX CONCURRENTLY {name} ON {table}({cols})"
     rollback: "DROP INDEX CONCURRENTLY {name}"
+    expected_effects:
+      - {metric: latency_p99_ms, direction: decrease, minimum_change: 0.20,
+         window_seconds: 300}
   - id: analyze_table
     action_type: vacuum_analyze
+    intervention_kind: CORRECTIVE
+    execution: gated
+    preconditions:
+      - {predicate_id: row_estimate_deviation_v2, result: SUPPORTS,
+         target_kind: NODE, required: true}
+      - {id: concrete_table_bound, required: true}
+    expected_effect_nodes: [stale_statistics, latency_p99_up, cpu_saturated]
     risk_tier: AUTO
     template: "ANALYZE {table}"
-    rollback: "SELECT 1"
+    rollback: "NO_ROLLBACK_NEEDED"
+    expected_effects:
+      - {metric: row_estimate_error_ratio, direction: decrease,
+         minimum_change: 0.50, window_seconds: 60}
   - id: vacuum_table
     action_type: vacuum_analyze
+    intervention_kind: MITIGATION
+    execution: gated
+    preconditions:
+      - {predicate_id: physical_bloat_ratio_v2, result: SUPPORTS,
+         target_kind: NODE, required: true}
+      - {id: table_is_vacuumable, required: true}
+    # 普通 VACUUM 只改善元组清理与扫描压力，不承诺把文件空间还给文件系统。
+    expected_effect_nodes: [latency_p99_up]
     risk_tier: CONFIRM
     template: "VACUUM ANALYZE {table}"
-    rollback: "SELECT 1"
+    rollback: "NO_ROLLBACK_NEEDED"
+    expected_effects:
+      - {metric: dead_tuple_ratio, direction: decrease, minimum_change: 0.10,
+         window_seconds: 600}
   - id: terminate_blocker
     action_type: session_control
+    intervention_kind: CONTAINMENT
+    execution: gated
+    preconditions:
+      - {id: concrete_pid_bound, required: true}
+      - {id: pid_is_topmost_blocker, required: true}
+      - {predicate_id: lock_blocking_chain_v2, result: SUPPORTS,
+         target_kind: PATH, required: true}
+      - {id: pid_identity_rechecked_fresh, required: true}
+    expected_effect_nodes:
+      [lock_contention, queries_blocked, latency_p99_up, throughput_down]
     risk_tier: CONFIRM
     # 只终止链条最上游的持锁者（pg_blocking_pids 为空的那个）——
     # 链上其余会话多是被牵连的正常业务连接，一并终止是误伤
@@ -185,50 +268,157 @@ fixes:
     # 终止会话撤不回来。写个假的回滚语句只会制造"以为能回滚"的错觉，
     # 所以要求显式声明不可逆，由人来担这个责任。
     rollback: "IRREVERSIBLE"
+    expected_effects:
+      - {metric: blocked_session_count, direction: decrease, minimum_change: 1,
+         window_seconds: 30}
+  - id: terminate_idle_transaction
+    action_type: session_control
+    intervention_kind: CONTAINMENT
+    execution: gated
+    preconditions:
+      - {id: concrete_pid_bound, required: true}
+      - {id: pid_state_idle_in_transaction, required: true}
+      - {id: transaction_age_bound, required: true}
+      - {id: database_role_bound, required: true}
+      - {id: blocking_or_xmin_impact_bound, required: true}
+      - {id: pid_identity_rechecked_fresh, required: true}
+    expected_effect_nodes:
+      [long_idle_transaction, autovacuum_starvation, queries_blocked,
+       connection_exhaustion]
+    risk_tier: CONFIRM
+    template: "SELECT pg_terminate_backend({pid})"
+    rollback: "IRREVERSIBLE"
+    expected_effects:
+      - {metric: oldest_backend_xmin_age, direction: decrease,
+         minimum_change: 1, window_seconds: 60}
+      - {metric: blocked_session_count, direction: decrease,
+         minimum_change: 1, window_seconds: 30}
   - id: enable_autovacuum
     action_type: alter_table_options
+    intervention_kind: CORRECTIVE
+    execution: gated
+    preconditions:
+      - {predicate_id: autovacuum_health_v2, result: SUPPORTS,
+         target_kind: NODE, required: true}
+      - {id: concrete_table_bound, required: true}
+    expected_effect_nodes: [autovacuum_starvation, autovacuum_unhealthy,
+                            table_bloat, xid_wraparound_risk]
     risk_tier: CONFIRM
     template: "ALTER TABLE {table} SET (autovacuum_enabled = true)"
     rollback: "ALTER TABLE {table} SET (autovacuum_enabled = false)"
+    expected_effects:
+      - {target_node_id: autovacuum_starvation, metric: autovacuum_enabled,
+         direction: increase, minimum_change: 1.0, window_seconds: 5}
 
   # ── 补上三个"诊断得出来却没法修"的根因 ─────────────────────
   # 手册明确说了要用哪种 VACUUM：不能用 VACUUM FULL（它自己要消耗 XID，
   # 反而加剧回卷），也不必 VACUUM FREEZE（做无用功）。
   - id: vacuum_database
     action_type: vacuum_analyze
+    intervention_kind: CORRECTIVE
+    execution: gated
+    preconditions:
+      - {predicate_id: replication_slot_age_v2, result: REFUTES,
+         target_kind: NODE, target_id: stale_replication_slot, required: true}
+      - {predicate_id: prepared_xact_age_v2, result: REFUTES,
+         target_kind: NODE, target_id: orphaned_prepared_transaction, required: true}
+      - {predicate_id: backend_xmin_age_v2, result: REFUTES,
+         target_kind: NODE, target_id: long_idle_transaction, required: true}
+      - {id: target_database_or_table_is_vacuumable, required: true}
+    expected_effect_nodes: [xid_wraparound_risk]
     risk_tier: CONFIRM
     template: "VACUUM {table}"
     rollback: "NO_ROLLBACK_NEEDED"
+    expected_effects:
+      - {metric: xid_age_ratio, direction: decrease, minimum_change: 0.10,
+         window_seconds: 900}
     source: pgdoc:routine-vacuuming
     doc_quote: "Execute VACUUM in the target database. A database-wide VACUUM
       is simplest. Do not use VACUUM FULL, which requires an XID."
   - id: drop_replication_slot
     action_type: replication_control
-    risk_tier: CONFIRM
+    intervention_kind: MANUAL
+    manual: true
+    risk_tier: DENY
     template: "SELECT pg_drop_replication_slot('{slot}')"
     # 丢掉槽之后备库需要重新做基础备份，撤不回来
     rollback: "IRREVERSIBLE"
     source: pgdoc:routine-vacuuming
+    preconditions:
+      - {id: downstream_ownership_and_rebuild_plan_confirmed, required: true}
+    expected_effect_nodes:
+      [stale_replication_slot, autovacuum_starvation, xid_wraparound_risk,
+       disk_growing]
+    # 槽是否仍被下游消费、能否重建，只靠本库证据无法判断。
+    execution: escalate_only
   - id: resolve_prepared_xact
     action_type: session_control
-    risk_tier: CONFIRM
+    intervention_kind: MANUAL
+    manual: true
+    risk_tier: DENY
     template: "ROLLBACK PREPARED '{gid}'"
     rollback: "IRREVERSIBLE"
     source: pgdoc:routine-vacuuming
+    preconditions:
+      - {id: distributed_transaction_coordinator_decision_bound, required: true}
+    expected_effect_nodes:
+      [orphaned_prepared_transaction, autovacuum_starvation,
+       xid_wraparound_risk]
     # 护盾不放行 TransactionStmt。这是对的：了结别人的两阶段提交事务
     # 意味着替一个分布式事务的协调者做决定，agent 没有这个信息。
     # agent 可以在报告里指出该这么修，但不能提交为提案。
     execution: escalate_only
+  - id: remediate_disk_capacity
+    action_type: storage_management
+    intervention_kind: MANUAL
+    manual: true
+    risk_tier: DENY
+    desc: 扩容、迁移或按运维手册清理 PostgreSQL 数据文件系统
+    # 这不是 SQL。具体动作取决于挂载、备份、WAL/日志归档与存储平台，
+    # 数据库 agent 只能报告证据并升级给存储/值班人员。
+    template: "ESCALATE STORAGE REMEDIATION FOR {mount}"
+    rollback: "IRREVERSIBLE"
+    preconditions:
+      - {predicate_id: disk_usage_v2, result: SUPPORTS,
+         target_kind: NODE, required: true}
+      - {id: storage_owner_and_retention_policy_bound, required: true}
+    expected_effect_nodes: [disk_pressure, disk_growing]
+    execution: escalate_only
   - id: terminate_idle_backend
     action_type: session_control
+    intervention_kind: CONTAINMENT
+    execution: gated
+    preconditions:
+      - {id: concrete_pid_bound, required: true}
+      - {id: pid_is_client_backend_and_state_idle, required: true}
+      - {id: pid_is_not_current_diagnostic_connection, required: true}
+      - {id: role_is_not_system_or_diagnostic, required: true}
+      - {id: pid_identity_rechecked_fresh, required: true}
+    expected_effect_nodes: [connection_exhaustion, conn_near_limit,
+                            throughput_down]
     risk_tier: CONFIRM
     template: "SELECT pg_terminate_backend({pid})"
     rollback: "IRREVERSIBLE"
+    expected_effects:
+      - {metric: connection_usage_ratio, direction: decrease,
+         minimum_change: 0.05, window_seconds: 30}
   - id: raise_max_wal_size
     action_type: set_parameter
+    intervention_kind: MITIGATION
     risk_tier: CONFIRM
     template: "ALTER SYSTEM SET max_wal_size = '{value}'"
     rollback: "ALTER SYSTEM RESET max_wal_size"
+    preconditions:
+      - {predicate_id: checkpoint_stats_v2, result: SUPPORTS,
+         target_kind: PATH, required: true}
+      - {id: wal_archiving_health_checked, required: true}
+      - {id: filesystem_headroom_checked, required: true}
+      - {id: wal_retention_holders_checked, required: true}
+      - {id: checkpoint_window_bound, required: true}
+    expected_effect_nodes: [checkpoint_pressure, latency_p99_up]
+    expected_effects:
+      - {metric: requested_checkpoint_ratio, direction: decrease,
+         minimum_change: 0.10, window_seconds: 900}
     source: pgdoc:monitoring-stats
     # 护盾把 ALTER SYSTEM 列为灾难动作（改全局配置且需重载）。
     # max_wal_size 是集群级设置，没有会话级的等价物 —— 也就是说
@@ -236,7 +426,34 @@ fixes:
     execution: escalate_only
   - id: raise_work_mem
     action_type: set_parameter
+    intervention_kind: MITIGATION
+    execution: gated
+    preconditions:
+      - {predicate_id: temp_file_volume_v2, result: SUPPORTS,
+         target_kind: PATH, required: true}
+      - {id: session_or_transaction_scope_only, required: true}
+      - {id: concurrency_bound, required: true}
+      - {id: aggregate_memory_budget_checked, required: true}
+    expected_effect_nodes: [work_mem_spill, latency_p99_up, disk_growing]
     risk_tier: CONFIRM
     template: "SET work_mem = '{value}'"
     rollback: "RESET work_mem"
+    expected_effects:
+      - {metric: temp_bytes_delta, direction: decrease, minimum_change: 0.20,
+         window_seconds: 300}
     source: pgdoc:monitoring-stats
+  - id: remediate_deadlock_pattern
+    action_type: manual_procedure
+    intervention_kind: MANUAL
+    manual: true
+    execution: escalate_only
+    risk_tier: DENY
+    desc: 修正事务加锁顺序，并为被 PostgreSQL 中止的事务设计有界重试策略
+    template: "ESCALATE DEADLOCK PATTERN REMEDIATION"
+    rollback: "IRREVERSIBLE"
+    preconditions:
+      - {predicate_id: deadlock_count_v2, result: SUPPORTS,
+         target_kind: PATH, required: true}
+      - {id: conflicting_transaction_patterns_bound, required: true}
+      - {id: retry_idempotency_reviewed, required: true}
+    expected_effect_nodes: [deadlock, throughput_down, queries_blocked]

@@ -16,6 +16,7 @@ ALLOW = [
     ("VACUUM", "VACUUM ANALYZE orders"),
     ("会话参数", "SET work_mem = '64MB'"),
     ("表存储参数", "ALTER TABLE orders SET (autovacuum_enabled = true)"),
+    ("重置表存储参数", "ALTER TABLE orders RESET (autovacuum_enabled)"),
     ("带 WHERE 的 UPDATE", "UPDATE orders SET status='PAID' WHERE id = 1"),
 ]
 
@@ -31,6 +32,7 @@ DENY = [
     ("提权", "GRANT ALL ON orders TO agent_ro"),
     ("建角色", "CREATE ROLE evil SUPERUSER LOGIN"),
     ("改表结构", "ALTER TABLE orders DROP COLUMN status"),
+    ("增加字段", "ALTER TABLE orders ADD COLUMN injected text"),
     ("重命名", "ALTER TABLE orders RENAME TO orders_old"),
     ("CLUSTER 重写", "CLUSTER orders USING orders_pkey"),
     ("删索引", "DROP INDEX idx_orders_created_at"),

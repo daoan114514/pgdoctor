@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import abc
 
-from agent.episode_state import EpisodeState, Verdict
+from agent.episode_state import EpisodeState
+from agent.explanation import EvidenceNeed, EvidenceTargetKind
+from agent.explanation_runtime import bind_evidence, intervention_options
 from agent.state_machine import Phase
 from agent.toolbox import Toolbox
 
@@ -33,17 +35,50 @@ class ScriptedPolicy(Policy):
     name = "scripted"
 
     def __init__(self, bad_fix: bool = False):
-        """bad_fix=True 时故意提交一个治不好病的修复。
+        """bad_fix=True 时先提交一次受控的失败修复。
 
         用来演示并验证"修复失败 -> 自动回滚 -> 知识不回滚 -> 换假设"
         这条路径。没有它就只能测 happy path，而这条路径恰恰是
         Safe Pass 真正要防的东西。
+
+        注意这里的 SQL 本身是有效的：它与正解同列，必须通过与正常修复
+        完全相同的反事实和 GATE 前置条件，才可能真正落到 undo journal
+        上 —— 换成一条会被前置条件挡下的 SQL，回滚路径根本走不到。
+        代价是"失败"必须由调用方注入（见 `.dev/w4_check.py` 的
+        W4ScenarioEnv 与 `demo.py` 第四幕的 FailFirstVerifyEnv）：
+        只把 bad_fix 打开而不注入失败，这次修复会直接成功。
         """
         self.bad_fix = bad_fix
 
     # 该症状组合下的候选根因。W6 起这个集合改由故障因果图多跳遍历给出，
     # 以保证覆盖率，而不是靠谁凭印象列举。
     CANDIDATES = ["missing_index", "stale_statistics", "lock_contention"]
+
+    @staticmethod
+    def _collect(tool: str, tb: Toolbox, hot: str, uid: dict) -> None:
+        if tool == "explain_query":
+            tb.explain_query(hot, uid)
+        elif tool == "get_indexes":
+            tb.get_indexes("orders")
+        elif tool == "get_table_stats":
+            tb.get_table_stats("orders")
+        elif tool == "get_physical_bloat":
+            tb.get_physical_bloat("orders")
+        elif tool == "get_top_queries":
+            tb.get_top_queries(5)
+        elif tool == "get_active_sessions":
+            tb.get_active_sessions()
+        elif tool == "get_blocking_chain":
+            tb.get_blocking_chain()
+        elif tool == "get_connection_stats":
+            tb.get_connection_stats()
+        elif tool == "get_vacuum_horizon":
+            tb.get_vacuum_horizon()
+        elif tool == "get_database_stats":
+            tb.get_database_stats()
+        elif tool == "simulate_index":
+            tb.simulate_index(
+                "CREATE INDEX ON orders(user_id, status)", hot, uid)
 
     def run_phase(self, phase: Phase, tb: Toolbox, st: EpisodeState,
                   ctx: dict) -> Phase:
@@ -52,7 +87,9 @@ class ScriptedPolicy(Policy):
 
         if phase is Phase.MONITOR:
             sess = tb.get_active_sessions()
-            st.symptoms = ctx.get("symptoms", [])
+            # Establish cumulative counter baselines and source epochs.  The
+            # first read is UNKNOWN by design and cannot support a diagnosis.
+            tb.get_database_stats()
             waits = {s["wait_event"] for s in sess if s["wait_event"]}
             st.note("scripted", "monitor_snapshot",
                     f"{len(sess)} 个异常会话，等待事件={waits or '无'}")
@@ -66,91 +103,110 @@ class ScriptedPolicy(Policy):
             return Phase.HYPOTHESIZE
 
         if phase is Phase.HYPOTHESIZE:
-            st.ensure_hypotheses(ctx.get("candidates") or self.CANDIDATES)
             return Phase.INVESTIGATE
 
         if phase is Phase.INVESTIGATE:
-            # H1 缺索引：EXPLAIN 见全表扫 + 索引里确实没有可用的
-            plan = tb.explain_query(hot, uid)
-            if plan.get("error"):
-                # 取不到计划就别硬判缺索引 —— 脚本基线的领域知识只覆盖
-                # 索引类故障，遇到别的应当诚实地给 INCONCLUSIVE
-                tb.set_hypothesis("missing_index", Verdict.INCONCLUSIVE.value,
-                                  f"无法取执行计划: {plan['error'][:80]}")
-                seq, removed, names, covering = False, 0, [], []
-            else:
-                seq = any("Seq Scan" in s for s in plan["scan_types"])
-                removed = plan["rows_removed_by_filter"]
-                idx = tb.get_indexes("orders")
-                names = [i["name"] for i in idx]
-                covering = [n for n in names
-                            if "user_status" in n or "status_user" in n]
-            if seq and removed > 1_000_000 and not covering:
-                tb.set_hypothesis(
-                    "missing_index", Verdict.CONFIRMED.value,
-                    f"Seq Scan 过滤掉 {removed:,} 行，且 orders 上无覆盖该谓词的索引")
-            elif not plan.get("error"):
-                tb.set_hypothesis("missing_index", Verdict.REFUTED.value,
-                                  f"计划={plan['scan_types']}, 索引={names}")
-
-            # H2 统计信息过期：last_analyze 新鲜就能干净排除
-            stats = tb.get_table_stats("orders")
-            if stats["last_analyze"]:
-                tb.set_hypothesis(
-                    "stale_statistics", Verdict.REFUTED.value,
-                    f"last_analyze={stats['last_analyze'][:19]}，统计信息新鲜")
-            else:
-                tb.set_hypothesis("stale_statistics", Verdict.INCONCLUSIVE.value,
-                                  "拿不到 last_analyze")
-
-            # H3 锁竞争：无阻塞链即排除
-            chain = tb.get_blocking_chain()
-            if not chain:
-                tb.set_hypothesis("lock_contention", Verdict.REFUTED.value,
-                                  "pg_locks 无阻塞链，会话也未等锁")
-            else:
-                tb.set_hypothesis("lock_contention", Verdict.CONFIRMED.value,
-                                  f"存在 {len(chain)} 条阻塞链")
+            needs = [EvidenceNeed.from_dict(item) for item in
+                     ctx.get("explanation", {}).get("needs", [])]
+            tools = list(dict.fromkeys(
+                need.candidate_tools[0] for need in needs
+                if need.candidate_tools))
+            for tool_name in tools:
+                self._collect(tool_name, tb, hot, uid)
             return Phase.DIAGNOSE
 
         if phase is Phase.DIAGNOSE:
-            confirmed = st.confirmed()
-            if len(confirmed) != 1:
-                st.outcome_note = f"未能收敛到唯一根因: {confirmed}"
-                return Phase.ESCALATE
-            rc = confirmed[0]
-            if rc == "missing_index":
-                # 反事实：动手之前先证明这个判断成立
-                sim = tb.simulate_index(
-                    "CREATE INDEX ON orders(user_id, status)", hot, uid)
-                if not sim["would_be_used"]:
-                    tb.set_hypothesis("missing_index", Verdict.REFUTED.value,
-                                      "hypopg 模拟显示优化器不会采用该索引")
-                    st.outcome_note = "反事实模拟证伪了缺索引假设"
-                    return Phase.ESCALATE
-                tb.declare_root_cause(
-                    "missing_index", "orders(user_id, status) 上缺少可用索引")
-            else:
-                tb.declare_root_cause(rc, f"确认的根因: {rc}")
-            return Phase.PLAN if st.max_repair_attempts else Phase.REPORT
+            explanation = st.explanation_graph
+            if explanation is None or not explanation.selected_path_ids:
+                st.outcome_note = "没有可选择的已支持解释路径"
+                return Phase.INVESTIGATE
+            if st.claimed_fault_class != "missing_index":
+                st.outcome_note = (f"已选择路径 {explanation.selected_path_ids}；"
+                                   "确定性基线未实现该类修复")
+                return Phase.REPORT
+            return Phase.PLAN if ctx.get("allow_repair", False) else Phase.REPORT
 
         if phase is Phase.PLAN:
-            if self.bad_fix and st.repair_attempts == 0:
-                # 在无关列上建索引：能建成、可回滚，但治不好这条查询
+            options = [option for option in intervention_options(
+                st, executable_only=True)
+                if option.get("action_type") == "create_index"]
+            interventions = {
+                (option.get("target_node_id"), option.get("fix"),
+                 option.get("action_type"))
+                for option in options
+            }
+            if len(interventions) != 1:
+                st.outcome_note = "选中解释没有唯一的可执行建索引干预"
+                return Phase.ESCALATE
+            paths = st.explanation_graph.path_map()
+            option = sorted(options, key=lambda item: (
+                -float(paths[item["path_id"]].score_components.get(
+                    "total", 0.0)),
+                item["path_id"],
+            ))[0]
+            bad_attempt = self.bad_fix and st.repair_attempts == 0
+            sql = (
+                "CREATE INDEX CONCURRENTLY idx_wrong_fix "
+                "ON orders(user_id, status)"
+                if bad_attempt else
+                "CREATE INDEX CONCURRENTLY idx_orders_user_status "
+                "ON orders(user_id, status)"
+            )
+
+            # Intervention predicates are plan preconditions, not diagnosis
+            # evidence.  Collect and bind them against the concrete fix only
+            # after a path and SQL definition have been selected, then rerun
+            # ESC for the new explanation revision before creating the plan.
+            from knowledge.causal_graph import graph as causal_graph
+            evidence = causal_graph.load().nodes["counterfactual_index"]
+            need = EvidenceNeed.create(
+                path_ids=[option["path_id"]],
+                target_kind=EvidenceTargetKind.INTERVENTION,
+                target_ids=[option["fix"]],
+                evidence_type="counterfactual_index",
+                predicate_id=str(evidence["predicate_id"]),
+                required=True,
+                freshness_seconds=int(evidence.get("freshness_seconds", 300)),
+                candidate_tools=[str(evidence["obtained_by"])],
+                reason="validate the concrete intervention definition",
+            )
+            before = len(st.scratchpad)
+            tb.simulate_index(sql, hot, uid)
+            refs = {
+                str(entry.get("raw_ref") or "")
+                for entry in st.scratchpad[before:]
+                if entry.get("evidence_type") == "counterfactual_index" and
+                entry.get("raw_ref")
+            }
+            bind_evidence(st, explicit_needs=[need], raw_refs=refs)
+            from agent.esc import check_explanation
+            current_esc = check_explanation(st)
+            if current_esc["verdict"] != "SUFFICIENT":
+                raise ValueError(
+                    "intervention evidence invalidated explanation sufficiency")
+
+            if bad_attempt:
+                # W4 的失败结果由外部验收器注入；SQL 本身必须通过与正常
+                # 修复完全相同的反事实和 GATE 前置条件，才能真实走到 undo。
                 tb.submit_proposal(
                     action_type="create_index",
-                    sql="CREATE INDEX CONCURRENTLY idx_wrong_fix ON orders(total)",
+                    sql=sql,
                     rollback="DROP INDEX CONCURRENTLY idx_wrong_fix",
-                    rationale="故意的无效修复，用于验证失败回滚路径",
-                    predicted_impact={"p99_ms": "<50"})
+                    rationale="受控的首次修复，用于验证失败结果后的回滚路径",
+                    predicted_impact={"p99_ms": "<50"},
+                    selected_path_id=option["path_id"],
+                    fix_id=option["fix"],
+                    intervention_target=option["target_node_id"])
             else:
                 tb.submit_proposal(
                     action_type="create_index",
-                    sql="CREATE INDEX CONCURRENTLY idx_orders_user_status "
-                        "ON orders(user_id, status)",
+                    sql=sql,
                     rollback="DROP INDEX CONCURRENTLY idx_orders_user_status",
                     rationale="补上覆盖 user_id+status 谓词的复合索引，消除全表扫",
-                    predicted_impact={"cost": "180975 -> 52"})
+                    predicted_impact={"cost": "180975 -> 52"},
+                    selected_path_id=option["path_id"],
+                    fix_id=option["fix"],
+                    intervention_target=option["target_node_id"])
             return Phase.GATE
 
         raise RuntimeError(f"ScriptedPolicy 未实现阶段 {phase}")

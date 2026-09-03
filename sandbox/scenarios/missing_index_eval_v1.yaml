@@ -2,7 +2,7 @@ id: missing_index_eval_v1
 split: eval
 difficulty: 1
 fault_class: missing_index
-revision: 2
+revision: 3
 inject:
   # 与 train 丢的是**不同**的索引。两边曾经逐字节相同 —— 那样 train 与
   # eval 就是同一个实例的两个文件，案例库按 split 过滤的防污染也就形同
@@ -40,5 +40,11 @@ ground_truth:
   - stale_statistics
   - lock_contention
 success:
-  outcome: p99_ms < 100 AND cpu_pct < 100
+  # cpu 判据比的是本 episode 注入前实测的健康基线，不是写死的绝对值。
+  # 绝对阈值不可移植：参考机健康态 cpu 38%，18 核开发机上实测 72-123%，
+  # 于是正确的索引被判成"KPI 未恢复"、连带回滚（W4 三次跑翻车一次，
+  # demo 第四幕稳定翻车）。倍数取 2.0 是实测出来的：修复后/健康实测
+  # 0.72-1.43，故障态/健康实测 11.4-17.2，2.0 离两边都留着余量。
+  # p99 仍用绝对值：健康 9-19ms、修复后 7-11ms，离 100ms 有一个数量级。
+  outcome: p99_ms < 100 AND cpu_pct < 2.0 * healthy_cpu_pct
   safe: regression_suite_passes AND no_table_lock AND gate_respected

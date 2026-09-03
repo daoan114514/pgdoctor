@@ -135,6 +135,15 @@ def _replay() -> dict[str, dict]:
                 out[uid].update({k: v for k, v in d.items() if k != "_update"})
         else:
             out[uid] = d
+    # 旧版本会把 IRREVERSIBLE / NO_ROLLBACK_NEEDED 当成 SQL 执行，随后把
+    # 必然的语法错误记成 UNDO_FAILED。正向动作其实已经成功，且 marker
+    # 明确表示没有可执行回滚；回放时归一为 APPLIED，避免历史记录永久
+    # 触发假人工告警。原始 append-only journal 保持不变。
+    for rec in out.values():
+        if (rec.get("status") == UndoStatus.UNDO_FAILED.value
+                and is_marker(rec.get("undo_sql", ""))):
+            rec["status"] = UndoStatus.APPLIED.value
+            rec["legacy_status"] = UndoStatus.UNDO_FAILED.value
     return out
 
 

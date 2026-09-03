@@ -17,11 +17,17 @@ CASES = [
     ("stale_statistics", "ANALYZE orders", "SELECT 1"),
     ("lock_contention", "SELECT pg_terminate_backend(32363)", "IRREVERSIBLE"),
 ]
+FIXES = {
+    "missing_index": "create_covering_index",
+    "stale_statistics": "analyze_table",
+    "lock_contention": "terminate_blocker",
+}
 
 for fault, sql, undo in CASES:
     p = RemediationProposal(
         action_type="", sql=sql, rollback=undo,
-        rationale="探针：人工正解修复", target={"table": "orders"})
+        rationale="探针：人工正解修复", target={"table": "orders"},
+        root_cause=fault, fix_id=FIXES[fault])
     # action_type 交给门自己按 AST 对齐（之前踩过 analyze/vacuum_analyze
     # 命名不一致导致提案连拒两次的坑）
     for at in ("create_index", "vacuum_analyze", "analyze", "session_control", "terminate_session",

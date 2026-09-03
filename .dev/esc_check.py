@@ -31,6 +31,7 @@ def full_evidence(st):
             "orders 上的索引: ['idx_orders_created_at', 'orders_pkey']")
     st.note("a", "stats_freshness",
             "orders: live=12,000,773 dead=0 last_analyze=2026-08-19 06:13:21")
+    st.note("a", "row_estimate_deviation", "估计与实际行数最大偏差 1 倍")
     st.note("a", "lock_blocking_chain", "阻塞链 0 条（无锁等待）")
     st.note("a", "counterfactual_index",
             "hypopg: cost 180,975 -> 52 (降 100.0%), 优化器会采用=True")
@@ -85,7 +86,7 @@ c_ok = r.verdict == "INSUFFICIENT" and not d2.passed
 print(f"  {'PASS' if c_ok else 'FAIL'}  D2 必需项不可被其他维度补偿")
 ok &= c_ok
 
-# ── D 反事实证伪：模拟显示优化器不会采用 ────────────────────
+# ── D 反事实证伪：只否定当前索引方案，不否定根因 ────────────
 print()
 st = mk("D")
 full_evidence(st)
@@ -101,8 +102,9 @@ r = esc.check(st, CANDS)
 d5 = [d for d in r.dims if d.name == "D5"][0]
 print(f"D 反事实证伪          -> {r.summary()}")
 print(f"     D5: {d5.detail}")
-d_ok = (not d5.passed) and r.verdict != "SUFFICIENT"
-print(f"  {'PASS' if d_ok else 'FAIL'}  动手之前就被证伪")
+d_ok = ((not d5.passed) and r.verdict == "SUFFICIENT" and
+        any("当前具体索引定义" in item for item in r.directives))
+print(f"  {'PASS' if d_ok else 'FAIL'}  否定当前方案，但保留 missing-index 路径")
 ok &= d_ok
 
 # ── E 证据取值指向反面 ────────────────────────────────────

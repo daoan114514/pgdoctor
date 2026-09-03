@@ -39,7 +39,9 @@ def _allow() -> dict:
 def make_phase_hook(phase: Phase, blocked_log: list | None = None,
                     extra_denied: set[str] | None = None,
                     role: Role = Role.MAIN,
-                    hypothesis: str | None = None) -> dict:
+                    hypothesis: str | None = None, *,
+                    evidence_need=None, task_context=None,
+                    environment_tools: set[str] | None = None) -> dict:
     """按角色与阶段拦截越界工具调用。
 
     权限本身不在这里定义 —— 全部来自 agent.permissions，那里是唯一
@@ -47,7 +49,9 @@ def make_phase_hook(phase: Phase, blocked_log: list | None = None,
 
     extra_denied 保留为兼容入口；新代码传 role 即可。
     """
-    allowed = allowed_tools(phase, role, hypothesis)
+    allowed = allowed_tools(
+        phase, role, hypothesis, evidence_need=evidence_need,
+        task_context=task_context, environment_tools=environment_tools)
     denied = set(extra_denied or ())
 
     async def guard(input_data, tool_use_id, context):

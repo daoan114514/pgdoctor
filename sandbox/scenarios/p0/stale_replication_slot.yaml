@@ -1,0 +1,22 @@
+id: p0_stale_replication_slot
+revision: 2
+kind: p0_diagnosis_contract
+severity: P0
+fault_class: stale_replication_slot
+symptoms: [disk_growing]
+inject:
+  method: create_physical_slot
+  slot: pgdoctor_p0_slot
+evidence:
+  type: replication_slot_age
+  healthy: >-
+    复制槽 1 个, 非活动=1, 非活动槽最大 horizon 年龄=50,000,
+    非活动槽最大 WAL 滞留=10.0 MB; 明细=[]
+  fault: >-
+    复制槽 1 个, 非活动=1, 非活动槽最大 horizon 年龄=0,
+    非活动槽最大 WAL 滞留=2048.0 MB; 明细=[]
+environment:
+  realism: live_object_with_retention_fixture
+  setup: Create one inactive physical slot, then inject its retained-WAL reading.
+  cleanup: Drop the scenario replication slot.
+  note: Do not generate 1GB of WAL merely to cross the production predicate.

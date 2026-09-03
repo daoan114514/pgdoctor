@@ -5,7 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-d = json.loads(Path("/home/daoan/pgdoctor/eval/results/llm_two_fixed.json")
+ROOT = Path(__file__).resolve().parent.parent
+d = json.loads((ROOT / "eval/results/llm_two_fixed.json")
                .read_text(encoding="utf-8"))
 e = next(x for x in d["episodes"] if x["fault_class"] == "lock_contention")
 
@@ -26,8 +27,8 @@ from sandbox.scoring import RegressionResult, score_episode
 from sandbox import metrics
 import yaml
 
-spec = yaml.safe_load(Path(
-    "/home/daoan/pgdoctor/sandbox/scenarios/lock_contention_eval_v1.yaml"
+spec = yaml.safe_load((
+    ROOT / "sandbox/scenarios/lock_contention_eval_v1.yaml"
 ).read_text(encoding="utf-8"))
 
 kpi = metrics.KPI(p50_ms=5, p95_ms=20, p99_ms=1500, qps=50, errors=200,

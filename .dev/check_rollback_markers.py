@@ -12,11 +12,29 @@ ANALYZE orders 都被拒，诊断明明完全正确。
 最要紧的是倒数第一条：标记绝不能成为夹带破坏性动作的通道。
 """
 import sys
+import json
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from safety import undo_journal
 from safety.gate import RemediationProposal, assess
+
+
+def proposal(action_type, sql, rollback):
+    if action_type == "vacuum_analyze":
+        root_cause, fix_id = "stale_statistics", "analyze_table"
+    elif action_type == "session_control":
+        root_cause, fix_id = "lock_contention", "terminate_blocker"
+    else:
+        # DELETE/TRUNCATE 用例会先被护盾拦下；绑定一个真实节点，确保测到的
+        # 是 SQL/marker 防线，而不是“缺少图上下文”的前置拒绝。
+        root_cause, fix_id = "missing_index", "create_covering_index"
+    return RemediationProposal(
+        action_type=action_type, sql=sql, rollback=rollback,
+        rationale="验收", target={"table": "orders"},
+        root_cause=root_cause, fix_id=fix_id)
 
 # (action_type, sql, rollback, 期望放行, 说明)
 CASES = [
@@ -42,8 +60,7 @@ CASES = [
 
 bad = 0
 for at, sql, rb, want, why in CASES:
-    d = assess(RemediationProposal(action_type=at, sql=sql, rollback=rb,
-                                   rationale="验收", target={"table": "orders"}))
+    d = assess(proposal(at, sql, rb))
     ok = d.approved is want
     bad += not ok
     reason = (d.reasons + d.shield_reasons or [""])[0][:46]
@@ -51,6 +68,27 @@ for at, sql, rb, want, why in CASES:
           f"{d.tier:<8}approved={d.approved!s:<6}{reason}")
     if not ok:
         print(f"      期望 approved={want} —— {why}")
+
+# 兼容旧 journal：marker 曾被误当 SQL 执行并记成 UNDO_FAILED。它不是
+# 未解决的数据库残留，回放时应归一为 APPLIED，同时保留 legacy_status。
+original_journal = undo_journal.JOURNAL
+with tempfile.TemporaryDirectory() as tmp:
+    undo_journal.JOURNAL = Path(tmp) / "undo.jsonl"
+    old = {
+        "undo_id": "legacy_marker", "episode_id": "legacy",
+        "action_type": "session_control", "forward_sql": "SELECT 1",
+        "undo_sql": "IRREVERSIBLE", "status": "UNDO_FAILED",
+        "error": "syntax error at or near IRREVERSIBLE",
+    }
+    undo_journal.JOURNAL.write_text(
+        json.dumps(old, ensure_ascii=False) + "\n", encoding="utf-8")
+    replayed = undo_journal.get("legacy_marker") or {}
+    normalized = (replayed.get("status") == "APPLIED"
+                  and replayed.get("legacy_status") == "UNDO_FAILED"
+                  and not undo_journal.needs_attention())
+undo_journal.JOURNAL = original_journal
+print(f"  {'OK ' if normalized else '!! '}legacy marker journal normalized")
+bad += not normalized
 
 print()
 print("ROLLBACK MARKERS:", "PASS" if bad == 0 else f"FAIL ({bad})")

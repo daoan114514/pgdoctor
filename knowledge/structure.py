@@ -36,6 +36,9 @@ from pathlib import Path
 
 import yaml
 
+from agent.episode_state import evidence_is_observed
+from agent.explanation import stable_id
+
 ROOT = Path(__file__).resolve().parent.parent
 LEARNED = ROOT / "knowledge" / "learned"
 CANDIDATES = LEARNED / "candidate_edges.yaml"
@@ -149,7 +152,8 @@ def observe_episode(st, score, symptoms: list[str],
     #    只可能提案 supporting，required 由人写，永远不由学习产生。
     linked = (set(_G.required_evidence(rc)) | set(_G.supporting_evidence(rc))
               | {r["evidence"] for r in _G.refuting_evidence(rc)})
-    seen_ev = {e["evidence_type"] for e in st.scratchpad}
+    seen_ev = {e["evidence_type"] for e in st.scratchpad
+               if evidence_is_observed(e)}
     for ev in seen_ev - linked:
         if g.nodes.get(ev, {}).get("kind") != "Evidence":
             continue                      # 只认图上已有的证据节点
@@ -243,6 +247,292 @@ def stats() -> dict:
         "promoted": sum(1 for p in ps.values() if p.status == "promoted"),
         "rejected": sum(1 for p in ps.values() if p.status == "rejected"),
     }
+
+
+# ---------------------------------------------------------------------------
+# v2 structure proposals.  The v1 candidate file above is retained as an
+# untrusted audit record and is never imported into this store.
+
+V2_PROPOSAL_STATES = {
+    "proposed", "ready_for_review", "approved", "promoted", "rejected",
+    "quarantined",
+}
+V2_MIN_INDEPENDENT_EPISODES = 3
+
+
+def _v2_candidates_path() -> Path:
+    return LEARNED / "v2" / "structure_proposals.yaml"
+
+
+@dataclass
+class EdgeProposalV2:
+    proposal_id: str
+    kind: str
+    src: str
+    dst: str
+    status: str = "proposed"
+    episode_ids: list[str] = field(default_factory=list)
+    scenario_ids: list[str] = field(default_factory=list)
+    predicate_ids: list[str] = field(default_factory=list)
+    evidence_binding_ids: list[str] = field(default_factory=list)
+    scopes: list[str] = field(default_factory=list)
+    temporal_order_episode_ids: list[str] = field(default_factory=list)
+    orphan_reduction_episode_ids: list[str] = field(default_factory=list)
+    counterexample_episode_ids: list[str] = field(default_factory=list)
+    observations: list[dict] = field(default_factory=list)
+    reviewed_by: str = ""
+    note: str = ""
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+
+    @property
+    def ready(self) -> bool:
+        independent = len(set(self.episode_ids)) >= V2_MIN_INDEPENDENT_EPISODES
+        if not independent or self.counterexample_episode_ids:
+            return False
+        if self.kind == "CONFIRMED_BY":
+            return bool(self.predicate_ids and self.scopes)
+        if self.kind == "CAUSES":
+            return bool(
+                len(set(self.scenario_ids)) >= 2 and
+                set(self.episode_ids).issubset(
+                    set(self.temporal_order_episode_ids)) and
+                set(self.episode_ids).issubset(
+                    set(self.orphan_reduction_episode_ids)))
+        return False
+
+
+def load_candidates_v2() -> dict[str, EdgeProposalV2]:
+    path = _v2_candidates_path()
+    if not path.exists():
+        return {}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if int(raw.get("schema_version", 0)) != 2:
+        return {}
+    out = {}
+    for key, value in (raw.get("proposals") or {}).items():
+        try:
+            proposal = EdgeProposalV2(**value)
+        except (TypeError, ValueError):
+            continue
+        if proposal.status not in V2_PROPOSAL_STATES:
+            proposal.status = "quarantined"
+        out[key] = proposal
+    return out
+
+
+def save_candidates_v2(proposals: dict[str, EdgeProposalV2]) -> None:
+    path = _v2_candidates_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump({
+        "schema_version": 2,
+        "v1_imported": False,
+        "proposals": {key: asdict(value) for key, value in
+                      sorted(proposals.items())},
+    }, allow_unicode=True, sort_keys=True), encoding="utf-8")
+
+
+def _proposal_id_v2(kind: str, src: str, dst: str) -> str:
+    return stable_id("structure_proposal", {
+        "schema_version": 2, "kind": kind, "src": src, "dst": dst})
+
+
+def propose_v2(*, kind: str, src: str, dst: str, episode_id: str,
+               scenario_id: str, predicate_id: str = "", scope: str = "",
+               evidence_binding_id: str = "",
+               temporal_order: bool = False,
+               reduces_orphan_symptom: bool = False,
+               known_counterexample: bool = False,
+               note: str = "") -> EdgeProposalV2:
+    """Record one scoped structural observation; never promote it."""
+    if kind not in {"CAUSES", "CONFIRMED_BY"}:
+        raise ValueError(f"{kind} has no v2 structure-learning entry point")
+    if not episode_id or not scenario_id:
+        raise ValueError("independent episode and scenario IDs are required")
+    if kind == "CONFIRMED_BY" and (
+            not predicate_id or not evidence_binding_id or
+            scope not in {"NODE", "PATH"}):
+        raise ValueError(
+            "CONFIRMED_BY requires a binding, predicate, and NODE/PATH scope")
+    if kind == "CONFIRMED_BY":
+        from knowledge.evidence_predicates import registered_predicates
+        if predicate_id not in registered_predicates():
+            raise ValueError("CONFIRMED_BY predicate is not registered")
+    from knowledge.causal_graph import graph as causal_graph
+    graph = causal_graph.load()
+    if src not in graph or dst not in graph:
+        raise ValueError("structure proposals may only reference live graph nodes")
+
+    proposals = load_candidates_v2()
+    proposal_id = _proposal_id_v2(kind, src, dst)
+    proposal = proposals.get(proposal_id) or EdgeProposalV2(
+        proposal_id=proposal_id, kind=kind, src=src, dst=dst)
+    if proposal.status not in {"proposed", "ready_for_review"}:
+        return proposal
+    if episode_id not in proposal.episode_ids:
+        proposal.episode_ids.append(episode_id)
+    if scenario_id not in proposal.scenario_ids:
+        proposal.scenario_ids.append(scenario_id)
+    if predicate_id and predicate_id not in proposal.predicate_ids:
+        proposal.predicate_ids.append(predicate_id)
+    if (evidence_binding_id and
+            evidence_binding_id not in proposal.evidence_binding_ids):
+        proposal.evidence_binding_ids.append(evidence_binding_id)
+    if scope and scope not in proposal.scopes:
+        proposal.scopes.append(scope)
+    if temporal_order and episode_id not in proposal.temporal_order_episode_ids:
+        proposal.temporal_order_episode_ids.append(episode_id)
+    if (reduces_orphan_symptom and
+            episode_id not in proposal.orphan_reduction_episode_ids):
+        proposal.orphan_reduction_episode_ids.append(episode_id)
+    if known_counterexample and episode_id not in proposal.counterexample_episode_ids:
+        proposal.counterexample_episode_ids.append(episode_id)
+    observation_id = stable_id("structure_observation", {
+        "proposal_id": proposal_id,
+        "episode_id": episode_id,
+        "predicate_id": predicate_id,
+        "evidence_binding_id": evidence_binding_id,
+        "scope": scope,
+    })
+    if observation_id not in {item.get("observation_id")
+                              for item in proposal.observations}:
+        proposal.observations.append({
+            "observation_id": observation_id,
+            "episode_id": episode_id,
+            "scenario_id": scenario_id,
+            "predicate_id": predicate_id,
+            "evidence_binding_id": evidence_binding_id,
+            "scope": scope,
+            "temporal_order": bool(temporal_order),
+            "reduces_orphan_symptom": bool(reduces_orphan_symptom),
+            "known_counterexample": bool(known_counterexample),
+            "note": note,
+        })
+    proposal.status = "ready_for_review" if proposal.ready else "proposed"
+    proposal.updated_at = time.time()
+    proposals[proposal_id] = proposal
+    save_candidates_v2(proposals)
+    return proposal
+
+
+def observe_episode_v2(st, structural_observations: list[dict] | None = None
+                       ) -> list[EdgeProposalV2]:
+    """Consume only explicit structural observations, never co-occurrence."""
+    touched = []
+    for observation in structural_observations or []:
+        binding_id = str(observation.get("evidence_binding_id", ""))
+        if observation["kind"] == "CONFIRMED_BY":
+            explanation = getattr(st, "explanation_graph", None)
+            binding = (explanation.evidence_bindings.get(binding_id)
+                       if explanation is not None else None)
+            if (binding is None or not binding.is_trusted() or
+                    binding.predicate_result != "SUPPORTS" or
+                    binding.predicate_id != observation.get("predicate_id") or
+                    observation["src"] not in binding.target_node_ids):
+                continue
+        touched.append(propose_v2(
+            kind=observation["kind"],
+            src=observation["src"],
+            dst=observation["dst"],
+            episode_id=st.episode_id,
+            scenario_id=st.scenario_id,
+            predicate_id=observation.get("predicate_id", ""),
+            scope=observation.get("scope", ""),
+            evidence_binding_id=binding_id,
+            temporal_order=bool(observation.get("temporal_order", False)),
+            reduces_orphan_symptom=bool(
+                observation.get("reduces_orphan_symptom", False)),
+            known_counterexample=bool(
+                observation.get("known_counterexample", False)),
+            note=str(observation.get("note", "")),
+        ))
+    return touched
+
+
+def approve_v2(proposal_id: str, *, by: str,
+               likelihood: float = 0.5) -> tuple[bool, str]:
+    """Human approval is the first operation allowed to touch live overlay."""
+    proposals = load_candidates_v2()
+    proposal = proposals.get(proposal_id)
+    if proposal is None:
+        return False, f"missing proposal: {proposal_id}"
+    if proposal.status != "ready_for_review" or not proposal.ready:
+        return False, f"proposal is not ready: {proposal.status}"
+    if not by:
+        return False, "reviewer identity is required"
+    promoted = load_promoted()
+    if proposal.kind == "CAUSES":
+        from knowledge.causal_graph import graph as causal_graph
+        destination_kind = causal_graph.load().nodes[proposal.dst].get("kind")
+        section = ("causes_symptom" if destination_kind == "Symptom"
+                   else "causes_cause")
+        entry = {"from": proposal.src, "to": proposal.dst,
+                 "likelihood": float(likelihood)}
+    else:
+        section = "confirmed_by"
+        entry = {"cause": proposal.src, "evidence": proposal.dst,
+                 "necessity": "supporting"}
+    entry.update({
+        "status": "approved",
+        "proposal_id": proposal.proposal_id,
+        "provenance": f"learned/v2/{by}@{int(time.time())}",
+    })
+    existing = promoted.setdefault(section, [])
+    if not any(item.get("proposal_id") == proposal.proposal_id
+               for item in existing):
+        existing.append(entry)
+    _save_promoted(promoted)
+    proposal.status = "approved"
+    proposal.reviewed_by = by
+    proposal.updated_at = time.time()
+    proposals[proposal_id] = proposal
+    save_candidates_v2(proposals)
+    from knowledge.causal_graph import graph as causal_graph
+    causal_graph.load.cache_clear()
+    return True, f"approved: {proposal_id}"
+
+
+def promote_v2(proposal_id: str, *, by: str) -> tuple[bool, str]:
+    proposals = load_candidates_v2()
+    proposal = proposals.get(proposal_id)
+    if proposal is None or proposal.status != "approved":
+        return False, "proposal must be approved first"
+    promoted = load_promoted()
+    found = False
+    for entries in promoted.values():
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if entry.get("proposal_id") == proposal_id:
+                entry["status"] = "promoted"
+                entry["promoted_by"] = by
+                found = True
+    if not found:
+        return False, "approved overlay entry is missing"
+    _save_promoted(promoted)
+    proposal.status = "promoted"
+    proposal.updated_at = time.time()
+    proposals[proposal_id] = proposal
+    save_candidates_v2(proposals)
+    from knowledge.causal_graph import graph as causal_graph
+    causal_graph.load.cache_clear()
+    return True, f"promoted: {proposal_id}"
+
+
+def resolve_v2(proposal_id: str, status: str, *, why: str = ""
+               ) -> tuple[bool, str]:
+    if status not in {"rejected", "quarantined"}:
+        return False, "only rejected/quarantined are valid review resolutions"
+    proposals = load_candidates_v2()
+    proposal = proposals.get(proposal_id)
+    if proposal is None:
+        return False, f"missing proposal: {proposal_id}"
+    proposal.status = status
+    proposal.note = why
+    proposal.updated_at = time.time()
+    proposals[proposal_id] = proposal
+    save_candidates_v2(proposals)
+    return True, f"{status}: {proposal_id}"
 
 
 # ── 人工审批用的小 CLI ────────────────────────────────────────

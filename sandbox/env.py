@@ -34,7 +34,8 @@ def _load_injectors() -> dict:
         from sandbox.injectors.misleading import REGISTRY as R3
         from sandbox.injectors.missing_index import REGISTRY as R1
         from sandbox.injectors.more import REGISTRY as R2
-        INJECTORS = {**R1, **R2, **R3}
+        from sandbox.injectors.p0 import REGISTRY as R4
+        INJECTORS = {**R1, **R2, **R3, **R4}
     return INJECTORS
 
 
@@ -171,7 +172,8 @@ class DBAScenarioEnv:
         cur = metrics.collect()
         while time.time() < deadline:
             cur = metrics.collect()
-            if not cur.stale and metrics.eval_expr(expr, cur):
+            if not cur.stale and metrics.eval_expr(
+                    expr, cur, baseline=self.healthy_kpi):
                 return True, cur
             time.sleep(5)
         return False, cur
@@ -213,7 +215,8 @@ class DBAScenarioEnv:
         if kpi is None or regression is None:
             kpi, regression = self.verify()
         return score_episode(self.spec, claimed_fault_class, self.applied_sql,
-                             kpi, regression, audit, ledger)
+                             kpi, regression, audit, ledger,
+                             baseline=self.healthy_kpi)
 
     def close(self) -> None:
         self._stop_workload()

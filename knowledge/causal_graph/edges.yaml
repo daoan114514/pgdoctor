@@ -1,7 +1,8 @@
 # 故障因果知识图谱 —— 边
 #
 # 为什么必须是图而不是向量库：故障是连锁的。
-#   autovacuum 停摆 -> 死元组堆积 -> 表膨胀 + XID 逼近 -> 磁盘涨 -> 停库
+#   autovacuum 停摆 -> 死元组堆积 -> 表膨胀 -> 磁盘涨 -> 停库
+#   autovacuum 停摆 -> 冻结不及时 -> XID 回卷风险（另一条独立分支）
 # 告警端看到的是"磁盘满"，真根因在三跳之外。向量相似度永远找不到三跳外的
 # 东西，图遍历可以。
 
@@ -38,6 +39,8 @@ causes_symptom:
      source: pgdoc:monitoring-stats}
   - {from: checkpoint_pressure,   to: latency_p99_up,  likelihood: 0.55,
      source: pgdoc:monitoring-stats}
+  - {from: autovacuum_starvation, to: autovacuum_unhealthy, likelihood: 0.99,
+     note: "表级 autovacuum 关闭或持续落后会直接触发健康告警"}
 
 # 根因 -> 根因（级联）。这是图相对查找表的不可替代之处。
 causes_cause:
@@ -48,8 +51,6 @@ causes_cause:
   - {from: long_idle_transaction, to: autovacuum_starvation, likelihood: 0.75,
      note: "长事务持有快照，vacuum 无法回收其后产生的死元组"}
   - {from: table_bloat,           to: disk_pressure,       likelihood: 0.55}
-  - {from: table_bloat,           to: missing_index,       likelihood: 0.10,
-     note: "膨胀会让索引失效感知变强，但不是真因，权重低"}
   # 误导性告警的来源之一：一批 idle in transaction 的会话占满连接槽，
   # 表面症状与真·连接打满完全一样。做成级联而非直连 conn_near_limit ——
   # 因果上本来就隔着一层，而且这样真根因离告警两跳，只看告警那一跳
@@ -69,9 +70,6 @@ causes_cause:
      note: "预备事务的 XID 一直不释放，datfrozenxid 推不动"}
   - {from: stale_replication_slot, to: xid_wraparound_risk, likelihood: 0.45,
      source: pgdoc:routine-vacuuming}
-  - {from: lock_contention,       to: deadlock,           likelihood: 0.20,
-     source: pgdoc:explicit-locking,
-     note: "加锁顺序不一致时，等待会升级成环"}
 
 # 根因 <- 确认证据。necessity=required 的是硬要求：
 # 证据充分性检查的 D1 直接读这里，缺一即判 INSUFFICIENT。
@@ -85,11 +83,14 @@ confirmed_by:
   - {cause: stale_statistics, evidence: stats_freshness,  necessity: supporting}
   - {cause: lock_contention,  evidence: lock_blocking_chain, necessity: required}
   - {cause: lock_contention,  evidence: session_wait_profile, necessity: supporting}
-  - {cause: table_bloat,      evidence: dead_tuple_ratio, necessity: required}
+  # dead_tuple_ratio 只描述清理压力，不能替代物理空间测量。
+  - {cause: table_bloat,      evidence: dead_tuple_ratio, necessity: supporting}
+  - {cause: table_bloat,      evidence: physical_bloat_ratio, necessity: required}
   - {cause: connection_exhaustion, evidence: connection_count, necessity: required}
   - {cause: long_idle_transaction, evidence: session_wait_profile, necessity: required}
   - {cause: long_idle_transaction, evidence: idle_in_transaction, necessity: required}
-  - {cause: autovacuum_starvation, evidence: stats_freshness, necessity: required}
+  - {cause: autovacuum_starvation, evidence: autovacuum_health,
+     necessity: required}
   # xid_wraparound_risk 与 disk_pressure 此前一条确认证据都没有 ——
   # 图上有这个节点，却没有任何办法确认它，等于只能靠猜。
   - {cause: xid_wraparound_risk, evidence: xid_age, necessity: required}
@@ -106,7 +107,7 @@ confirmed_by:
      necessity: supporting}
   - {cause: long_idle_transaction, evidence: backend_xmin_age,
      necessity: supporting}
-  - {cause: disk_pressure, evidence: temp_file_volume, necessity: supporting}
+  - {cause: disk_pressure, evidence: disk_usage, necessity: required}
   # slow_query_ranking 此前是孤点：get_top_queries 产出它、ESC 的 D4 也在
   # 找它，图上却一条边都没有 —— 等于 agent 查了也白查。它的作用是定位
   # "是哪条查询在慢"，对查询级的三类根因都是佐证。
@@ -117,34 +118,54 @@ confirmed_by:
 # 根因 <- 反证证据：拿到这条证据即可排除该根因
 refuted_by:
   - {cause: stale_statistics, evidence: row_estimate_deviation,
+     predicate_id: row_estimate_deviation_v2, scope: NODE,
      when: "估计与实际行数偏差不大"}
   - {cause: lock_contention,  evidence: lock_blocking_chain,
+     predicate_id: lock_blocking_chain_v2, scope: PATH, window_required: true,
      when: "阻塞链为空"}
   - {cause: missing_index,    evidence: explain_plan,
+     predicate_id: explain_plan_v2, scope: PATH,
      when: "执行计划已走索引"}
-  - {cause: table_bloat,      evidence: dead_tuple_ratio,
-     when: "死元组占比很低"}
+  - {cause: table_bloat,      evidence: physical_bloat_ratio,
+     predicate_id: physical_bloat_ratio_v2, scope: NODE,
+     when: "结构化物理测量显示可回收比例很低"}
   - {cause: connection_exhaustion, evidence: connection_count,
+     predicate_id: connection_count_v2, scope: PATH,
      when: "连接数远低于上限"}
   - {cause: long_idle_transaction, evidence: idle_in_transaction,
+     predicate_id: idle_in_transaction_v2, scope: PATH,
      when: "idle in transaction 会话数接近 0"}
   # 反事实模拟是 DB 域独有的反证手段：不碰生产就能预先否掉一个方案。
   # _supports 早就实现了这条判断，图上一直没有对应的边 —— 而 D2 判
   # "这次排除有没有依据"是照着图查的，缺边就等于这条反证不算数。
   - {cause: missing_index, evidence: counterfactual_index,
+     predicate_id: counterfactual_index_v2, scope: INTERVENTION,
+     target_fix: create_covering_index,
      when: "hypopg 模拟显示优化器不会采用该索引"}
   - {cause: checkpoint_pressure, evidence: checkpoint_stats,
+     predicate_id: checkpoint_stats_v2, scope: PATH, window_required: true,
      when: "请求式检查点占比不高，写入时间正常"}
   - {cause: xid_wraparound_risk, evidence: xid_age,
+     predicate_id: xid_age_v2, scope: NODE,
      when: "XID 年龄远低于 autovacuum_freeze_max_age"}
   - {cause: stale_replication_slot, evidence: replication_slot_age,
+     predicate_id: replication_slot_age_v2, scope: NODE,
      when: "没有复制槽，或槽的 xmin 年龄很小"}
   - {cause: orphaned_prepared_transaction, evidence: prepared_xact_age,
+     predicate_id: prepared_xact_age_v2, scope: NODE,
      when: "pg_prepared_xacts 为空"}
   - {cause: deadlock, evidence: deadlock_count,
+     predicate_id: deadlock_count_v2, scope: PATH, window_required: true,
      when: "故障窗口内 deadlocks 计数没有增长"}
   - {cause: work_mem_spill, evidence: temp_file_volume,
+     predicate_id: temp_file_volume_v2, scope: PATH, window_required: true,
      when: "temp_bytes 为 0，没有任何外溢"}
+  - {cause: autovacuum_starvation, evidence: autovacuum_health,
+     predicate_id: autovacuum_health_v2, scope: NODE,
+     when: "autovacuum 有效启用，且没有超过触发阈值的积压"}
+  - {cause: disk_pressure, evidence: disk_usage,
+     predicate_id: disk_usage_v2, scope: NODE,
+     when: "数据目录所在文件系统使用率低于告警阈值"}
 
 # 一条证据能一次分开哪几个候选 —— 驱动"下一步查什么最划算"。
 # 取证预算有限时，优先做信息增益最大的那次查询。
@@ -194,15 +215,17 @@ fixed_by:
   - {cause: stale_statistics,     fix: analyze_table}
   - {cause: table_bloat,          fix: vacuum_table}
   - {cause: lock_contention,      fix: terminate_blocker}
-  - {cause: long_idle_transaction, fix: terminate_blocker}
+  - {cause: long_idle_transaction, fix: terminate_idle_transaction}
   - {cause: autovacuum_starvation, fix: enable_autovacuum}
   # connection_exhaustion / xid_wraparound_risk / disk_pressure 此前
   # 一个修复都没挂 —— 诊断得出来也不知道该干什么。
   - {cause: connection_exhaustion, fix: terminate_idle_backend}
   - {cause: xid_wraparound_risk,   fix: vacuum_database}
-  - {cause: disk_pressure,         fix: vacuum_table}
+  # 普通 VACUUM 只把空间归还给表内复用，不会把文件缩回文件系统，不能
+  # 当作磁盘压力修复。存储处置依赖平台与数据保留策略，只能升级人工。
+  - {cause: disk_pressure,         fix: remediate_disk_capacity}
   - {cause: stale_replication_slot, fix: drop_replication_slot}
   - {cause: orphaned_prepared_transaction, fix: resolve_prepared_xact}
   - {cause: work_mem_spill,        fix: raise_work_mem}
-  - {cause: deadlock,              fix: terminate_blocker}
+  - {cause: deadlock,              fix: remediate_deadlock_pattern}
   - {cause: checkpoint_pressure,   fix: raise_max_wal_size}

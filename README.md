@@ -2,24 +2,21 @@
 
 面向 PostgreSQL 的**自主运维 Agent**：从告警出发自主诊断根因，并在确定性安全门的保护下执行修复与验证。
 
-核心不是"接个大模型问它数据库为什么慢"，而是**一套约束它的工程结构**——让 agent 在不够聪明的时候不闯祸。
+项目重点是**用工程结构约束模型**，让 agent 在判断不足时停下来，不把猜测写进数据库。
 
-```
-⚡ ALERT  p99=2510ms (baseline 55ms) · cpu=94%
+```text
+ALERT        p99=2510ms (baseline 55ms), cpu=94%
+OBSERVE      latency_p99_up + cpu_saturated
+HYPOTHESIZE  生成 14 条候选因果路径，并登记 3 条可达 P0 义务
+INVESTIGATE  按当前 frontier 派发 EvidenceNeed；证据绑定到具体路径和边
+DIAGNOSE     missing_index -> latency_p99_up，主要替代路径已排除
+ESC          路径覆盖、连续性、反证、P0、新鲜度均满足 -> SUFFICIENT
+PLAN         先用 hypopg 验证具体索引，再绑定 FIXED_BY 和预期下游效果
+GATE         因果上下文有效；AST/风险/回滚检查通过 -> CONFIRM
+EXECUTE      undo journal PENDING -> APPLIED
+VERIFY       路径预测 SUPPORTED；p99、cpu 和回归检查通过
 
-[OBSERVE]     pg_stat_statements → 罪魁 mean 812ms (历史 5ms) rows 12.0M
-[INVESTIGATE] 三个假设并行隔离取证
-  ├─ missing_index      CONFIRMED   Seq Scan, Rows Removed 12,000,606
-  ├─ stale_statistics   REFUTED     last_analyze 新鲜
-  └─ lock_contention    REFUTED     pg_locks 无阻塞链
-[ESC]         D1✓ D2✓ D3✓ D4✓ D5✓  →  SUFFICIENT
-[PLAN]        CREATE INDEX CONCURRENTLY idx_orders_user_status ON orders(user_id, status)
-[SHIELD]      AST 校验通过（非黑名单动作）
-[GATE]        DDL + CONCURRENTLY + 大表 + 可逆 → 风险=中 → 需确认
-[EXECUTE]     undo_journal#7 PENDING → 执行 (46s) → APPLIED
-[VERIFY]      p99 2510ms → 8.93ms ✓  cpu 94% → 42% ✓  回归套件 ✓
-
-✅ RESOLVED   Diagnosis ✓  Outcome ✓  Safe Pass ✓
+DONE         Diagnosis PASS, Outcome PASS, Safe Pass PASS
 ```
 
 ---
@@ -38,6 +35,8 @@
 [告警]
   ↓
 MONITOR → OBSERVE → HYPOTHESIZE → INVESTIGATE → DIAGNOSE     ← 只读区 (agent_ro)
+             ↓             ↓              ↓
+        ExplanationGraph：候选路径 → frontier 取证 → 选中解释子图
                                                     ↓
                                         ★ ESC 硬转移 ★        ← 结论够不够格
                                                     ↓
@@ -54,8 +53,8 @@ MONITOR → OBSERVE → HYPOTHESIZE → INVESTIGATE → DIAGNOSE     ← 只读�
 
 | 闸 | 位置 | 管什么 |
 |---|---|---|
-| 证据充分性检查 (ESC) | DIAGNOSE → PLAN | 结论**够不够格**：证据是否充分 |
-| 护盾 + 分级门 | PLAN → EXECUTE | 动作**安不安全**：是否可逆、是否灾难 |
+| 证据充分性检查 (ESC) | DIAGNOSE → PLAN | 解释子图是否覆盖症状、证据是否绑定到路径、替代路径和 P0 是否解决 |
+| 因果校验 + 护盾 + 分级门 | PLAN → EXECUTE | 干预是否属于选中路径，动作是否可逆、是否灾难 |
 
 **安全是结构保证，不是提示约束**：agent 全程只持有只读连接 `agent_ro`，**没有任何能改数据库的工具**。它在 PLAN 阶段只能提交类型化提案；写权限 `agent_rw` 由安全门独占，执行是系统阶段。
 
@@ -66,7 +65,7 @@ SDK 在内层提供三样这个架构真正依赖的能力：
 | 能力 | 用途 |
 |---|---|
 | MCP server（`create_sdk_mcp_server`） | 工具以进程内 server 挂载，schema 与实现同处一地 |
-| **PreToolUse hook** | 按阶段裁剪工具集——"agent 没有写工具"的真正执行者 |
+| **PreToolUse hook** | 先按阶段限制工具，再按当前 `EvidenceNeed` 裁到 1–3 个只读工具 |
 | 上下文自动压缩 | 兜底。关键状态在 `EpisodeState` 里，压缩再狠也不丢 |
 
 另加 `setting_sources=None`：不加载任何用户/项目设置，保证实验可复现。
@@ -83,28 +82,22 @@ SDK 在内层提供三样这个架构真正依赖的能力：
 
 所以判据全部来自 episode 的**执行轨迹**（实际跑了哪些查询、拿到了什么返回），这些是沙箱记录下的客观事实，agent 伪造不了。
 
-五个维度，D1/D2 为必需项、**不可被其他维度加权补偿**（否则"编个自洽故事就能过"的漏洞又回来了）：
+v2 不再拿一组根因 verdict 算总分。它对当前 `ExplanationGraph` 做八项不可互相补偿的检查：
 
-| 维度 | 判什么 | 判据来源 |
-|---|---|---|
-| D1 直接证据 | 必需证据是否取到，且取值支持结论 | 因果图的 `CONFIRMED_BY(required)` 边 |
-| D2 鉴别诊断 | 竞争假设排除率是否达标 | 台账 + 图的候选集 |
-| D3 因果一致 | 有无解释不了的孤儿症状 | 图的 `CAUSES` 边 |
-| D4 时间线 | 是否有时间相关证据 | 轨迹 |
-| D5 反事实 | hypopg 模拟是否支持——不改生产就能预先证伪 | `simulate_index` |
+| 检查 | 判什么 |
+|---|---|
+| `SYMPTOM_COVERAGE` | 每个已观测症状都被选中路径解释，或明确列为未解释 |
+| `ROOT_REQUIRED_EVIDENCE` | 选中路径的上游原因具备 required evidence |
+| `CAUSAL_CONTINUITY` | 路径中的节点和 `CAUSES` 边都有作用域正确的支持证据 |
+| `ALTERNATIVE_PATHS` | 主要竞争路径已被可信的 `REFUTED_BY` 证据关闭 |
+| `P0_OBLIGATIONS` | 每条可达 P0 路径都已确认或逐项反证，截断不能静默放行 |
+| `EVIDENCE_TRUST` | 证据新鲜、来源和对象匹配、带有效 `raw_ref`，且属于当前 episode |
+| `GRAPH_VERSION` | 解释使用的图版本仍是当前版本 |
+| `PARTIAL_SCOPE` | PARTIAL 解释没有把独立故障或未决 P0 留在范围外 |
 
-ESC 检查的是**过程可靠性**而非结论正确性——生产环境里你无法事前知道结论对不对，只能保证过程够扎实。
+预算和工具可用性单独决定是否返回 `EXHAUSTED`。证据还可取得时返回 `INSUFFICIENT`，并给出类型化 `EvidenceNeed`；多个有支持的竞争路径无法区分时返回 `AMBIGUOUS`。只有八项检查都通过才会进入 PLAN。
 
-**不只是拒绝，还要指路**。真实 episode 里的第一次裁决：
-
-```
-ESC → INSUFFICIENT  [D1✓ D2✗ D3✓ D4✓ D5✓]
-      D2 竞争假设 3 个，已排除 1 个 (33%)
-      补证: stale_statistics 尚未排除（可用 get_table_stats 取 stats_freshness）
-      补证: table_bloat 尚未排除（可用 get_table_stats 取 dead_tuple_ratio）
-```
-
-模型据此补了取证，第二次即 SUFFICIENT 放行——**拦得住偷懒，也不会把正常诊断卡死**。
+README 后面的 D1–D5 和阈值实验保留为 v1 历史结果，用于说明旧 ESC 如何暴露过无效判据。当前在线裁决以解释子图检查为准，不再从 `hypothesis_candidates` 重新计算覆盖或竞争关系。
 
 ### 2. 护盾：基于 AST 而非正则
 
@@ -122,7 +115,7 @@ CREATE INDEX idx_ok ON orders(status); DROP TABLE order_items
 
 ### 3. 故障因果图：为什么必须是图而不是向量库
 
-故障是连锁的。实测从"磁盘增长"反查：
+故障会沿多条机制级联。实测从"磁盘增长"反查：
 
 ```
 table_bloat            0 跳
@@ -130,14 +123,20 @@ autovacuum_starvation  1 跳   autovacuum_starvation → table_bloat
 long_idle_transaction  2 跳   long_idle_transaction → autovacuum_starvation → table_bloat
 ```
 
-告警端看到"磁盘满"，真根因在 **2 跳之外**。向量相似度永远找不到 `long_idle_transaction`，图遍历可以。
+告警端看到"磁盘增长"，上游原因可能在两跳之外。向量检索可以找相似案例，但不能证明中间的 `autovacuum_starvation` 是否成立；图遍历会保留完整路径，允许逐段验证。
 
-图还驱动**最优取证**（`DISCRIMINATES` 边记录一条证据能一次分开哪几个候选）和**子 agent 的工具集**——加故障类型只改图不改代码：
+每个 episode 都持久化一份 `ExplanationGraph`。其中有候选路径、选中路径、未解释症状、证据绑定、P0 义务和 revision。`Cause / Mechanism / Symptom` 是节点在某条路径中的角色，不是节点的永久类型：同一个节点可以是上游原因，也可以在更长路径中作为中间机制。
 
-```python
-toolset_for("connection_exhaustion")  # → ['get_connection_stats']
-toolset_for("lock_contention")        # → ['get_active_sessions', 'get_blocking_chain']
+```text
+observed symptoms
+  -> candidate causal paths
+  -> unresolved frontier
+  -> EvidenceNeed(path_ids, target_ids, predicate, required)
+  -> selected explanation subgraph
+  -> intervention target and expected downstream effects
 ```
+
+图先根据 `CONFIRMED_BY`、`REFUTED_BY` 和 `DISCRIMINATES` 推导当前 frontier 的证据需求。工具规划器再取“阶段允许、能产出该证据、当前环境可用、学习策略允许”四者交集，每个任务只拿 1–3 个工具。`DISCRIMINATES` 只回答“下一步查什么更能区分候选”，不能直接支持或反证节点；节点/边方向只能来自 `CONFIRMED_BY` 或 predicate、scope 都匹配的 `REFUTED_BY`。新增故障类型仍以图和 predicate 为主，不需要为每个根因写一套固定工具清单。
 
 #### 按官方手册扩图
 
@@ -146,7 +145,7 @@ toolset_for("lock_contention")        # → ['get_active_sessions', 'get_blockin
 办法确认它，等于只能靠猜。另有三个根因没挂任何修复，诊断出来也不知道
 该干什么。
 
-按 PostgreSQL 官方手册补到 **50 节点 / 96 边**，每条新增关系都记了出处
+按 PostgreSQL 官方手册补到 **57 节点 / 100 边**，每条新增关系都记了出处
 （`source: pgdoc:*` 与原文引用）：
 
 | 来源 | 补进来的东西 |
@@ -155,8 +154,7 @@ toolset_for("lock_contention")        # → ['get_active_sessions', 'get_blockin
 | Monitoring Stats | 死锁计数、临时文件外溢、检查点压力、I/O 等待各自对应哪个视图哪一列 |
 | Explicit Locking | 死锁与普通锁等待的区别：前者被自动中止、计数器会涨 |
 
-净增 5 个根因（陈旧复制槽 / 预备事务残留 / 死锁 / work_mem 外溢 /
-检查点压力）、7 个证据、6 个修复。扩完之后**每个根因都可确认、可修复**。
+当前图包含 **14 个根因、22 个证据节点和 14 个修复节点**。每个根因都有可执行的确认或反证路径；需要人工处理的故障可以只给升级方案，不伪造自动修复 SQL。
 
 **扩图的硬约束是证据必须有工具能产出**——否则 ESC 只能退化成看模型
 自述，图再大也是摆设。所以同时加了两个观测工具：
@@ -167,48 +165,70 @@ toolset_for("lock_contention")        # → ['get_active_sessions', 'get_blockin
 - `get_database_stats` —— 库级累计计数器。检查点那组列在 PG17 拆去了
   `pg_stat_checkpointer`，PG16 在 `pg_stat_bgwriter` 里叫另一套名字；
   沙箱是 16.15 而官方 current 文档是 18，**照文档抄会直接报列不存在**，
-  两套都试才跑得起来。
+  两套都试才跑得起来。它还读取数据目录所在文件系统的即时使用率，磁盘
+  空间不足不再由临时文件外溢量代判。
 
-七个新证据全部补了取值判据。不补的话它们会走 `_supports()` 的默认分支
+九个新证据全部补了取值判据。不补的话它们会走 `_supports()` 的默认分支
 恒返回 True——"调过工具就算取证、不看取值"，正是刚给
-`idle_in_transaction` 修掉的那个 bug，一次性重犯七遍。
+`idle_in_transaction` 修掉的那个 bug。autovacuum 现在看有效开关、触发
+阈值与 worker 状态；复制槽只在非活动且实际滞留 xmin/catalog xmin 或大量
+WAL 时成立；预备事务也必须达到 XID 年龄或挂起时长阈值。
 
-`.dev/graph_expand_check.py` 30 项验收钉住两条约束：每个证据节点都挂到
+`.dev/graph_expand_check.py` 的验收钉住两条约束：每个证据节点都挂到
 真实存在的 Toolbox 方法上、每个新证据的空值都不支持它对应的根因。这个
 检查上线当天就抓出两个既有 bug——`slow_query_ranking` 是孤点（工具产出
 它、ESC 的 D4 也在找它，图上却一条边都没有），`idle_in_transaction` 漏在
 L4 的 `TOOL_OF` 外（判别力统计从来没算过它）。
 
-> **代价要说清楚**：候选根因变多，`latency_p99_up` 从 4–5 个候选涨到
-> 11 个，ESC 的 D2 按 50% 算就要排除 5 个而不是 2 个。好在新加的两个
-> 工具一次调用能否掉 6 个假设，所以是自洽的；但 `min_refute_ratio=0.5`
-> 这个阈值是在 4 候选的世界里定的，扩图后值得重新校。
+#### 风险感知的候选召回
 
-### 4. Subagent 隔离 + 共享便签
+固定取前几个根因会漏掉低先验、高损失路径：在 `latency_p99_up` 下，
+autovacuum、陈旧复制槽和预备事务原本分别排在第 7、9、10 位。v2 的
+`HYPOTHESIZE` 从每个症状反向遍历多跳路径，保留分支多样性和探索配额，并把
+所有可达 P0 建成显式 `P0Obligation`。完全不可达的 P0 不会被硬塞进来。
 
-每条假设一个独立上下文，各自只拿它需要的 3–4 个工具，只读连接，独立预算。**子 agent 连下裁决的权力都没有**——它只能通过 `report_verdict` 交回结构化结论，裁决在主 agent 看到所有证据后才做。
+`hypothesis_candidates` 仍会写入，供 v1 轨迹和旧工具只读使用；它只是
+`ExplanationGraph` 根节点的兼容投影。当前 ESC 消费的是同一 revision 的
+候选路径、证据绑定和 P0 义务，不会拿兼容列表重新推导结论。扩大普通路径
+召回不会线性增加“排除一半”的负担，但每条可达 P0 都必须单独解决。
 
-**返回格式**是固定的五个字段，不是自然语言：
+`sandbox/scenarios/p0/` 记录了 autovacuum / disk / prepared / slot 四个 P0
+诊断合同，`.dev/p0_recall_check.py` 验证路径召回、健康值反证、故障值确认、
+`UNKNOWN` 不放行以及 P0 义务。场景明确区分真实性：autovacuum
+直接注入表状态；slot / prepared 创建真实对象但用指标夹层放大年龄或滞留量；
+disk 完全使用容量 provider。测试不会真实填满宿主机磁盘、制造 1GB WAL，
+也不会为了跑得快而降低生产阈值。四类均在 `sandbox/injectors/p0.py` 注册；
+`python .dev/p0_recall_check.py --live` 还会在 PostgreSQL 中轻量创建真实表
+参数、物理槽和 prepared transaction，验证 oracle 后连续清理两次。2PC
+场景要求 `max_prepared_transactions=10`，Docker 启动参数已包含该设置。
 
-| 字段 | 内容 |
-|---|---|
-| `verdict` | CONFIRMED / REFUTED / **INCONCLUSIVE**——三态，逼它明确表态而不是含糊说"也有可能" |
-| `confidence` | 置信度（容忍 `"high"` 这类写法，解析时归一） |
-| `reasoning` | 依据 |
-| `incidental` | 与本假设无关、但可能对别的假设有用的发现 |
-| `missing_evidence` | 想查但没查到的 |
+### 4. Subagent 处理路径前沿，不给整套工具箱
 
-注意**证据本身不在裁决里**——每个取证工具在返回时自动往便签写一条结构化证据。这样 ESC 核验的是工具轨迹，而不是子 agent 的自述，"绝不让模型自评"这条红线在子 agent 这层同样成立。
+Subagent 的任务单位是 `EvidenceNeed` 或局部路径片段，不是“一个根因”。任务中会写明 path、target node/edge、predicate、required 标记、预算和允许工具。它只能返回 `EvidenceReport`，不能选择根因、提交修复或修改解释图。
 
-**并行策略是分批 + 早停**：每批 2 条假设并发（`batch_size=2`），每批结束后检查 `_converged()`——恰好一个确认、且没有未测假设，就剪掉剩余批次。
+```text
+EvidenceTask
+  need_ids + path_ids + target_ids + allowed_tools
+      -> EvidenceReport(result=OBSERVED | UNKNOWN | ERROR, raw_ref, scope)
+      -> predicate evaluation
+      -> EvidenceBinding(SUPPORTS | REFUTES | UNKNOWN)
+```
 
-隔离的代价是彼此看不见，靠 append-only 的共享便签补偿。实测这个机制真的起了作用——调查"统计过期"的子 agent 顺手记下：
+工具结果先写入 append-only 证据便签，随后由确定性 predicate 解释其语义。`UNKNOWN`、权限不足和工具错误只表示没有取得判别证据，不能伪装成反证。重复或迟到报告按稳定 ID 幂等合并，不得推进已变化 revision。
 
-> 发现 missing_index 迹象：查询都使用了 Seq Scan，indexes_used=[]…建议调查 missing_index 假设
+调度仍按小批并行运行，但早停条件改成“当前解释 frontier 已收敛，且没有未决 required/P0 need”。低分普通分支可以停止继续调查；可达 P0、required evidence 和仍可能改变主要路径的分叉不能被预算内早停删掉。
 
-**早停剪枝**：第一批两条假设跑完即收敛，第三条直接跳过，子 agent 部分只花 $0.08。
+权限有两层：Toolbox 校验当前状态和任务分配，PreToolUse hook 再按阶段与任务裁剪可调用工具。Subagent 始终使用只读连接。
 
-**纵深防御两层，都不依赖提示词**：Toolbox 内的状态机校验（工具执行前抛异常）+ PreToolUse hook（模型的请求根本发不出去）。第二层曾经是失效的——`permission_mode='bypassPermissions'` 会在 `can_use_tool` 回调之前自动批准所有调用，改用 hook 后实测有效。
+#### 从解释子图到修复和验证
+
+PLAN 只能选择 `selected_path_ids` 上的干预目标，修复必须来自该目标的 `FIXED_BY`。计划会记录干预类型、具体方案、预期影响的下游节点、指标方向和观察窗口。索引方案还要先经过 `simulate_index`，反事实证据绑定到具体索引定义，不能拿“建索引可能有用”的泛化结论过门。
+
+GATE 先检查 explanation ID/revision、选中路径、target、fix、ESC report、证据引用和 expected effects 是否属于同一因果上下文，再运行 pglast AST、风险、影响面和回滚检查。未决 P0、PARTIAL、containment 和不可逆动作不能降成 AUTO；证据过期回 INVESTIGATE，方案或回滚错误回 PLAN。
+
+P0 根因自身的处置优先于链中间节点。若选中的 disk / slot / prepared 根因只允许 `escalate_only`，系统会生成无 SQL 的人工计划并直接进入 ESCALATE，不能借由下游 autovacuum 或 table 节点的可执行修复绕开人工处置。
+
+VERIFY 同时检查数据库健康 KPI、回归查询和计划中的下游预测。具体方案没有产生预期效果时，先反证 `INTERVENTION`；目标改变但下游机制不变时，才反证对应路径片段。失败不会直接把整条根因永久判死，数据库回滚后，失败证据和 explanation revision 继续保留。
 
 ### 5. 上下文治理：四道防线
 
@@ -359,7 +379,7 @@ status——两个集合会漂移，5503 次热查询只有 12 次真被阻塞�
 `orders JOIN users` 的聚合才真正复现"低估基数导致 Nested Loop"这个
 教科书特征。三版设计的对照实验原文留在 `.dev/exp_stale_*.sql`。
 
-> 教训不是"要写测试"，而是**评测环境必须自己先被评测**。判分器、注入器、
+> 这次暴露出：**评测环境本身也需要独立验收**。判分器、注入器、
 > 负载生成器都会有 bug，而它们的 bug 会伪装成"模型能力不足"——两次都
 > 差点让我得出"模型修不好这类故障"的错误结论。
 > 所有阈值现在都由实测的故障态与修复态两个数夹出来，不再拍脑袋。
@@ -461,7 +481,7 @@ episode 重放出来，换不同阈值重算裁决，和 ground truth 对一遍�
 
 **第一次跑出来曲线是完全平的**，0.00 到 1.00 裁决一个都不变。
 
-追下去发现原因不是"数据太简单"，而是 **D2 一直没通电**：
+追下去发现 **D2 一直没通电**，问题不在数据难度：
 
 ```
 st.symptoms 实际内容:      '错误 5285'        ← 人话串，数值烧在里面
@@ -617,7 +637,7 @@ D2 衡量的是**有没有做鉴别诊断**，不是**结论对不对**。一个
 
 **回滚语句本身是非法 SQL。** `make_idempotent` 把 `DROP INDEX CONCURRENTLY x` 拼成了 `DROP INDEX IF EXISTS CONCURRENTLY x`——`IF EXISTS` 位置错了，导致**回滚失败**，整条安全链里最危险的情形。这个 bug 只有走失败路径才会暴露。
 
-**"修复失败"不等于"根因被否定"。** 一次建错列的索引会把正确的根因判死，agent 再也无法用正确方案重试。改成：同一根因累计两次失败才升级为根因级反证。
+**"修复失败"不等于"根因被否定"。** 一次建错列的索引不能把正确根因判死。v2 先把失败记到具体 `INTERVENTION`；只有目标状态已改变而下游机制仍不成立时才反证路径片段。节点级降权需要多个独立、正确执行且覆盖合理的干预得到一致结果，不再使用“失败两次就否定根因”的固定次数规则。
 
 **统计过期的判别特征是偏差倍数，不是时间戳。** 子 agent 的顺带发现里白纸黑字写着"估计 1189 vs 实际 5,000,688（偏差 4200 倍）"，裁决却因"last_analyze 在近期"判了 REFUTED——刚灌完数据时时间戳确实新，统计却早已失真。
 
@@ -656,58 +676,30 @@ D2 衡量的是**有没有做鉴别诊断**，不是**结论对不对**。一个
 
 ## 非参数自进化：L1–L4
 
-四层都不训练模型，改的是**外部知识**。所以自进化是可审计的——YAML 落盘并进 git，这周学到了什么、哪条被推翻了，都能 diff 出来。
+四层都不训练模型，学习结果写入 `knowledge/learned/v2/`。每层必须同时具备写入端、读取端、在线行为变化和 `learned=False` 回退；只多一份 YAML 不算生效。
 
 | 层 | 学什么 | 回流到哪 |
 |---|---|---|
-| L1 案例记忆 | 解过的事故 | 假设生成的先验 |
-| L2 技能沉淀 | 有效的取证顺序 | INVESTIGATE / PLAN 提示 |
-| L3 失败驱动 | 哪个根因在这组症状下更可能 | 因果图的候选排序 |
-| L4 查询库 | 哪条查询对哪个根因有判别力 | 子 agent 的工具顺序 |
+| L1 案例记忆 | 症状/环境指纹对应的路径模板、分叉和失败干预 | `HYPOTHESIZE` 的路径召回与排序 |
+| L2 调查策略 | 某个 frontier 和已有证据下，哪一个 need/tool 真正改变了判断 | 工具规划器的下一步评分 |
+| L3 因果权重 | 稳定 edge/path ID 的正负结果 | 候选路径分数；支持 cause-to-cause 边 |
+| L4 工具信息增益 | `frontier + need + tool` 的信息增益、成本、UNKNOWN/ERROR 和重复率 | 把合法候选裁到 1–3 个，而不只是重排 |
 
-**判据不是"记下来了"，而是"下次不一样了"。** 喂入 18 个真实历史 episode 后，候选排序确实发生变化：
+学习不能覆盖手工安全约束。required/P0 need 始终有保底通道；L3 调整按手工先验的相对比例封顶；无结论 episode 不更新；正负结果对称且每个 outcome 只写一次。eval split 不写 L1–L4，v1 学习文件也不会被隐式导入。
 
-```
-根因                      学习前      学习后     调整量
-missing_index            0.8075  →  0.7600     -0.050
-stale_statistics         0.5525  →  0.7177     +0.075
-lock_contention          0.5850  →  0.6525     +0.075
-connection_exhaustion    0.3190  →  0.3410     +0.040
-```
+受控消融已经证明四层的读取端会改变下一次行为：L1 会按 wait profile 召回不同路径；L2/L4 会在积累观测后改变首选工具；L4 会改变工具集合；L3 的边级和路径级通道都能改变路径排序，关闭学习则恢复静态顺序。同时，开启学习不会降低可达 P0 recall，也不会放宽 ESC/GATE。
 
-L3 有**两条回流通道**：根因级（`prior_adj`，调根因本身的基础可能性）与边级
-（`likelihood_adj`，调具体一条「根因→症状」边的权重）。`stale_statistics`
-的涨幅明显超过它 +0.075 的根因级调整，正是因为边级通道也在起作用——它在
-这组症状上被单独加了权。
-
-边级通道曾经是**死的**：数据写了，但全仓库没有任何地方读；而且键用了带数值的
-人话串（`"lock_contention->错误 5086"`、`"->错误 5285"`…），每个 episode 造一个
-新键，既累加不起来下次也永远命不中。现已归一到图节点 id 并接上读取端。
-
-L4 学到的工具偏好：`lock_contention → ['get_blocking_chain', 'get_active_sessions']`
-
-### 两个必须防的偏差
-
-**学习不能推翻手工先验。** 第一版调整量固定 ±0.25，而基础先验量级是 0.02–0.35——学习足以完全颠覆种子图，实测 `missing_index`（最常见的根因）被挤到第三位。现在按基础先验成比例封顶（±50%），学习是精调而非推翻。
-
-**"常见"不等于"有判别力"。** 第一版把 episode 里所有证据都记在当次根因名下，于是 `simulate_index`（几乎每次都被调用）排到了锁竞争偏好的第一位，而真正判别锁竞争的 `get_blocking_chain` 反而不在。现在按因果图的 `CONFIRMED_BY` / `REFUTED_BY` 边归因。
-
-**惩罚与奖励必须对称。** `learn()` 先调 `learn_from_episode`（诊断没中扣
-−LR），再调 `learn_truth` 又扣一次，而真凶只升一次。实测 `missing_index`
-被压到 −0.125、几乎顶到相对上限；同样的历史轨迹按修正后的规则重放只得
-−0.05——**最常见的根因确实被罚过头了**，正是上一条担心的失控形态。
-
-还有一条同样重要：**"没诊断出来"和"诊断错了"不是一回事**。第一版两者都算 miss 并同等降权，把"这次没查出来"当成了"这个根因不太可能"。现在没有结论时不动先验——没有信息量的观测不该写进先验。
+这些结果来自 fixture/replay，不是生产事故收益。当前 v2 只有 2 条人工标注冷启动案例，sandbox/production 案例、L2/L3/L4 在线记录和 processed outcome 都是 0。完整的 v1/v2 统计、逐层消融和兼容规则见 [因果解释子图 v2 迁移说明](CAUSAL_SUBGRAPH_V2_MIGRATION.md)。
 
 ## 案例记忆库（L1）
 
-**红线：案例只影响假设的生成与排序，绝不替代取证。** 即使案例斩钉截铁说"就是缺索引"，ESC 的 D1 仍要求实际跑 EXPLAIN。**ESC 是案例记忆的安全带**。
+案例只影响候选路径的召回和排序，不会为当前 episode 生成证据绑定。即使历史案例选择了缺索引路径，当前 ESC 仍要求根节点必需证据、路径连续性和主要替代路径全部满足。
 
 检索主力是**结构化症状指纹**而非向量——数据库事故的"相似"是指标异常的**模式**相似，其中 `onset`（突发/渐进）与 `wait_profile`（等待事件分布）判别力最强。实测同型 1.00 / 异型 0.64。
 
-**负例是大多数案例库浪费掉的一半价值**：正例告诉你"可能是 X"，负例告诉你"别再走 X 这条路"。
+正例保存有帮助的路径模板和关键分叉；负例保存失败干预及其作用域。负例只能降低同类方案的优先级，不能直接反证当前路径。
 
-自进化是**可审计**的：案例以 YAML 落盘并进 git，这周学到什么、哪条被隔离了都能 diff 出来。
+案例以 YAML 落盘并进 git，provenance、split、图版本和状态都可以审计。
 
 ## 轨迹重放：让离线实验零成本
 
@@ -733,7 +725,7 @@ python3 demo.py 2 3      # 只看拦截（离线，1 秒跑完）
 
 | 幕 | 内容 | 需要数据库 |
 |---|---|---|
-| 1 | 正常修复：完整闭环，三率全过 | 是 |
+| 1 | 正常修复：完成诊断、执行和验证，三率全过 | 是 |
 | 2 | 护盾硬拦：夹带 `DROP TABLE` 的提案 | 否 |
 | 3 | 证据不足被拦：结论碰巧对，但过程不合格 | 否 |
 | 4 | 修复失败自动回滚：数据库回滚，知识单调增长 | 是 |
@@ -750,7 +742,7 @@ VERIFY    p99=15.22ms 恢复=True 回归=True
           Diagnosis=PASS  Outcome=PASS  SafePass=PASS
 ```
 
-四幕里有三幕是拦截与回滚——因为这个项目的主张不是"agent 有多聪明"，而是"它在不够聪明的时候会不会闯祸"。
+四幕里有三幕专门验证拦截与回滚。项目关心的是 agent 判断不足时能否停下，以及写操作失败后能否恢复数据库。
 
 ## 快速开始
 
@@ -759,10 +751,15 @@ cd docker && docker compose up -d      # 起沙箱，首次灌 1200 万行（数
 python3 -m sandbox.snapshot create     # 固化健康基线为 golden 模板
 
 python3 .dev/w1_check.py               # 沙箱：基线→注入→回滚→恢复
-python3 .dev/w2_env_check.py           # 闭环：两个 episode 的三率判分
+python3 .dev/w2_env_check.py           # 端到端：两个 episode 的三率判分
 python3 .dev/shield_check.py           # 护盾：23 项对抗测试（离线）
 python3 .dev/esc_check.py              # ESC：六个场景（离线）
+python3 .dev/esc_explanation_check.py  # ESC v2：解释路径、P0、作用域和四类裁决
+python3 .dev/evolution_v2_check.py     # L1-L4 写入、读取和逐层开关
+python3 .dev/e2e_explanation_check.py # 只读多跳与双根因上下文回滚
 python3 .dev/w4_check.py               # 端到端：诊断→过门→修复→验证→回滚
+python3 .dev/p0_gate_check.py --live   # autovacuum：ESC→CONFIRM→执行→验证→回滚
+python3 .dev/p0_recall_check.py --live # 四个 P0 的 PostgreSQL 直接证据和清理
 ```
 
 LLM 策略需要先配置 Claude Agent SDK（见 `.dev/setup_proxy.sh`、`.dev/install_node.sh`）：
@@ -773,12 +770,7 @@ python3 -m eval.run_suite --policy llm --split eval --order pending
 
 ## 项目规模
 
-129 次提交 · 7,836 行 Python（不含 `.dev/`）· 58 个开发与验收
-脚本，其中回归套件含 **20 项离线检查**（护盾 23 项对抗测试、ESC 六场景、
-多根因 15 项断言、自进化四层 15 项断言、权限矩阵 18 项、评测台静态检查
-7 组）· 5 类故障 × train/eval 切分，评测集有实例锁与版本号
-
-每个模块都有对应的验收脚本，且**大部分可离线运行**——`shield_check` / `esc_check` / `w7_check` 不需要数据库也不需要 API。
+`.dev/checkall.sh` 汇总离线回归；解释模型、路径召回、predicate、动态工具规划、Subagent、ESC/GATE、VERIFY/ROLLBACK、L1-L4、权限矩阵和评测台都有独立验收脚本。`e2e_explanation_check.py` 还会走完整状态机，验证只读多跳 REPORT 和双根因的窄作用域回滚。大部分检查不需要模型 API；W4、双根因索引回滚和 P0 live 使用 PostgreSQL 16 活库。
 
 ## 技术栈
 
@@ -786,17 +778,13 @@ Claude Agent SDK (Python) · 自写 MAPE-K 状态机 · PostgreSQL 16 + hypopg �
 
 ## 已知局限
 
-- **覆盖 5 类故障**（含 1 类误导性告警），非全谱；对照表里只有前 4 类
-- **`Outcome` 尚未在重建后的 `lock_contention` / `stale_statistics` 上复测**：这两个场景因沙箱侧的 bug 重建过，人工正解已验证可达，LLM 复测受 Pro 额度所限还没跑完
-- **`Outcome` 只有 1/4**：只有缺索引一类真正被修好，高风险修复动作模型倾向于升级人工（该数字取自场景重建之前）
-- **案例库（L1）尚未喂起来**：`knowledge/cases/` 为 0 例——写入门槛要求"诊断对
-  且修好且安全"或"含失败尝试"，现有 episode 未达标；规模曲线实验（0→10→25→50）
-  未跑，所以"案例越多越准"这条**没有实验支撑**
-- **多根因只能升级人工**：ESC 现在会区分级联（沿 `CAUSES` 边取最上游）与真·独立
-  多根因（判 AMBIGUOUS 升级），但不支持并行修复多个根因
-- **样本量小**：Pro 额度一个窗口只够跑 2–3 个 episode，对照表跨多个窗口拼成，每格 n=1
-- **ESC 带来过度保守**：实测过度保守率 **12.5%**（40 个诊断正确的 episode 里 5 个被升级人工）。且当前 `min_refute_ratio = 0.5` 踩在悬崖边上，0.67 时会跳到 72.5%
-- **D2 拦不住「结论错但排查扎实」**：rev2 的 500 例里 51 例属于这类，22 例被整体放行。D2 衡量的是有没有做鉴别诊断、不是结论对不对，拦这类要靠判别证据的取值检查，调阈值没用
-- **受控跑批不是独立事故**：每轮 100 例：是 10 个真实故障态 × 10 种受控策略行为，用来量 ESC 的响应可以，用来估真实误诊率不行
-- **未做强化学习**，自进化走非参数路线（记忆与知识库演化，非权重更新）
-- 沙箱是简化的生产环境；**生产环境建议仅启用只读诊断**，自动修复限于沙箱与预发环境
+- 当前因果图为 57 节点 / 100 边，覆盖 14 个根因，不代表 PostgreSQL 故障全集。图外症状会显式留在 `unexplained_symptoms`，系统可能转人工。
+- v2 还没有真实 sandbox/production 学习样本。现有 2 条 L1 案例都是人工标注冷启动 fixture；L2、L3、L4 和 processed outcome 均为 0。不能据此声称真实准确率或工具成本已经改善。
+- L1–L4 的行为变化来自受控 fixture/replay 消融。它证明读取端生效和安全约束未被放宽，不等于生产事故上的收益评测。
+- 最新 W4 活库验收 A/B/C 通过，但 A 只覆盖 `missing_index` 的成功修复；C 的第一次失败由测试夹具固定 KPI 结果触发，不是错误索引在自然负载下自行失败。
+- autovacuum / slot / prepared 使用真实 PostgreSQL 对象验证直接证据；slot 和 prepared 的年龄或滞留量由指标夹层放大。disk 使用容量 provider，不会真实填满宿主机磁盘。
+- 多根因可以保留为多路径解释，但一个 plan 只干预一个目标。现有 E2E 已验证一条路径效果成功、总 KPI 因另一根因未恢复时会归因 `CONTEXT`，不会反证两个正确根因；独立故障仍需顺序处理或升级人工，尚未支持并行写操作。
+- 历史 D1–D5、D2 阈值和 500 例受控跑批属于 v1/rev2 评测，不能外推成 v2 的生产误诊率。受控策略轨迹也不是独立事故样本。
+- 四个 connection/misleading train/eval 场景没有可靠的随机化轴，`harness_lint` 会保留这项警告。为消除警告而加入不稳定随机参数会污染评测。
+- v1 学习文件、`hypothesis_candidates`、`report_id` 和 v1 只读投影仍在兼容期。删除条件和 reader 回滚规则见迁移说明。
+- 未做强化学习；当前学习只修改外部案例、调查策略、因果权重和工具统计。生产环境仍建议只开只读诊断，自动修复限于沙箱和预发环境。

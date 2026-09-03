@@ -98,7 +98,9 @@ for i, sf in enumerate(scenarios, 1):
                         # 这一格连 D1 都没到就被挡住了，本身就是结果
                         "declare_blocked": not st.claimed_fault_class,
                         "n_evidence": len({e["evidence_type"]
-                                           for e in st.scratchpad}),
+                                           for e in st.scratchpad
+                                           if e.get("status", "OBSERVED")
+                                           == "OBSERVED"}),
                     })
             print(f"        跑完 10 个变体，累计 {time.time() - t0:.0f}s")
     except Exception as exc:

@@ -17,7 +17,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agent import esc as esc_mod
-from agent.episode_state import EpisodeState
+from agent.episode_state import EpisodeState, evidence_is_observed
+from eval.metrics_v2 import (aggregate_episode_metrics,
+                             compute_episode_metrics)
+
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 TRACES = ROOT / "traces"
@@ -35,6 +39,19 @@ class ReplayResult:
     evidence_types: list = field(default_factory=list)
     ledger: dict = field(default_factory=dict)
     attempts: int = 0
+    scenario_revision: int | None = None
+    metrics_v2: dict = field(default_factory=dict)
+
+
+def _scenario_spec(scenario_id: str) -> dict:
+    for path in (ROOT / "sandbox" / "scenarios").rglob("*.yaml"):
+        try:
+            spec = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        if spec.get("id") == scenario_id:
+            return spec
+    return {"id": scenario_id, "fault_class": "", "revision": None}
 
 
 def list_episodes() -> list[str]:
@@ -55,19 +72,33 @@ def replay_esc(episode_id: str, candidates: list[str] | None = None,
     调阈值做敏感性分析时尤其有用。
     """
     st = load(episode_id)
-    rep = esc_mod.check(st, candidates=candidates,
-                        min_refute_ratio=min_refute_ratio)
+    if st.schema_version == 2 and st.explanation_graph is not None:
+        raw_rep = esc_mod.check_explanation(st, persist=False)
+        verdict = raw_rep["verdict"]
+        dims = {item["name"]: item["passed"]
+                for item in raw_rep.get("dimensions", [])}
+        directives = list(raw_rep.get("directives", []))
+    else:
+        raw_rep = esc_mod.check(st, candidates=candidates,
+                                min_refute_ratio=min_refute_ratio)
+        verdict = raw_rep.verdict
+        dims = {d.name: d.passed for d in raw_rep.dims}
+        directives = raw_rep.directives
+    spec = _scenario_spec(st.scenario_id)
     return ReplayResult(
         episode_id=episode_id,
         scenario_id=st.scenario_id,
         claimed_fault_class=st.claimed_fault_class,
-        esc_verdict=rep.verdict,
-        esc_dims={d.name: d.passed for d in rep.dims},
-        esc_directives=rep.directives,
+        esc_verdict=verdict,
+        esc_dims=dims,
+        esc_directives=directives,
         steps=st.budget.get("steps", 0),
-        evidence_types=sorted({e["evidence_type"] for e in st.scratchpad}),
+        evidence_types=sorted({e["evidence_type"] for e in st.scratchpad
+                               if evidence_is_observed(e)}),
         ledger={k: v.verdict for k, v in st.ledger.items()},
         attempts=len(st.attempts),
+        scenario_revision=spec.get("revision"),
+        metrics_v2=compute_episode_metrics(st, spec),
     )
 
 
@@ -105,11 +136,26 @@ def sensitivity(ratios: list[float] | None = None) -> dict:
     return out
 
 
+def replay_metrics() -> dict:
+    """Recompute the v2 metric suite from all persisted v1/v2 traces."""
+    results = replay_all()
+    episodes = [{"metrics_v2": result.metrics_v2} for result in results]
+    return {
+        "episodes": len(results),
+        "scenario_revisions": {
+            result.scenario_id: result.scenario_revision for result in results
+        },
+        "metrics_v2": aggregate_episode_metrics(episodes),
+    }
+
+
 if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "sensitivity":
         print(json.dumps(sensitivity(), ensure_ascii=False, indent=2))
+    elif len(sys.argv) > 1 and sys.argv[1] == "metrics":
+        print(json.dumps(replay_metrics(), ensure_ascii=False, indent=2))
     else:
         for r in replay_all():
             print(f"{r.episode_id[:46]:<46} {str(r.claimed_fault_class):<16} "

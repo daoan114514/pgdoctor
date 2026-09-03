@@ -1,0 +1,22 @@
+id: p0_autovacuum_starvation
+revision: 2
+kind: p0_diagnosis_contract
+severity: P0
+fault_class: autovacuum_starvation
+symptoms: [autovacuum_unhealthy]
+inject:
+  method: disable_autovacuum
+  table: orders
+evidence:
+  type: autovacuum_health
+  healthy: >-
+    orders: autovacuum_enabled=True running=False dead=100 trigger=1,000
+    backlog=0.10 last_autovacuum=2026-09-01
+  fault: >-
+    orders: autovacuum_enabled=False running=False dead=0 trigger=1,000
+    backlog=0.00 last_autovacuum=空
+environment:
+  realism: live_state
+  setup: ALTER TABLE orders SET (autovacuum_enabled = false)
+  cleanup: ALTER TABLE orders RESET (autovacuum_enabled)
+  note: The disabled state is cheap to create and is itself sufficient evidence.

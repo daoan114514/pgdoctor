@@ -17,7 +17,7 @@ D2 针对的是"直接证据齐备、却完全没做鉴别诊断"。要测它就
 """
 from __future__ import annotations
 
-from agent.episode_state import EpisodeState, Verdict
+from agent.episode_state import EpisodeState
 from agent.policy import Policy
 from agent.state_machine import Phase
 from agent.toolbox import Toolbox
@@ -26,8 +26,8 @@ from agent.toolbox import Toolbox
 class DifferentialDepthPolicy(Policy):
     """按指定深度做鉴别诊断，其余照常。
 
-    target      要声称的根因（可以故意是错的，用来造"落进陷阱"的样本）
-    refute_k    排除几个竞争假设。None 表示全排
+    target      要优先取证的根因
+    refute_k    额外调查几个竞争路径的根节点。None 表示全部调查
     """
 
     def __init__(self, target: str, refute_k: int | None = None,
@@ -62,6 +62,8 @@ class DifferentialDepthPolicy(Policy):
                     tb.get_indexes("orders")
                 elif by == "get_table_stats":
                     tb.get_table_stats("orders")
+                elif by == "get_physical_bloat":
+                    tb.get_physical_bloat("orders")
                 elif by == "get_blocking_chain":
                     tb.get_blocking_chain()
                 elif by == "get_active_sessions":
@@ -83,7 +85,11 @@ class DifferentialDepthPolicy(Policy):
                   ctx: dict) -> Phase:
         if phase is Phase.MONITOR:
             sess = tb.get_active_sessions()
-            st.symptoms = ctx.get("symptoms", [])
+            # 建立累计统计的事故窗口基线；症状由 loop 从 Observation 持久化。
+            try:
+                tb.get_database_stats()
+            except Exception:
+                pass
             waits = {s["wait_event"] for s in sess if s["wait_event"]}
             st.note("depth", "monitor_snapshot",
                     f"{len(sess)} 个异常会话，等待事件={waits or '无'}")
@@ -97,13 +103,16 @@ class DifferentialDepthPolicy(Policy):
             return Phase.HYPOTHESIZE
 
         if phase is Phase.HYPOTHESIZE:
-            st.ensure_hypotheses(ctx.get("candidates") or [self.target])
             return Phase.INVESTIGATE
 
         if phase is Phase.INVESTIGATE:
             from knowledge.causal_graph import graph as G
 
-            competitors = [h for h in st.ledger if h != self.target]
+            explanation = st.explanation_graph
+            competitors = list(dict.fromkeys(
+                path.root_node_id for path in
+                (explanation.candidate_paths if explanation else [])
+                if path.root_node_id != self.target))
             k = len(competitors) if self.refute_k is None else self.refute_k
             k = max(0, min(k, len(competitors)))
             if self.seed is None or k >= len(competitors):
@@ -122,26 +131,15 @@ class DifferentialDepthPolicy(Policy):
                           | {r["evidence"] for r in G.refuting_evidence(c)})
             self._gather(tb, st, ctx, extra=extra)
 
-            got = {e["evidence_type"] for e in st.scratchpad}
-            for c in picked:
-                rel = (set(G.required_evidence(c)) | G.discriminators_of(c)
-                       | {r["evidence"] for r in G.refuting_evidence(c)})
-                hit = sorted(rel & got)
-                if not hit:
-                    # 取不到判别证据就别硬排 —— 硬排会被 D2 判成"声称排除
-                    # 但无依据"，那反映的是策略在耍赖，不是鉴别深度不够
-                    continue
-                tb.set_hypothesis(
-                    c, Verdict.REFUTED.value,
-                    f"受控策略：依据 {hit[:2]} 排除该假设")
             return Phase.DIAGNOSE
 
         if phase is Phase.DIAGNOSE:
-            try:
-                tb.declare_root_cause(self.target, ctx.get(
-                    "claim_note", "受控策略：按设定目标声称根因"))
-            except Exception as exc:
-                st.note("depth", "declare_blocked", str(exc)[:180])
+            explanation = st.explanation_graph
+            if explanation is None or not explanation.selected_path_ids:
+                st.outcome_note = "受控深度调查尚未得到已支持解释路径"
+                return Phase.INVESTIGATE
+            st.note("depth", "selected_explanation",
+                    f"系统选择路径 {explanation.selected_path_ids}")
             return Phase.REPORT
 
         return Phase.REPORT

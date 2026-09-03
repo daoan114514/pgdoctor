@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 
+from knowledge.causal_graph import graph as causal_graph
 from safety import shield, undo_journal
 from safety.undo_journal import UndoStatus
 from sandbox import db
@@ -23,6 +24,12 @@ class Tier(str, Enum):
     AUTO = "AUTO"        # 完全可逆、不锁、单对象
     CONFIRM = "CONFIRM"  # 可逆但重或影响面宽，需一次确认
     DENY = "DENY"        # 不可逆或灾难
+
+
+class RetryPhase(str, Enum):
+    PLAN = "PLAN"
+    INVESTIGATE = "INVESTIGATE"
+    ESCALATE = "ESCALATE"
 
 
 @dataclass
@@ -35,6 +42,20 @@ class RemediationProposal:
     evidence_refs: list[str] = field(default_factory=list)
     predicted_impact: dict = field(default_factory=dict)
     target: dict = field(default_factory=dict)
+    # 由 Toolbox/状态机注入，不暴露为模型可填写参数。
+    root_cause: str = ""
+    fix_id: str = ""
+    esc_verdict: str = ""
+    partial_explanation: bool = False
+    explanation_id: str = ""
+    explanation_revision: int = 0
+    selected_path_id: str = ""
+    intervention_target: str = ""
+    intervention_kind: str = ""
+    expected_effect_nodes: list[str] = field(default_factory=list)
+    expected_effects: list[dict] = field(default_factory=list)
+    esc_report_id: str = ""
+    unresolved_p0_paths: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -44,6 +65,18 @@ class GateDecision:
     reasons: list[str] = field(default_factory=list)
     risk: dict = field(default_factory=dict)
     shield_reasons: list[str] = field(default_factory=list)
+    reason_code: str = "APPROVED"
+    retry_phase: str = ""
+
+
+def denial(reason_code: str, retry_phase: RetryPhase | str,
+           reasons: list[str], *, risk: dict | None = None,
+           shield_reasons: list[str] | None = None) -> GateDecision:
+    phase = retry_phase.value if isinstance(retry_phase, RetryPhase) else retry_phase
+    return GateDecision(
+        tier=Tier.DENY.value, approved=False, reasons=reasons,
+        risk=risk or {}, shield_reasons=shield_reasons or [],
+        reason_code=reason_code, retry_phase=phase)
 
 
 @dataclass
@@ -67,6 +100,78 @@ SELF_CORRECTING = frozenset({"vacuum_analyze"})
 # 变得不可达、分级形同虚设。用行数判定既客观又能泛化到没见过的表。
 LARGE_TABLE_ROWS = 1_000_000
 _SIZE_CACHE: dict[str, int] = {}
+_TIER_RANK = {Tier.AUTO.value: 0, Tier.CONFIRM.value: 1, Tier.DENY.value: 2}
+
+
+def _graph_context(p: RemediationProposal) -> tuple[dict, dict, GateDecision | None]:
+    """Resolve the graph-owned remediation policy for a typed proposal."""
+    if not p.root_cause:
+        return {}, {}, denial(
+            "CAUSAL_BINDING_INVALID", RetryPhase.PLAN,
+            ["提案缺少已确认根因上下文"])
+    if not p.fix_id:
+        return {}, {}, denial(
+            "CAUSAL_BINDING_INVALID", RetryPhase.PLAN,
+            ["提案没有绑定因果图修复节点"])
+
+    if p.explanation_id:
+        if (not p.explanation_revision or not p.selected_path_id or
+                not p.intervention_target or not p.esc_report_id):
+            return {}, {}, denial(
+                "CAUSAL_BINDING_INVALID", RetryPhase.PLAN,
+                ["v2 提案缺少解释 revision、路径、干预目标或 ESC 报告绑定"])
+        if p.root_cause != p.intervention_target:
+            return {}, {}, denial(
+                "CAUSAL_BINDING_INVALID", RetryPhase.PLAN,
+                ["提案根因字段与系统干预目标冲突"])
+        if p.unresolved_p0_paths:
+            return {}, {}, denial(
+                "P0_MANUAL_REQUIRED", RetryPhase.ESCALATE,
+                ["仍有未解决 P0 路径，禁止执行"])
+        if not p.evidence_refs:
+            return {}, {}, denial(
+                "EVIDENCE_MISSING", RetryPhase.INVESTIGATE,
+                ["v2 提案没有路径/目标的可信证据绑定"])
+        if not p.expected_effect_nodes or not p.expected_effects:
+            return {}, {}, denial(
+                "CAUSAL_BINDING_INVALID", RetryPhase.PLAN,
+                ["v2 提案缺少路径下游的结构化预期效果"])
+
+    fixes = {f["fix"]: f for f in causal_graph.fixes_for(p.root_cause)}
+    fix = fixes.get(p.fix_id)
+    if not fix:
+        return {}, {}, denial(
+            "CAUSAL_BINDING_INVALID", RetryPhase.PLAN,
+            [f"修复节点 {p.fix_id} 不属于根因 {p.root_cause}"])
+
+    severity = causal_graph.severity_of(p.root_cause)
+    risk = {
+        "root_cause": p.root_cause,
+        "severity": severity,
+        "fix_id": p.fix_id,
+        "graph_risk_tier": fix.get("risk_tier", Tier.CONFIRM.value),
+        "execution": fix.get("execution", "gated"),
+        "intervention_kind": fix.get("intervention_kind", "CORRECTIVE"),
+    }
+    if fix.get("execution") == "escalate_only":
+        code = ("P0_MANUAL_REQUIRED" if severity == "P0" else "MANUAL_ONLY")
+        return fix, risk, denial(
+            code, RetryPhase.ESCALATE,
+            [f"修复 {p.fix_id} 只能升级人工，禁止由 agent 执行"], risk=risk)
+    if fix.get("risk_tier") == Tier.DENY.value:
+        return fix, risk, denial(
+            "MANUAL_ONLY", RetryPhase.ESCALATE,
+            [f"修复 {p.fix_id} 的图策略为 DENY"], risk=risk)
+    if severity == "P0":
+        if p.esc_verdict != "SUFFICIENT":
+            return fix, risk, denial(
+                "EVIDENCE_MISSING", RetryPhase.INVESTIGATE,
+                ["P0 修复必须先通过 ESC 证据充分性检查"], risk=risk)
+        if not p.evidence_refs:
+            return fix, risk, denial(
+                "EVIDENCE_MISSING", RetryPhase.INVESTIGATE,
+                ["P0 修复必须携带可审计的原始证据引用"], risk=risk)
+    return fix, risk, None
 
 
 def _table_rows(table: str) -> int:
@@ -99,45 +204,56 @@ def _blast_radius(sql: str) -> str:
 
 def assess(p: RemediationProposal) -> GateDecision:
     """四维风险分级：动作类 / 可逆性 / 影响面 / 数据安全。"""
+    fix, graph_risk, context_denial = _graph_context(p)
+    if context_denial:
+        return context_denial
+
     sv = shield.inspect_sql(p.sql)
     if not sv.allowed:
-        return GateDecision(Tier.DENY.value, False,
-                            ["护盾拦截"], shield_reasons=sv.reasons)
+        return denial("SHIELD_DENIED", RetryPhase.PLAN, ["护盾拦截"],
+                      risk=graph_risk, shield_reasons=sv.reasons)
 
     # 防伪：声明的动作类型必须与 AST 实际解析出来的一致
     actual = shield.classify(p.sql)
     if actual != p.action_type:
-        return GateDecision(
-            Tier.DENY.value, False,
-            [f"提案声称 {p.action_type}，AST 实际为 {actual}"])
+        return denial(
+            "SQL_INVALID", RetryPhase.PLAN,
+            [f"提案声称 {p.action_type}，AST 实际为 {actual}"],
+            risk=graph_risk)
+    if fix.get("action_type") != actual:
+        return denial(
+            "SQL_INVALID", RetryPhase.PLAN,
+            [f"修复节点 {p.fix_id} 声明 {fix.get('action_type')}，"
+             f"提案实际为 {actual}"], risk=graph_risk)
 
     if not p.rollback or not p.rollback.strip():
         # 终止会话这类动作本质上不可撤销，强求回滚语句只会逼出假的，
         # 反而制造"以为能回滚"的错觉。改为要求显式承认不可逆。
         if actual == "session_control":
-            return GateDecision(
-                Tier.DENY.value, False,
+            return denial(
+                "ROLLBACK_INVALID", RetryPhase.PLAN,
                 ["会话控制不可撤销，rollback 请显式写 IRREVERSIBLE 以示知情"])
         if actual in SELF_CORRECTING:
-            return GateDecision(
-                Tier.DENY.value, False,
+            return denial(
+                "ROLLBACK_INVALID", RetryPhase.PLAN,
                 [f"{actual} 无需回滚，rollback 请显式写 "
                  f"NO_ROLLBACK_NEEDED 以示知情"])
-        return GateDecision(Tier.DENY.value, False, ["缺少回滚语句"])
+        return denial("ROLLBACK_INVALID", RetryPhase.PLAN, ["缺少回滚语句"])
 
     if p.rollback.strip().upper() == "NO_ROLLBACK_NEEDED":
         if actual not in SELF_CORRECTING:
-            return GateDecision(
-                Tier.DENY.value, False,
+            return denial(
+                "ROLLBACK_INVALID", RetryPhase.PLAN,
                 [f"{actual} 会改变数据或结构，不能声明无需回滚"])
 
     if p.rollback.strip().upper() == "IRREVERSIBLE":
         if actual != "session_control":
-            return GateDecision(Tier.DENY.value, False,
-                                [f"{actual} 不允许标记为不可逆"])
+            return denial("ROLLBACK_INVALID", RetryPhase.PLAN,
+                          [f"{actual} 不允许标记为不可逆"])
         return GateDecision(Tier.CONFIRM.value, True,
                             ["终止会话不可撤销，已显式声明并需人工确认"],
-                            {"action_class": actual, "reversible": False,
+                            {**graph_risk,
+                             "action_class": actual, "reversible": False,
                              "locks_table": False,
                              "blast_radius": "session",
                              "touches_data": False})
@@ -147,13 +263,13 @@ def assess(p: RemediationProposal) -> GateDecision:
     if not undo_journal.is_marker(p.rollback):
         rb = shield.inspect_sql(p.rollback)
         if not rb.allowed and "DROP" not in p.rollback.upper():
-            return GateDecision(Tier.DENY.value, False,
-                                ["回滚语句本身不合法"],
-                                shield_reasons=rb.reasons)
+            return denial("ROLLBACK_INVALID", RetryPhase.PLAN,
+                          ["回滚语句本身不合法"],
+                          shield_reasons=rb.reasons)
 
     concurrent = shield.is_concurrent_index(p.sql)
     radius = _blast_radius(p.sql)
-    risk = {
+    risk = {**graph_risk,
         "action_class": actual,
         "reversible": True,
         "locks_table": (actual == "create_index" and not concurrent),
@@ -216,8 +332,31 @@ def assess(p: RemediationProposal) -> GateDecision:
         tier = Tier.CONFIRM
         reasons.append("未归类动作，保守起见需确认")
 
-    return GateDecision(tier.value, tier is not Tier.DENY, reasons, risk,
-                        sv.reasons)
+    # 图上的 risk_tier 是最低门槛；SQL 形态和实际影响面只能继续抬高。
+    graph_tier = str(fix.get("risk_tier", Tier.CONFIRM.value))
+    if graph_tier not in _TIER_RANK:
+        graph_tier = Tier.CONFIRM.value
+        reasons.append("因果图风险档位非法，保守按 CONFIRM 处理")
+    if _TIER_RANK.get(graph_tier, 1) > _TIER_RANK[tier.value]:
+        tier = Tier(graph_tier)
+        reasons.append(f"因果图将修复 {p.fix_id} 的最低门槛设为 {graph_tier}")
+    if graph_risk.get("severity") == "P0" and tier is Tier.AUTO:
+        tier = Tier.CONFIRM
+        reasons.append("P0 修复禁止自动执行，至少需要人工确认")
+    if p.partial_explanation and tier is Tier.AUTO:
+        tier = Tier.CONFIRM
+        reasons.append("PARTIAL 解释只能处置已选路径，禁止自动执行")
+
+    if (fix.get("intervention_kind") == "CONTAINMENT" and
+            tier is Tier.AUTO):
+        tier = Tier.CONFIRM
+        reasons.append("CONTAINMENT 只能限制影响，禁止自动执行")
+
+    if tier is Tier.DENY:
+        return denial("SQL_INVALID", RetryPhase.PLAN, reasons,
+                      risk=risk, shield_reasons=sv.reasons)
+    return GateDecision(tier.value, True, reasons, risk, sv.reasons,
+                        reason_code="APPROVED", retry_phase="")
 
 
 def _preflight(p: RemediationProposal) -> tuple[bool, str]:
@@ -226,11 +365,6 @@ def _preflight(p: RemediationProposal) -> tuple[bool, str]:
         m = re.search(r"\bON\s+(\w+)\s*\(([^)]+)\)", p.sql, flags=re.I)
         if m:
             table, cols = m.group(1), m.group(2)
-            try:
-                rows = db.query(
-                    "SELECT hypopg_reset(); ", role="rw") if False else None
-            except Exception:
-                pass
             # 磁盘余量：建索引需要额外空间
             try:
                 free = db.query(

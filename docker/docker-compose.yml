@@ -44,6 +44,10 @@ services:
       - -c
       - work_mem=8MB
       - -c
+      # P0 prepared-transaction 场景需要真实创建一个 2PC 对象；默认值 0
+      # 会让 PREPARE TRANSACTION 在进入判据测试之前就失败。
+      - max_prepared_transactions=10
+      - -c
       # 给诊断角色留位子：连接池打满时 agent 仍需能连上才能诊断。
       # 用 PG16 的非超级用户保留位，而不是把 agent 提成 superuser。
       - reserved_connections=5

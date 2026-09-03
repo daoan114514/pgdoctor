@@ -17,6 +17,7 @@ from agent import esc
 from agent.esc import _CHECKED_TYPES, _supports, _value_checked
 from agent.episode_state import EpisodeState, Verdict
 from knowledge.causal_graph import graph as G
+from knowledge.evidence_predicates import registered_predicates
 
 fails = []
 
@@ -58,34 +59,35 @@ print(f"      对照 _supports(idle_in_transaction, 观测, long_idle_transactio
       f" = {_supports('idle_in_transaction', OBS, 'long_idle_transaction')}"
       f"  ← 同一条证据其实支持它")
 
-print("\n[2] 拿真能反证的证据去排除 —— 不能误伤")
+print("\n[2] 只有显式 REFUTED_BY predicate 才能支撑排除")
 st = mk({"lock_contention": "等待事件为空，无阻塞链，排除锁竞争"})
 rep = esc.check(st)
 d2 = next(d for d in rep.dims if d.name == "D2")
 print(f"      {d2.detail}")
-check("这次排除计入排除率",
-      "已排除 1 个" in d2.detail and "lock_contention" not in
-      d2.detail.split("无证据支撑：")[-1],
-      "session_wait_profile=等待事件无，是正当的反证")
+check("普通 supporting evidence 不能冒充反证",
+      "lock_contention" in d2.detail.split("无证据支撑：")[-1],
+      "session_wait_profile 没有 REFUTED_BY 关系")
+st.note("agent", "lock_blocking_chain", "阻塞链 0 条（无锁等待）", "", [])
+rep = esc.check(st)
+d2 = next(d for d in rep.dims if d.name == "D2")
+check("锁链 predicate 的 PATH 反证可以计入",
+      "已排除 1 个" in d2.detail and
+      "无证据支撑" not in d2.detail, d2.detail)
 
 print("\n[3] 图与 _supports 必须对得上")
 # 方向判据现在从图的 REFUTED_BY 边推导，手工表没了。该查的变成两件事：
 # 图上声明能反证的组合，_supports 里有没有真写检查；以及 _supports 里
 # 写了检查的类型，图上有没有对应的反证边（没有的话那段代码永远不会被
 # 方向判断用到，是死逻辑）。
-src = (Path(__file__).resolve().parent.parent / "agent/esc.py").read_text(
-    encoding="utf-8")
-body = src.split("def _supports")[1].split("def _value_checked")[0]
-import re
-declared = set(re.findall(r'evidence_type == "([a-z_]+)"', body))
-
 g = G.load()
 causes = [n for n, d in g.nodes(data=True) if d.get("kind") == "RootCause"]
 graph_refuters = {r["evidence"] for c in causes
                   for r in G.refuting_evidence(c)}
-
-no_impl = sorted(graph_refuters - declared)
-check("图上声明能反证的证据，_supports 里都写了检查", not no_impl, no_impl)
+unknown_predicates = sorted(
+    r["predicate_id"] for c in causes for r in G.refuting_evidence(c)
+    if r["predicate_id"] not in registered_predicates())
+check("图上声明的反证 predicate 都已注册",
+      not unknown_predicates, unknown_predicates)
 
 not_declared = sorted(graph_refuters - _CHECKED_TYPES)
 check("图上声明能反证的证据，都在 _CHECKED_TYPES 里", not not_declared,
@@ -110,7 +112,7 @@ check("explain_seq_scan 不参与（存在性判断，图上无反证边）",
 check("row_estimate_deviation 对统计过期参与（这才是真判别特征）",
       _value_checked("row_estimate_deviation", "stale_statistics"))
 
-print("\n[5] 回归保护：排除 missing_index 不能被方向检查误伤")
+print("\n[5] missing_index 只能由显式路径反证排除")
 # 实测踩过：把 explain_seq_scan / index_existence 也拿来判方向，导致
 # "声称锁竞争、排除缺索引"被判成无依据 —— 500 例里多拦了 45 个完全
 # 正确的诊断，正确诊断放行率从 45% 掉到 22%。
@@ -135,10 +137,17 @@ st2.set_verdict("missing_index", Verdict.REFUTED,
 rep = esc.check(st2)
 d2 = next(d for d in rep.dims if d.name == "D2")
 print(f"      {d2.detail}")
-check("排除 missing_index 计入排除率",
-      "missing_index" not in d2.detail.split("无证据支撑：")[-1]
-      or "无证据支撑" not in d2.detail,
-      "explain_seq_scan / index_existence 是存在性判断，不能拿来判方向")
+check("存在性证据不能支撑 missing_index 反证",
+      "missing_index" in d2.detail.split("无证据支撑：")[-1],
+      "explain_seq_scan / index_existence 不是 REFUTED_BY")
+st2.note("a", "explain_plan",
+         "2.4ms, Index Scan, Rows Removed by Filter=0, 用到索引=idx_orders_user_status",
+         "", [])
+rep = esc.check(st2)
+d2 = next(d for d in rep.dims if d.name == "D2")
+check("当前计划已走索引可以反证当前 missing-index 路径",
+      "已排除 1 个" in d2.detail and "无证据支撑" not in d2.detail,
+      d2.detail)
 
 print()
 print("=" * 66)

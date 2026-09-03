@@ -32,6 +32,21 @@ def _ledger_of(st, res=None) -> dict:
     return {}
 
 
+def _esc_verdict_of(report) -> str:
+    """取一份 ESC 报告的裁决，不关心报告是什么形状。
+
+    v2 的 check_explanation 返回 dict，v1 的 check 返回 ESCReport 数据类，
+    两种都会进 res.esc_reports。原先这里写死 .verdict，v2 上每个 episode
+    都抛 AttributeError —— 而它抛在 run_one 中段，把后面的 metrics_v2、
+    applied_sql、gate_decisions、shield_blocked 整段吞掉，还会用这个
+    AttributeError 覆盖掉 episode 真正的 error。三率因为在它之前赋值才
+    幸存，所以跑批表面看起来是好的。
+    """
+    if isinstance(report, dict):
+        return str(report.get("verdict") or "")
+    return str(getattr(report, "verdict", "") or "")
+
+
 @dataclass
 class EpisodeOutcome:
     scenario: str
@@ -68,6 +83,8 @@ class EpisodeOutcome:
     # 模型调不通导致的作废，与"没诊断出来"必须分开统计
     unusable: bool = False
     learned: dict = field(default_factory=dict)
+    learned_layers: list[str] = field(default_factory=list)
+    metrics_v2: dict = field(default_factory=dict)
 
 
 def _confirm(p, d):
@@ -164,7 +181,8 @@ def _settle(max_wait: float = 60.0) -> None:
 
 
 def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
-            use_cases: bool, allow_repair: bool, max_steps: int
+            use_cases: bool, allow_repair: bool, max_steps: int,
+            learned_layers: set[str] | None = None,
             ) -> EpisodeOutcome:
     from agent.loop import run_episode
     from sandbox.env import DBAScenarioEnv
@@ -172,6 +190,9 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
     spec = yaml.safe_load(scenario_path.read_text(encoding="utf-8"))
     out = EpisodeOutcome(scenario=spec["id"], fault_class=spec["fault_class"],
                          split=spec.get("split", "train"), policy=policy_name)
+    active_layers = ({"l1", "l2", "l3", "l4"}
+                     if learned_layers is None else set(learned_layers))
+    out.learned_layers = sorted(active_layers)
 
     if policy_name == "scripted":
         from agent.policy import ScriptedPolicy
@@ -194,24 +215,31 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                                   allow_repair=allow_repair, confirm_cb=_confirm,
                                   quiet=True, use_esc=use_esc,
                                   use_cases=use_cases,
-                                  use_cases_split="train")
-            score = env.score(res.claimed_fault_class, audit=res.audit,
-                              ledger=_ledger_of(st, res),
-                              kpi=res.final_kpi, regression=res.final_regression)
+                                  use_cases_split="train",
+                                  use_learned=bool(active_layers),
+                                  learned_layers=active_layers)
+            # run_episode owns scoring and learning finalization.  Repeating it
+            # here used to sample a second KPI window and write L1-L4 twice.
+            score = res.benchmark_score
+            if not score:
+                raise RuntimeError("run_episode did not persist benchmark score")
             out.final_phase = res.final_phase
             out.claimed = res.claimed_fault_class
-            out.diagnosis = bool(score.diagnosis)
-            out.diagnosis_strict = bool(score.diagnosis_strict)
-            out.non_destructive = bool(score.non_destructive)
-            out.outcome = bool(score.outcome)
-            out.safe_pass = bool(score.safe_pass)
+            out.diagnosis = bool(score.get("diagnosis"))
+            out.diagnosis_strict = bool(score.get("diagnosis_strict"))
+            out.non_destructive = bool(score.get("non_destructive"))
+            out.outcome = bool(score.get("outcome"))
+            out.safe_pass = bool(score.get("safe_pass"))
             out.steps = res.steps
             out.elapsed_s = res.elapsed_s
-            out.esc_verdicts = [r.verdict for r in res.esc_reports]
+            out.esc_verdicts = [_esc_verdict_of(r) for r in res.esc_reports]
             out.applied_sql = res.applied_sql
             out.violations = res.violations
             out.error = res.error
             out.episode_id = res.episode_id
+            from eval.metrics_v2 import compute_episode_metrics
+            out.metrics_v2 = compute_episode_metrics(
+                st, spec, gate_decisions=res.gate_decisions)
             # run_episode 会把异常吞进 res.error，所以要在这里判，
             # 否则额度耗尽的 episode 会被当成"模型没诊断出来"计入分母
             low = (res.error or "").lower()
@@ -221,20 +249,7 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 sum((u.get("cost_usd") or 0.0)
                     for u in getattr(policy, "usage", [])), 4)
 
-            # 成功的 episode 沉淀成案例（eval 场景由写入策略挡掉）
-            if use_cases:
-                from knowledge import case_store as cs
-                cs.write_case(st, score, spec, res.applied_sql)
-
-            # L2/L3/L4：把这次的结局回流到 playbook、图先验、查询库。
-            # 注意 eval 场景同样只学"过程"不学"答案"：playbook 记的是
-            # 取证顺序，图先验记的是这组症状下哪个根因更可能 ——
-            # 都不构成对具体实例的记忆，所以不算污染。
-            if use_cases:
-                from knowledge import evolution as ev
-                out.learned = ev.learn(st, score, res.applied_sql,
-                                       st.symptoms,
-                                       truth=spec.get("fault_class"))
+            out.learned = dict(res.learning_result)
             out.gate_decisions = res.gate_decisions
             out.outcome_note = st.outcome_note or ""
             out.shield_blocked = list(
@@ -258,6 +273,12 @@ def main() -> None:
                     help="逗号分隔，限定故障类；留空为全部")
     ap.add_argument("--no-esc", action="store_true")
     ap.add_argument("--no-cases", action="store_true")
+    ap.add_argument("--no-learned", action="store_true",
+                    help="disable all L1-L4 online consumers")
+    ap.add_argument(
+        "--learned-layers", default="l1,l2,l3,l4",
+        help="comma-separated online learning layers; each of l1,l2,l3,l4 "
+             "can be ablated independently")
     ap.add_argument("--no-repair", action="store_true")
     ap.add_argument("--max-steps", type=int, default=60)
     ap.add_argument("--tag", default="")
@@ -265,6 +286,17 @@ def main() -> None:
                     choices=["name", "reverse", "pending"],
                     help="pending=优先跑历史结果里还没有效数据的场景")
     args = ap.parse_args()
+    learned_layers = {
+        value.strip().lower() for value in args.learned_layers.split(",")
+        if value.strip()
+    }
+    invalid_layers = learned_layers - {"l1", "l2", "l3", "l4"}
+    if invalid_layers:
+        ap.error(f"unknown learned layers: {sorted(invalid_layers)}")
+    if args.no_learned:
+        learned_layers.clear()
+    if args.no_cases:
+        learned_layers.discard("l1")
 
     scen_dir = ROOT / "sandbox" / "scenarios"
     picks = []
@@ -289,6 +321,8 @@ def main() -> None:
         tag += "_noesc"
     if args.no_cases:
         tag += "_nocases"
+    if learned_layers != {"l1", "l2", "l3", "l4"}:
+        tag += "_layers_" + ("-".join(sorted(learned_layers)) or "off")
 
     # 跑批前先探一次模型是否可用，避免烧掉几十分钟才发现额度没了
     if args.policy == "llm":
@@ -306,7 +340,8 @@ def main() -> None:
         print(f"[{i}/{len(picks)}] {p.stem} ...", flush=True)
         _settle()
         r = run_one(p, args.policy, not args.no_esc, not args.no_cases,
-                    not args.no_repair, args.max_steps)
+                    not args.no_repair, args.max_steps,
+                    learned_layers=learned_layers)
         results.append(r)
         print(f"    fired={r.fired} claimed={r.claimed} "
               f"D={r.diagnosis}(严{r.diagnosis_strict}) O={r.outcome} "
@@ -321,11 +356,18 @@ def main() -> None:
 
     RESULTS.mkdir(parents=True, exist_ok=True)
     path = RESULTS / f"{tag}.json"
+    serialized = [asdict(r) for r in results]
+    usable_serialized = [asdict(r) for r in results
+                         if r.fired and not r.unusable]
+    from eval.metrics_v2 import aggregate_episode_metrics
+    aggregate_v2 = aggregate_episode_metrics(usable_serialized)
     path.write_text(json.dumps(
         {"tag": tag, "policy": args.policy, "split": args.split,
          "use_esc": not args.no_esc, "use_cases": not args.no_cases,
+         "learned_layers": sorted(learned_layers),
          "elapsed_s": round(time.time() - t0, 1),
-         "episodes": [asdict(r) for r in results]},
+         "metrics_v2": aggregate_v2,
+         "episodes": serialized},
         ensure_ascii=False, indent=2), encoding="utf-8")
 
     usable = [r for r in results if r.fired and not r.unusable]
@@ -348,6 +390,14 @@ def main() -> None:
           f"（均被护盾拦下）")
     print(f"成本合计 ${sum(r.cost_usd for r in results):.4f} | "
           f"用时 {round(time.time() - t0)}s")
+    p0 = aggregate_v2["p0_obligation_recall"]
+    path_r = aggregate_v2["path_recall_at_k"].get("12", {})
+    print("v2 P0 obligation recall "
+          f"{p0.get('numerator', 0)}/{p0.get('denominator', 0)} | "
+          "path recall@12 "
+          f"{path_r.get('numerator', 0)}/{path_r.get('denominator', 0)} | "
+          "GATE context bypass "
+          f"{aggregate_v2['gate_context_bypass_count']}")
     print(f"结果已写入 {path}")
 
 

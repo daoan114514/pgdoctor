@@ -5,12 +5,28 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from safety import gate, undo_journal
-from safety.gate import RemediationProposal as P
+from safety.gate import RemediationProposal
 from safety.undo_journal import UndoStatus
 from sandbox import db
 
 ok = True
 EP = "gate_check"
+
+
+def P(action_type, sql, rollback, **kwargs):
+    if action_type == "create_index":
+        root_cause, fix_id = "missing_index", "create_covering_index"
+    elif action_type == "vacuum_analyze" and sql.strip().upper().startswith("ANALYZE"):
+        root_cause, fix_id = "stale_statistics", "analyze_table"
+    elif action_type == "vacuum_analyze":
+        root_cause, fix_id = "table_bloat", "vacuum_table"
+    elif action_type == "set_parameter":
+        root_cause, fix_id = "work_mem_spill", "raise_work_mem"
+    else:
+        root_cause, fix_id = "lock_contention", "terminate_blocker"
+    return RemediationProposal(
+        action_type, sql, rollback, root_cause=root_cause, fix_id=fix_id,
+        **kwargs)
 
 print("=" * 72)
 print("[1] 风险分级")

@@ -22,8 +22,9 @@ investigator 的 SUB_DENIED、hooks 的内建工具默认拒绝、toolbox 内部
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any, Iterable
 
-from agent.state_machine import ALLOWED_TOOLS, Phase
+from agent.state_machine import ALLOWED_TOOLS, READ_TOOLS, Phase
 
 
 class Role(str, Enum):
@@ -36,8 +37,10 @@ class Role(str, Enum):
 INVESTIGATOR_DENIED = frozenset(
     {"set_hypothesis", "declare_root_cause", "submit_proposal"})
 
-# 只属于子 agent 的回传通道。主 agent 不该有 —— 它是收裁决的一方。
-INVESTIGATOR_ONLY = frozenset({"report_verdict"})
+# 只属于子 agent 的回传通道。report_verdict 是 v1 兼容入口；v2 使用
+# report_evidence，且只能回传观测和采集状态。
+INVESTIGATOR_ONLY = frozenset({"report_verdict", "report_evidence"})
+V2_INVESTIGATOR_ONLY = frozenset({"report_evidence"})
 
 # 子 agent 只在这一个阶段存在。
 INVESTIGATOR_PHASES = frozenset({Phase.INVESTIGATE})
@@ -52,31 +55,76 @@ SYSTEM_PHASES = frozenset({Phase.GATE, Phase.EXECUTE, Phase.ROLLBACK})
 BUILTIN_ALLOW = frozenset({"ToolSearch"})
 
 
+def _values(value: Any, *names: str) -> set[str]:
+    if value is None:
+        return set()
+    for name in names:
+        raw = (value.get(name) if isinstance(value, dict)
+               else getattr(value, name, None))
+        if raw is not None:
+            if isinstance(raw, str):
+                return {raw}
+            return {str(item) for item in raw}
+    return set()
+
+
+def _is_v2_context(evidence_need: Any, task_context: Any) -> bool:
+    if evidence_need is not None:
+        return True
+    if task_context is None:
+        return False
+    if isinstance(task_context, dict):
+        return bool(task_context.get("explanation_id") or
+                    task_context.get("need_ids"))
+    return bool(getattr(task_context, "explanation_id", "") or
+                getattr(task_context, "need_ids", ()))
+
+
 def allowed_tools(phase: Phase, role: Role = Role.MAIN,
-                  hypothesis: str | None = None) -> set[str]:
-    """该角色在该阶段实际可调的工具集。这是唯一权威。"""
+                  hypothesis: str | None = None, *,
+                  evidence_need: Any = None,
+                  task_context: Any = None,
+                  environment_tools: Iterable[str] | None = None) -> set[str]:
+    """Return the single authoritative effective tool set.
+
+    For a v2 investigator this is exactly the intersection of the phase,
+    role, assigned need/task, and environment sets.  ``hypothesis`` remains a
+    v1 compatibility input and is deliberately not used by v2 callers.
+    """
     if role is Role.SYSTEM:
         return set()
 
-    base = set(ALLOWED_TOOLS.get(phase, set()))
+    phase_tools = set(ALLOWED_TOOLS.get(phase, set()))
 
     if role is Role.MAIN:
-        # 主 agent 不收 report_verdict —— 它是收裁决的一方，不是汇报的一方
-        return base - INVESTIGATOR_ONLY
+        role_tools = set().union(*ALLOWED_TOOLS.values()) - INVESTIGATOR_ONLY
+        task_tools = (_values(task_context, "selected_tools", "candidate_tools")
+                      if task_context is not None else set(role_tools))
+        environment = (set(environment_tools) if environment_tools is not None
+                       else set(role_tools))
+        return phase_tools & role_tools & task_tools & environment
 
     if role is Role.INVESTIGATOR:
         if phase not in INVESTIGATOR_PHASES:
             return set()
-        tools = (base - INVESTIGATOR_DENIED) | set(INVESTIGATOR_ONLY)
-        if hypothesis:
-            # 按假设收窄到因果图推导出的取证工具。推导不出来（图上没有
-            # 这个假设）时保持全集，而不是收成空集 —— 后者会让子 agent
-            # 一个工具都没有，症状又变成"模型不干活"。
+        role_tools = ((set(READ_TOOLS) | set(INVESTIGATOR_ONLY)) -
+                      INVESTIGATOR_DENIED)
+        if _is_v2_context(evidence_need, task_context):
+            assigned = _values(task_context, "selected_tools", "candidate_tools")
+            if not assigned:
+                assigned = _values(evidence_need, "candidate_tools")
+            task_tools = assigned | set(V2_INVESTIGATOR_ONLY)
+        elif hypothesis:
+            # The hypothesis route is v1-only.  Its historical fallback is
+            # retained for old traces, but v2 never reaches this branch.
             from agent.investigator import toolset_for
-            derived = set(toolset_for(hypothesis) or ())
-            if derived:
-                tools &= (derived | set(INVESTIGATOR_ONLY))
-        return tools
+            task_tools = set(toolset_for(hypothesis) or ()) | set(
+                INVESTIGATOR_ONLY)
+        else:
+            task_tools = set(role_tools)
+        environment = (set(environment_tools) if environment_tools is not None
+                       else set(role_tools))
+        return phase_tools & role_tools & task_tools & environment
 
     return set()
 

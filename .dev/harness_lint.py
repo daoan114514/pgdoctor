@@ -96,7 +96,9 @@ for k, s in specs.items():
             bad_expr.append(f"{k}.{path} 缺失")
             continue
         try:
-            metrics.eval_expr(expr, FAKE)
+            # 判据右边可以乘一个健康基线，求值时必须给得出基线，
+            # 否则这里会把可用的表达式误报成写错了
+            metrics.eval_expr(expr, FAKE, baseline=FAKE)
         except Exception as exc:
             bad_expr.append(f"{k}.{path}: {type(exc).__name__}")
 check("表达式都能求值", not bad_expr, bad_expr[:5])
@@ -111,6 +113,18 @@ for k, s in specs.items():
             if tok not in known:
                 bad_field.append(f"{k}.{path}: {tok}")
 check("引用的 KPI 字段都存在", not bad_field, bad_field[:5])
+
+# 阈值右边引用的健康基线同样要存在。漏掉这条的话，healthy_ 前缀写错
+# 只会等到活库跑进 VERIFY 才炸，而那时库已经被动过了。
+known_baseline = set(metrics.baseline_refs(FAKE))
+bad_baseline = []
+for k, s in specs.items():
+    for path, expr in (("alert", s.get("trigger", {}).get("alert", "")),
+                       ("outcome", s.get("success", {}).get("outcome", ""))):
+        for tok in re.findall("healthy_[a-z_0-9]*", expr):
+            if tok not in known_baseline:
+                bad_baseline.append(f"{k}.{path}: {tok}")
+check("引用的健康基线字段都存在", not bad_baseline, bad_baseline[:5])
 
 # ══ 3. 判分与知识必须一致 ═════════════════════════════════
 # 这一格错了最难发现：agent 修对了，判分却说没修好。
@@ -245,4 +259,8 @@ elif warns:
     print(f"HARNESS LINT: PASS（{len(warns)} 条警告待人工判断）")
 else:
     print("HARNESS LINT: PASS")
-sys.exit(1 if fails else 0)
+# relock.py 要 import 本模块拿 fingerprint/LOCK/SCEN。模块级的 sys.exit
+# 会在 import 阶段就把它打死，而且退出码是 0 —— 看起来像"锁已更新"，
+# 实际上锁一个字都没写。
+if __name__ == "__main__":
+    sys.exit(1 if fails else 0)

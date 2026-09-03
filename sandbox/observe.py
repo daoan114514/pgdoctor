@@ -10,8 +10,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from sandbox import db
 from sandbox.traces import TraceStore
@@ -36,6 +39,13 @@ class SessionDigest:
     wait_event: str | None
     duration_s: float
     query_fingerprint: str                # 指纹化截断，不带完整 SQL 文本
+    role: str = ""
+    transaction_age_seconds: float | None = None
+    backend_type: str = ""
+    backend_xmin: str = ""
+    is_current_diagnostic_connection: bool = False
+    is_system_or_diagnostic: bool = False
+    identity_rechecked: bool = True
 
 
 @dataclass
@@ -47,6 +57,10 @@ class TableStats:
     last_analyze: str
     last_autovacuum: str
     total_size: str
+    autovacuum_enabled: bool
+    autovacuum_running: bool
+    autovacuum_trigger: int
+    raw_ref: str = ""
 
 
 def _walk_plan(node: dict, out: dict) -> None:
@@ -77,6 +91,22 @@ class Observer:
 
     def __init__(self, trace: TraceStore | None = None):
         self.trace = trace or TraceStore()
+        self.last_raw_refs: dict[str, str] = {}
+        self._extension_cache: dict[str, bool] = {}
+
+    def extension_available(self, extension: str) -> bool:
+        """Read-only capability probe used by the v2 tool planner."""
+        if extension in self._extension_cache:
+            return self._extension_cache[extension]
+        rows = db.query(
+            "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = %s)",
+            (extension,), role="ro")
+        available = bool(rows and rows[0][0])
+        self._extension_cache[extension] = available
+        return available
+
+    def raw_ref_for(self, tool: str) -> str:
+        return self.last_raw_refs.get(tool, "")
 
     def explain_query(self, sql: str, params: dict | None = None) -> ExplainDigest:
         with db.connect(role="ro") as conn, conn.cursor() as cur:
@@ -94,28 +124,47 @@ class Observer:
             parallel_workers=acc["workers"],
             top_nodes=[str(round(t, 1)) + "ms " + n for t, n in acc["nodes"][:3]],
         )
+        trace_digest = asdict(digest)
+        trace_digest.pop("raw_ref", None)
         digest.raw_ref = self.trace.record(
             "explain_query", {"sql": sql[:200]},
-            json.dumps(plan_json, indent=2), asdict(digest))
+            json.dumps(plan_json, indent=2), trace_digest)
         return digest
 
     def get_active_sessions(self, min_duration_s: float = 1.0) -> list[SessionDigest]:
         rows = db.query(
             "SELECT pid, state, wait_event_type, wait_event,"
-            " EXTRACT(EPOCH FROM (now() - query_start)), query"
+            " EXTRACT(EPOCH FROM (now() - query_start)), query,"
+            " coalesce(usename,''),"
+            " EXTRACT(EPOCH FROM (now() - xact_start)),"
+            " coalesce(backend_type,''), coalesce(backend_xmin::text,'')"
             " FROM pg_stat_activity"
             " WHERE state IS NOT NULL AND pid <> pg_backend_pid()"
             "   AND datname = current_database()"
             " ORDER BY 5 DESC NULLS LAST LIMIT 50",
             role="ro")
         out = []
-        for pid, state, wtype, wevent, dur, q in rows:
+        for (pid, state, wtype, wevent, dur, q, role, xact_age,
+             backend_type, backend_xmin) in rows:
             dur = float(dur or 0)
             if state == "idle" or (state == "active" and dur < min_duration_s):
                 continue
             we = (wtype + ":" + str(wevent)) if wtype else None
-            out.append(SessionDigest(pid, state, we, round(dur, 2),
-                                     re.sub(r"\s+", " ", q or "")[:80]))
+            system_or_diagnostic = (
+                backend_type != "client backend" or
+                role in {"postgres", "agent_ro", "agent_rw"})
+            out.append(SessionDigest(
+                pid, state, we, round(dur, 2),
+                re.sub(r"\s+", " ", q or "")[:80],
+                role=role,
+                transaction_age_seconds=(
+                    round(float(xact_age), 2) if xact_age is not None else None),
+                backend_type=backend_type,
+                backend_xmin=backend_xmin,
+                is_current_diagnostic_connection=False,
+                is_system_or_diagnostic=system_or_diagnostic,
+                identity_rechecked=True,
+            ))
         self.trace.record("get_active_sessions", {},
                           json.dumps([asdict(s) for s in out], ensure_ascii=False),
                           {"n": len(out)})
@@ -141,13 +190,29 @@ class Observer:
         rows = db.query(
             "SELECT blocked.pid, blocking.pid,"
             " coalesce(blocked.wait_event_type,'') || ':' || coalesce(blocked.wait_event,''),"
-            " left(regexp_replace(blocked.query, %s, ' ', 'g'), 80)"
+            " left(regexp_replace(blocked.query, %s, ' ', 'g'), 80),"
+            " coalesce(blocking.usename,''), coalesce(blocking.state,''),"
+            " round(extract(epoch FROM now() - blocking.xact_start))::int,"
+            " coalesce(blocking.backend_type,''),"
+            " coalesce(blocking.backend_xmin::text,''),"
+            " cardinality(pg_blocking_pids(blocking.pid)) = 0,"
+            " count(*) OVER (PARTITION BY blocking.pid)"
             " FROM pg_stat_activity blocked"
             " JOIN LATERAL unnest(pg_blocking_pids(blocked.pid)) AS bp(pid) ON true"
             " JOIN pg_stat_activity blocking ON blocking.pid = bp.pid",
             ("[[:space:]]+",), role="ro")
-        out = [{"blocked_pid": r[0], "blocked_by": r[1], "wait": r[2],
-                "query": r[3], "evidence": "currently_waiting"}
+        out = [{"blocked_pid": r[0], "blocked_by": r[1], "pid": r[1],
+                "wait": r[2], "query": r[3], "role": r[4],
+                "state": r[5], "transaction_age_seconds": r[6],
+                "backend_type": r[7], "backend_xmin": r[8],
+                "is_topmost_blocker": bool(r[9]),
+                "blocking_impact": int(r[10] or 0),
+                "is_current_diagnostic_connection": False,
+                "is_system_or_diagnostic": (
+                    r[7] != "client backend" or
+                    r[4] in {"postgres", "agent_ro", "agent_rw"}),
+                "identity_rechecked": True,
+                "evidence": "currently_waiting"}
                for r in rows]
 
         # 上面那个查询只看得见"此刻正在等待"的会话。等待者一旦被
@@ -169,31 +234,104 @@ class Observer:
             " ORDER BY 3 DESC NULLS LAST",
             ("[[:space:]]+",), role="ro")
         for r in idle:
-            out.append({"blocked_pid": None, "blocked_by": r[0],
+            out.append({"blocked_pid": None, "blocked_by": r[0], "pid": r[0],
                         "wait": f"idle_in_transaction:{r[2]}s",
                         "query": f"[持锁 {r[3]} 个对象，最后语句] {r[4]}",
+                        "role": r[1], "state": "idle in transaction",
+                        "transaction_age_seconds": r[2],
+                        "backend_type": "client backend",
+                        "is_topmost_blocker": True,
+                        "blocking_impact": int(r[3] or 0),
+                        "is_current_diagnostic_connection": False,
+                        "is_system_or_diagnostic": (
+                            r[1] in {"postgres", "agent_ro", "agent_rw"}),
+                        "identity_rechecked": True,
                         "evidence": "idle_in_transaction_holding_locks"})
 
-        self.trace.record("get_blocking_chain", {},
-                          json.dumps(out, ensure_ascii=False),
-                          {"n": len(out), "n_waiting": len(rows),
-                           "n_idle_holders": len(idle)})
+        ref = self.trace.record("get_blocking_chain", {},
+                                json.dumps(out, ensure_ascii=False),
+                                {"chains": out})
+        self.last_raw_refs["get_blocking_chain"] = ref
         return out
 
     def get_table_stats(self, table: str) -> TableStats:
         r = db.query(
             "SELECT n_live_tup, n_dead_tup, last_analyze, last_autoanalyze,"
-            " last_autovacuum, pg_size_pretty(pg_total_relation_size(relid))"
-            " FROM pg_stat_user_tables WHERE relname = %s", (table,), role="ro")
+            " last_autovacuum, pg_size_pretty(pg_total_relation_size(s.relid)),"
+            " current_setting('autovacuum')::boolean AND coalesce(("
+            "   SELECT option_value::boolean FROM pg_options_to_table(c.reloptions)"
+            "   WHERE option_name = 'autovacuum_enabled'), true),"
+            " EXISTS (SELECT FROM pg_stat_progress_vacuum p WHERE p.relid = s.relid),"
+            " ceil(coalesce((SELECT option_value::numeric"
+            "                FROM pg_options_to_table(c.reloptions)"
+            "                WHERE option_name = 'autovacuum_vacuum_threshold'),"
+            "               current_setting('autovacuum_vacuum_threshold')::numeric)"
+            "      + coalesce((SELECT option_value::numeric"
+            "                  FROM pg_options_to_table(c.reloptions)"
+            "                  WHERE option_name = 'autovacuum_vacuum_scale_factor'),"
+            "                 current_setting('autovacuum_vacuum_scale_factor')::numeric)"
+            "        * greatest(s.n_live_tup, 0))::bigint"
+            " FROM pg_stat_user_tables s JOIN pg_class c ON c.oid = s.relid"
+            " WHERE s.relname = %s", (table,), role="ro")
         if not r:
             raise KeyError(table)
-        live, dead, la, laa, lav, size = r[0]
+        live, dead, la, laa, lav, size, av_enabled, av_running, av_trigger = r[0]
         st = TableStats(table, live or 0, dead or 0,
                         round((dead or 0) / max(live or 1, 1), 4),
-                        str(la or laa or ""), str(lav or ""), size)
-        self.trace.record("get_table_stats", {"table": table},
-                          json.dumps(asdict(st), ensure_ascii=False), asdict(st))
+                        str(la or laa or ""), str(lav or ""), size,
+                        bool(av_enabled), bool(av_running), int(av_trigger or 0))
+        raw = asdict(st)
+        raw.pop("raw_ref", None)
+        ref = self.trace.record("get_table_stats", {"table": table},
+                                json.dumps(raw, ensure_ascii=False), raw)
+        st.raw_ref = ref
         return st
+
+    def get_physical_bloat(self, table: str) -> dict:
+        """Measure physical reclaimable space with pgstattuple_approx.
+
+        The algorithm is explicit and versioned: dead tuple bytes plus
+        approximate free bytes, divided by the physical table length.  Missing
+        extension/function access is reported as unavailable, never inferred
+        from pg_stat_user_tables dead-tuple estimates.
+        """
+        algorithm = "pgstattuple_approx_reclaimable_pct_v1"
+        out: dict = {"table": table, "algorithm": algorithm}
+        try:
+            available = db.query(
+                "SELECT to_regprocedure('pgstattuple_approx(regclass)') IS NOT NULL",
+                role="ro")[0][0]
+            if not available:
+                out.update({
+                    "availability": "UNAVAILABLE",
+                    "reason": "pgstattuple_approx(regclass) is not installed",
+                })
+            else:
+                row = db.query(
+                    "SELECT table_len, dead_tuple_percent, approx_free_percent "
+                    "FROM pgstattuple_approx(%s::regclass)",
+                    (table,), role="ro")[0]
+                dead_pct = float(row[1] or 0.0)
+                free_pct = float(row[2] or 0.0)
+                out.update({
+                    "availability": "AVAILABLE",
+                    "table_bytes": int(row[0] or 0),
+                    "dead_tuple_percent": round(dead_pct, 4),
+                    "free_percent": round(free_pct, 4),
+                    "reclaimable_pct": round(min(100.0, dead_pct + free_pct), 4),
+                })
+        except Exception as exc:
+            unavailable = type(exc).__name__ in {
+                "InsufficientPrivilege", "UndefinedFunction",
+                "FeatureNotSupported",
+            }
+            out.update({"availability": ("UNAVAILABLE" if unavailable else "ERROR"),
+                        "reason": f"{type(exc).__name__}: {exc}"[:200]})
+        ref = self.trace.record(
+            "get_physical_bloat", {"table": table},
+            json.dumps(out, ensure_ascii=False, default=str), out)
+        out["raw_ref"] = ref
+        return out
 
     def get_indexes(self, table: str) -> list[dict]:
         rows = db.query(
@@ -230,8 +368,10 @@ class Observer:
                "by_user": by_user, "by_state": by_state,
                "idle_in_transaction": idle_in_tx,
                "near_limit": total >= maxc * 0.85}
-        self.trace.record("get_connection_stats", {},
-                          json.dumps(out, ensure_ascii=False), out)
+        ref = self.trace.record("get_connection_stats", {},
+                                json.dumps(out, ensure_ascii=False), out)
+        self.last_raw_refs["get_connection_stats"] = ref
+        out["raw_ref"] = ref
         return out
 
     def get_vacuum_horizon(self) -> dict:
@@ -280,17 +420,22 @@ class Observer:
         try:
             out["slots"] = [
                 {"name": n, "xmin_age": int(x or 0),
-                 "catalog_xmin_age": int(cx or 0), "active": bool(a)}
-                for n, x, cx, a in db.query(
-                    "SELECT slot_name, age(xmin), age(catalog_xmin), active "
+                 "catalog_xmin_age": int(cx or 0), "active": bool(a),
+                 "retained_wal_bytes": int(wal or 0)}
+                for n, x, cx, a, wal in db.query(
+                    "SELECT slot_name, age(xmin), age(catalog_xmin), active, "
+                    "greatest(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn), 0) "
                     "FROM pg_replication_slots", role="ro")]
         except Exception:
             out["slots"] = []
         try:
             out["prepared_xacts"] = [
-                {"gid": g, "xid_age": int(a or 0)}
-                for g, a in db.query(
-                    "SELECT gid, age(transactionid) FROM pg_prepared_xacts",
+                {"gid": g, "xid_age": int(a or 0),
+                 "prepared_age_s": int(seconds or 0)}
+                for g, a, seconds in db.query(
+                    "SELECT gid, age(transactionid), "
+                    "extract(epoch FROM now() - prepared)::bigint "
+                    "FROM pg_prepared_xacts",
                     role="ro")]
         except Exception:
             out["prepared_xacts"] = []
@@ -318,59 +463,101 @@ class Observer:
         if any(x["xid_age"] > 1_000_000 for x in out["prepared_xacts"]):
             holders.append("prepared_transaction")
         out["xmin_holders"] = holders
-        self.trace.record("get_vacuum_horizon", {},
-                          json.dumps(out, ensure_ascii=False, default=str), out)
+        ref = self.trace.record("get_vacuum_horizon", {},
+                                json.dumps(out, ensure_ascii=False, default=str), out)
+        out["raw_ref"] = ref
         return out
 
     def get_database_stats(self) -> dict:
         """库级累计计数器：死锁、临时文件外溢、检查点压力、I/O 等待。
 
         这些都是 pg_stat_database / 检查点视图里的**累计值**，单次读数说明
-        不了问题，要看它在故障窗口内涨了多少 —— 所以一并返回，让 agent
-        自己对比两次读数。
+        不了问题。这里返回原始计数和 reset 时刻，由 Toolbox 持久化基线并
+        计算相邻两次观测之间的窗口增量。
 
         检查点那组列在 PG17 拆去了 pg_stat_checkpointer，PG16 及更早在
         pg_stat_bgwriter 里叫另一套名字。沙箱是 16.15，官方 current 文档
         是 18 —— 照文档抄会直接报列不存在，所以两套都试。
         """
-        out: dict = {}
+        out: dict = {"errors": {}}
         try:
             r = db.query(
                 "SELECT deadlocks, temp_files, temp_bytes, "
-                "blk_read_time, blk_write_time, xact_commit, xact_rollback "
+                "blk_read_time, blk_write_time, xact_commit, xact_rollback, "
+                "COALESCE(stats_reset, pg_postmaster_start_time()) "
                 "FROM pg_stat_database WHERE datname = current_database()",
                 role="ro")[0]
             out.update({"deadlocks": int(r[0]), "temp_files": int(r[1]),
                         "temp_bytes": int(r[2]),
                         "blk_read_time_ms": float(r[3] or 0),
                         "blk_write_time_ms": float(r[4] or 0),
-                        "xact_commit": int(r[5]), "xact_rollback": int(r[6])})
+                        "xact_commit": int(r[5]), "xact_rollback": int(r[6]),
+                        "db_stats_reset": str(r[7] or "")})
         except Exception as exc:
-            out["error"] = str(exc)[:120]
+            out["errors"]["pg_stat_database"] = str(exc)[:120]
         try:                                  # PG17+
             r = db.query("SELECT num_timed, num_requested, write_time, "
-                         "sync_time FROM pg_stat_checkpointer", role="ro")[0]
+                         "sync_time, COALESCE(stats_reset, "
+                         "pg_postmaster_start_time()) FROM pg_stat_checkpointer",
+                         role="ro")[0]
             out.update({"ckpt_timed": int(r[0]), "ckpt_requested": int(r[1]),
                         "ckpt_write_time_ms": float(r[2] or 0),
-                        "ckpt_sync_time_ms": float(r[3] or 0)})
-        except Exception:
+                        "ckpt_sync_time_ms": float(r[3] or 0),
+                        "ckpt_stats_reset": str(r[4] or ""),
+                        "ckpt_source": "pg_stat_checkpointer"})
+        except Exception as pg17_exc:
             try:                              # PG16 及更早
                 r = db.query(
                     "SELECT checkpoints_timed, checkpoints_req, "
-                    "checkpoint_write_time, checkpoint_sync_time "
+                    "checkpoint_write_time, checkpoint_sync_time, "
+                    "COALESCE(stats_reset, pg_postmaster_start_time()) "
                     "FROM pg_stat_bgwriter", role="ro")[0]
                 out.update({"ckpt_timed": int(r[0]),
                             "ckpt_requested": int(r[1]),
                             "ckpt_write_time_ms": float(r[2] or 0),
-                            "ckpt_sync_time_ms": float(r[3] or 0)})
-            except Exception:
-                pass
-        # 请求式检查点占比高 = WAL 涨得比 checkpoint_timeout 快
-        t, q = out.get("ckpt_timed", 0), out.get("ckpt_requested", 0)
-        out["ckpt_requested_pct"] = round(q / max(t + q, 1) * 100, 1)
-        out["temp_mb"] = round(out.get("temp_bytes", 0) / 1048576, 1)
-        self.trace.record("get_database_stats", {},
-                          json.dumps(out, ensure_ascii=False), out)
+                            "ckpt_sync_time_ms": float(r[3] or 0),
+                            "ckpt_stats_reset": str(r[4] or ""),
+                            "ckpt_source": "pg_stat_bgwriter"})
+            except Exception as pg16_exc:
+                out["errors"]["checkpoint_stats"] = (
+                    f"PG17+: {pg17_exc}; PG16-: {pg16_exc}")[:240]
+        try:
+            if db.PG_HOST not in {"localhost", "127.0.0.1", "::1"} and not os.getenv(
+                    "PGDOCTOR_DATA_PATH"):
+                raise OSError("远程数据库未配置 PGDOCTOR_DATA_PATH")
+            configured = os.getenv("PGDOCTOR_DATA_PATH")
+            data_path = Path(configured or db.query(
+                "SHOW data_directory", role="ro")[0][0])
+            probe = data_path
+            while True:
+                try:
+                    usage = shutil.disk_usage(probe)
+                    break
+                except PermissionError:
+                    parent = probe.parent
+                    if parent == probe:
+                        raise
+                    probe = parent
+            out["disk_usage"] = {
+                "path": str(probe),
+                "total_bytes": int(usage.total),
+                "used_bytes": int(usage.used),
+                "free_bytes": int(usage.free),
+                "used_pct": round(usage.used / max(usage.total, 1) * 100, 1),
+            }
+        except Exception as exc:
+            out["errors"]["disk_usage"] = str(exc)[:160]
+        if "temp_bytes" in out:
+            out["temp_mb"] = round(out["temp_bytes"] / 1048576, 1)
+        if "ckpt_timed" in out and "ckpt_requested" in out:
+            # 这个仍只是累计占比，Toolbox 会基于两次快照重算窗口占比。
+            t, q = out["ckpt_timed"], out["ckpt_requested"]
+            out["ckpt_requested_pct"] = round(q / max(t + q, 1) * 100, 1)
+        if not out["errors"]:
+            out.pop("errors")
+        ref = self.trace.record("get_database_stats", {},
+                                json.dumps(out, ensure_ascii=False), out)
+        out["raw_ref"] = ref
         return out
 
     def simulate_index(self, create_sql: str, test_sql: str,
@@ -405,8 +592,9 @@ class Observer:
             res["note"] = (
                 f"原查询成本仅 {cb:.1f}，本来就很快，加索引的收益没有意义；"
                 f"该结果不足以支持'缺索引'的判断")
-        self.trace.record("simulate_index", {"create": create_sql},
-                          json.dumps(res, ensure_ascii=False), res)
+        ref = self.trace.record("simulate_index", {"create": create_sql},
+                                json.dumps(res, ensure_ascii=False), res)
+        res["raw_ref"] = ref
         return res
 
     def fetch_raw(self, ref: str) -> str:

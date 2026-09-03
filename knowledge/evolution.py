@@ -14,11 +14,15 @@ YAML 落盘并进 git，这周学到了什么、哪条被推翻了，都能 diff
 from __future__ import annotations
 
 import json
+import math
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import yaml
+
+from agent.episode_state import evidence_is_observed
+from agent.explanation import stable_id
 
 ROOT = Path(__file__).resolve().parent.parent
 LEARNED = ROOT / "knowledge" / "learned"
@@ -117,6 +121,8 @@ def sediment_playbook(st, score, applied_sql: list[str]) -> Playbook | None:
         # 只有真解决了才更新流程本身，否则只累计失败计数
         order, seen = [], set()
         for e in st.scratchpad:
+            if not evidence_is_observed(e):
+                continue
             k = e["evidence_type"]
             if k.startswith(("subagent_", "incidental", "blocked_",
                              "remediation_", "proposal_")):
@@ -127,7 +133,8 @@ def sediment_playbook(st, score, applied_sql: list[str]) -> Playbook | None:
         pb.evidence_order = order[:8]
         pb.decisive_evidence = [
             e["evidence_type"] for e in st.scratchpad
-            if e["evidence_type"] in ("explain_seq_scan", "index_existence",
+            if evidence_is_observed(e)
+            and e["evidence_type"] in ("explain_seq_scan", "index_existence",
                                       "lock_blocking_chain", "connection_count",
                                       "row_estimate_deviation",
                                       "dead_tuple_ratio")][:4]
@@ -440,6 +447,8 @@ TOOL_OF = {
     "row_estimate_deviation": "explain_query",
     "index_existence": "get_indexes", "stats_freshness": "get_table_stats",
     "dead_tuple_ratio": "get_table_stats",
+    "physical_bloat_ratio": "get_physical_bloat",
+    "autovacuum_health": "get_table_stats",
     "lock_blocking_chain": "get_blocking_chain",
     "session_wait_profile": "get_active_sessions",
     "connection_count": "get_connection_stats",
@@ -453,6 +462,7 @@ TOOL_OF = {
     "deadlock_count": "get_database_stats",
     "temp_file_volume": "get_database_stats",
     "checkpoint_stats": "get_database_stats",
+    "disk_usage": "get_database_stats",
 }
 
 
@@ -479,7 +489,8 @@ def record_queries(st, score) -> dict[str, QueryStat]:
     solved = bool(score.diagnosis)
     rc = st.claimed_fault_class or "?"
     related = _evidence_of(rc) if rc != "?" else set()
-    seen = {e["evidence_type"] for e in st.scratchpad}
+    seen = {e["evidence_type"] for e in st.scratchpad
+            if evidence_is_observed(e)}
     for ev in seen:
         tool = TOOL_OF.get(ev)
         if not tool:
@@ -563,6 +574,542 @@ def stats() -> dict:
                     for k, v in sorted(
                         qs.items(),
                         key=lambda x: -x[1].discriminative_power)},
+    }
+
+
+# ===========================================================================
+# v2 learning.  These stores are deliberately separate from every v1 loader
+# above.  There is no implicit migration or fallback path.
+
+V2_TOOL_SCHEMA_VERSION = 2
+V2_MIN_SAMPLES = 3
+V2_L3_LR = 0.04
+V2_L3_EDGE_RELATIVE_CAP = 0.40
+V2_L3_PATH_RELATIVE_CAP = 0.25
+
+
+def _v2_dir() -> Path:
+    return LEARNED / "v2"
+
+
+def _v2_path(name: str) -> Path:
+    return _v2_dir() / name
+
+
+def _load_v2_doc(name: str, default: dict) -> dict:
+    path = _v2_path(name)
+    if not path.exists():
+        return {"schema_version": 2, **default}
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if int(raw.get("schema_version", 0)) != 2:
+        return {"schema_version": 2, **default}
+    return raw
+
+
+def _save_v2_doc(name: str, value: dict) -> None:
+    _v2_dir().mkdir(parents=True, exist_ok=True)
+    payload = {"schema_version": 2, **{
+        key: item for key, item in value.items() if key != "schema_version"}}
+    _v2_path(name).write_text(
+        yaml.safe_dump(payload, allow_unicode=True, sort_keys=True),
+        encoding="utf-8")
+
+
+@dataclass
+class ConditionalDecisionStat:
+    decision_key: str
+    frontier_signature: str
+    evidence_state_signature: str
+    p0_signature: str
+    capability_signature: str
+    evidence_need_signature: str
+    tool: str
+    graph_version: str
+    scenario_revision: int
+    tool_schema_version: int = V2_TOOL_SCHEMA_VERSION
+    calls: int = 0
+    observed: int = 0
+    unknown: int = 0
+    error: int = 0
+    useful_steps: int = 0
+    pruned_path_total: int = 0
+    required_fulfilled_total: int = 0
+    changed_decision_total: int = 0
+    cost_total: float = 0.0
+    reward_total: float = 0.0
+    observation_ids: list[str] = field(default_factory=list)
+    stale: bool = False
+    updated_at: float = field(default_factory=time.time)
+
+
+@dataclass
+class ToolInformationStat:
+    stat_key: str
+    frontier_signature: str
+    evidence_need_signature: str
+    tool: str
+    graph_version: str
+    scenario_revision: int
+    tool_schema_version: int = V2_TOOL_SCHEMA_VERSION
+    calls: int = 0
+    observed: int = 0
+    unknown: int = 0
+    error: int = 0
+    latency_total_s: float = 0.0
+    covered_need_total: int = 0
+    pruned_path_total: int = 0
+    entropy_gain_total: float = 0.0
+    posterior_change_total: float = 0.0
+    changed_decision_total: int = 0
+    duplicate_calls: int = 0
+    observation_ids: list[str] = field(default_factory=list)
+    stale: bool = False
+    updated_at: float = field(default_factory=time.time)
+
+
+def v2_context_signatures(explanation, need,
+                          environment_tools: set[str] | list[str], *,
+                          scenario_revision: int = 1,
+                          tool_schema_version: int = V2_TOOL_SCHEMA_VERSION
+                          ) -> dict[str, str | int]:
+    """Build replayable L2/L4 keys from causal state, not natural language."""
+    paths = explanation.path_map()
+    relevant = [paths[path_id] for path_id in need.path_ids
+                if path_id in paths]
+    relevant_nodes = sorted({node for path in relevant for node in path.node_ids})
+    relevant_edges = sorted({edge for path in relevant for edge in path.edge_ids})
+    evidence_state = {
+        "nodes": {node: explanation.node_status.get(node, "UNTESTED")
+                  for node in relevant_nodes},
+        "edges": {edge: explanation.edge_status.get(edge, "UNTESTED")
+                  for edge in relevant_edges},
+    }
+    p0_state = {cause_id: obligation.status for cause_id, obligation in
+                sorted(explanation.p0_obligations.items())
+                if set(obligation.reachable_path_ids) & set(need.path_ids) or
+                cause_id in need.target_ids}
+    frontier = {
+        "path_ids": sorted(need.path_ids),
+        "target_kind": need.target_kind,
+        "target_ids": sorted(need.target_ids),
+        "viable_path_ids": sorted(
+            path.path_id for path in relevant if path.status != "REFUTED"),
+    }
+    need_shape = {
+        "target_kind": need.target_kind,
+        "target_ids": sorted(need.target_ids),
+        "evidence_type": need.evidence_type,
+        "predicate_id": need.predicate_id,
+        "required": bool(need.required),
+    }
+    return {
+        "frontier_signature": stable_id("frontier", frontier),
+        "evidence_state_signature": stable_id("evidence_state", evidence_state),
+        "p0_signature": stable_id("p0_state", p0_state),
+        "capability_signature": stable_id(
+            "capabilities", sorted(set(environment_tools))),
+        "evidence_need_signature": stable_id("evidence_need", need_shape),
+        "graph_version": explanation.graph_version,
+        "scenario_revision": int(scenario_revision),
+        "tool_schema_version": int(tool_schema_version),
+    }
+
+
+def _active_v2_record(record: dict, context: dict) -> bool:
+    return bool(
+        not record.get("stale", False) and
+        record.get("graph_version") == context.get("graph_version") and
+        int(record.get("scenario_revision", 1)) ==
+        int(context.get("scenario_revision", 1)) and
+        int(record.get("tool_schema_version", 0)) ==
+        int(context.get("tool_schema_version", V2_TOOL_SCHEMA_VERSION)))
+
+
+def _l2_decision_key(context: dict, tool: str) -> str:
+    return stable_id("l2_decision", {
+        **{key: context[key] for key in (
+            "frontier_signature", "evidence_state_signature", "p0_signature",
+            "capability_signature", "evidence_need_signature",
+            "graph_version", "scenario_revision", "tool_schema_version")},
+        "tool": tool,
+    })
+
+
+def _l4_stat_key(context: dict, tool: str) -> str:
+    return stable_id("l4_tool", {
+        "frontier_signature": context["frontier_signature"],
+        "evidence_need_signature": context["evidence_need_signature"],
+        "tool": tool,
+        "graph_version": context["graph_version"],
+        "scenario_revision": context["scenario_revision"],
+        "tool_schema_version": context["tool_schema_version"],
+    })
+
+
+def v2_tool_learning_components(context: dict, tool: str, *,
+                                l2_cap: float = 0.75,
+                                l4_cap: float = 0.75,
+                                use_learned: bool = True
+                                ) -> tuple[float, float, int]:
+    """Return shrunken L2/L4 utilities for one exact frontier/need/tool key."""
+    if not use_learned:
+        return 0.0, 0.0, 0
+    l2_doc = _load_v2_doc("investigation_policy.yaml", {"records": {}})
+    l4_doc = _load_v2_doc("tool_information_gain.yaml", {"records": {}})
+    decision_key = _l2_decision_key(context, tool)
+    stat_key = _l4_stat_key(context, tool)
+    l2_record = (l2_doc.get("records") or {}).get(decision_key)
+    l4_record = (l4_doc.get("records") or {}).get(stat_key)
+    l2_score = 0.0
+    l4_score = 0.0
+    samples = 0
+    if l2_record and _active_v2_record(l2_record, context):
+        calls = max(0, int(l2_record.get("calls", 0)))
+        samples = max(samples, calls)
+        if calls >= V2_MIN_SAMPLES:
+            shrink = calls / (calls + V2_MIN_SAMPLES)
+            empirical = float(l2_record.get("reward_total", 0.0)) / calls
+            l2_score = max(-l2_cap, min(l2_cap, empirical * shrink))
+    if l4_record and _active_v2_record(l4_record, context):
+        calls = max(0, int(l4_record.get("calls", 0)))
+        samples = max(samples, calls)
+        if calls >= V2_MIN_SAMPLES:
+            shrink = calls / (calls + V2_MIN_SAMPLES)
+            info = (float(l4_record.get("entropy_gain_total", 0.0)) +
+                    float(l4_record.get("posterior_change_total", 0.0)) +
+                    float(l4_record.get("changed_decision_total", 0))) / calls
+            latency = float(l4_record.get("latency_total_s", 0.0)) / calls
+            bad_rate = (float(l4_record.get("unknown", 0)) +
+                        float(l4_record.get("error", 0)) +
+                        float(l4_record.get("duplicate_calls", 0))) / calls
+            empirical = info / (1.0 + latency) - bad_rate
+            # The zero-centered aggregate prior plus shrinkage prevents one
+            # lucky low-sample call from monopolising a frontier.
+            l4_score = max(-l4_cap, min(l4_cap, empirical * shrink))
+    return round(l2_score, 6), round(l4_score, 6), samples
+
+
+def _observation_is_useful(item: dict) -> bool:
+    return bool(
+        int(item.get("changed_statuses", 0)) > 0 or
+        int(item.get("pruned_paths", 0)) > 0 or
+        item.get("required_fulfilled") or
+        item.get("changed_next_decision"))
+
+
+def _update_v2_tool_learning(
+        observations: list[dict], *, use_l2: bool = True,
+        use_l4: bool = True) -> tuple[int, int]:
+    l2_doc = _load_v2_doc("investigation_policy.yaml", {"records": {}})
+    l4_doc = _load_v2_doc("tool_information_gain.yaml", {"records": {}})
+    l2_records = l2_doc.setdefault("records", {})
+    l4_records = l4_doc.setdefault("records", {})
+    l2_updates = 0
+    l4_updates = 0
+    for item in observations:
+        context = dict(item.get("learning_context") or {})
+        tool = str(item.get("tool") or "")
+        observation_id = str(item.get("observation_id") or "")
+        if not tool or not observation_id or not context:
+            continue
+        status = str(item.get("collection_status") or "UNKNOWN")
+        useful = _observation_is_useful(item)
+        decision_key = _l2_decision_key(context, tool)
+        if useful and use_l2:
+            raw = l2_records.get(decision_key) or asdict(ConditionalDecisionStat(
+                decision_key=decision_key,
+                frontier_signature=context["frontier_signature"],
+                evidence_state_signature=context["evidence_state_signature"],
+                p0_signature=context["p0_signature"],
+                capability_signature=context["capability_signature"],
+                evidence_need_signature=context["evidence_need_signature"],
+                tool=tool,
+                graph_version=context["graph_version"],
+                scenario_revision=int(context.get("scenario_revision", 1)),
+                tool_schema_version=int(context.get(
+                    "tool_schema_version", V2_TOOL_SCHEMA_VERSION)),
+            ))
+            if observation_id not in raw.get("observation_ids", []):
+                raw["calls"] += 1
+                raw[status.lower()] = int(raw.get(status.lower(), 0)) + 1
+                raw["useful_steps"] += 1
+                raw["pruned_path_total"] += int(item.get("pruned_paths", 0))
+                raw["required_fulfilled_total"] += int(bool(
+                    item.get("required_fulfilled")))
+                raw["changed_decision_total"] += int(bool(
+                    item.get("changed_next_decision")))
+                raw["cost_total"] = round(float(raw.get("cost_total", 0.0)) +
+                                           float(item.get("cost", 0.0)), 6)
+                reward = (0.25 * int(item.get("changed_statuses", 0)) +
+                          0.75 * int(item.get("pruned_paths", 0)) +
+                          0.5 * int(bool(item.get("required_fulfilled"))) +
+                          0.25 * int(bool(item.get("changed_next_decision"))) -
+                          0.1 * float(item.get("cost", 0.0)))
+                raw["reward_total"] = round(
+                    float(raw.get("reward_total", 0.0)) + reward, 6)
+                raw.setdefault("observation_ids", []).append(observation_id)
+                raw["updated_at"] = time.time()
+                l2_records[decision_key] = raw
+                l2_updates += 1
+
+        if not use_l4:
+            continue
+        stat_key = _l4_stat_key(context, tool)
+        raw = l4_records.get(stat_key) or asdict(ToolInformationStat(
+            stat_key=stat_key,
+            frontier_signature=context["frontier_signature"],
+            evidence_need_signature=context["evidence_need_signature"],
+            tool=tool,
+            graph_version=context["graph_version"],
+            scenario_revision=int(context.get("scenario_revision", 1)),
+            tool_schema_version=int(context.get(
+                "tool_schema_version", V2_TOOL_SCHEMA_VERSION)),
+        ))
+        if observation_id in raw.get("observation_ids", []):
+            continue
+        raw["calls"] += 1
+        raw[status.lower()] = int(raw.get(status.lower(), 0)) + 1
+        raw["latency_total_s"] = round(
+            float(raw.get("latency_total_s", 0.0)) +
+            float(item.get("latency_s", 0.0)), 6)
+        raw["covered_need_total"] += int(item.get("covered_need_count", 1))
+        raw["pruned_path_total"] += int(item.get("pruned_paths", 0))
+        raw["entropy_gain_total"] = round(
+            float(raw.get("entropy_gain_total", 0.0)) +
+            float(item.get("entropy_gain", 0.0)), 6)
+        raw["posterior_change_total"] = round(
+            float(raw.get("posterior_change_total", 0.0)) +
+            float(item.get("posterior_change", 0.0)), 6)
+        raw["changed_decision_total"] += int(bool(
+            item.get("changed_next_decision")))
+        raw["duplicate_calls"] += int(item.get("duplicate_calls", 0))
+        raw.setdefault("observation_ids", []).append(observation_id)
+        raw["updated_at"] = time.time()
+        l4_records[stat_key] = raw
+        l4_updates += 1
+    if l2_updates:
+        _save_v2_doc("investigation_policy.yaml", l2_doc)
+    if l4_updates:
+        _save_v2_doc("tool_information_gain.yaml", l4_doc)
+    return l2_updates, l4_updates
+
+
+def load_l3_v2_adjustments(graph_version: str | None = None
+                           ) -> tuple[dict[str, float], dict[str, float]]:
+    """Load live stable-ID edge/path adjustments for one graph version."""
+    if graph_version is None:
+        try:
+            from knowledge.causal_graph.graph import graph_version as current
+            graph_version = current()
+        except Exception:
+            return {}, {}
+    doc = _load_v2_doc("causal_weights.yaml", {
+        "processed_outcomes": [], "edge_stats": {}, "path_stats": {}})
+    edge = {key: float(value.get("adjustment", 0.0))
+            for key, value in (doc.get("edge_stats") or {}).items()
+            if value.get("graph_version") == graph_version and
+            not value.get("stale", False)}
+    path = {key: float(value.get("adjustment", 0.0))
+            for key, value in (doc.get("path_stats") or {}).items()
+            if value.get("graph_version") == graph_version and
+            not value.get("stale", False)}
+    return edge, path
+
+
+def _edge_manual_likelihood(edge_id: str) -> float:
+    from knowledge.causal_graph import graph as causal_graph
+    graph = causal_graph.load()
+    for _src, _dst, key, data in graph.edges(keys=True, data=True):
+        if key == "CAUSES" and data.get("edge_id") == edge_id:
+            return float(data.get("likelihood", 0.5))
+    return 0.0
+
+
+def _bump_l3_record(records: dict, stable_key: str, *, amount: float,
+                    manual_weight: float, relative_cap: float,
+                    graph_version: str, outcome_id: str) -> None:
+    if manual_weight <= 0:
+        return
+    raw = records.get(stable_key) or {
+        "stable_id": stable_key,
+        "graph_version": graph_version,
+        "manual_weight": manual_weight,
+        "positive": 0,
+        "negative": 0,
+        "adjustment": 0.0,
+        "outcome_ids": [],
+        "stale": False,
+    }
+    if outcome_id in raw.get("outcome_ids", []):
+        return
+    cap = manual_weight * relative_cap
+    raw["adjustment"] = round(max(
+        -cap, min(cap, float(raw.get("adjustment", 0.0)) + amount)), 8)
+    raw["positive" if amount > 0 else "negative"] += 1
+    raw.setdefault("outcome_ids", []).append(outcome_id)
+    raw["updated_at"] = time.time()
+    records[stable_key] = raw
+
+
+def _update_l3_v2(st, score) -> int:
+    explanation = getattr(st, "explanation_graph", None)
+    if explanation is None or not explanation.selected_path_ids:
+        return 0
+    sufficient = any(report.get("verdict") == "SUFFICIENT"
+                     for report in getattr(st, "esc_reports", []))
+    verified = any(
+        attempt.learnable and attempt.outcome == "VERIFIED"
+        for attempt in getattr(st, "intervention_attempts", []))
+    selected_supported = all(
+        explanation.path_map()[path_id].status == "SUPPORTED"
+        for path_id in explanation.selected_path_ids
+        if path_id in explanation.path_map())
+    positive = bool(sufficient and verified and selected_supported and
+                    not explanation.unresolved_p0_paths() and
+                    score.diagnosis and score.outcome and score.safe_pass)
+    negative_attempts = [attempt for attempt in
+                         getattr(st, "intervention_attempts", [])
+                         if attempt.learnable and
+                         attempt.failure_scope == "PATH_SEGMENT"]
+    if not positive and not negative_attempts:
+        return 0
+    doc = _load_v2_doc("causal_weights.yaml", {
+        "processed_outcomes": [], "edge_stats": {}, "path_stats": {}})
+    path_map = explanation.path_map()
+    updates = 0
+    outcome_id = stable_id("l3_outcome", {
+        "episode_id": st.episode_id,
+        "explanation_id": explanation.explanation_id,
+        "selected_path_ids": explanation.selected_path_ids,
+        "attempts": [{"id": attempt.attempt_id,
+                      "outcome": attempt.outcome,
+                      "scope": attempt.failure_scope}
+                     for attempt in getattr(st, "intervention_attempts", [])],
+    })
+    if outcome_id in doc.get("processed_outcomes", []):
+        return 0
+    edge_stats = doc.setdefault("edge_stats", {})
+    path_stats = doc.setdefault("path_stats", {})
+
+    def update_path(path_id: str, sign: float,
+                    edge_subset: set[str] | None = None) -> None:
+        nonlocal updates
+        path = path_map.get(path_id)
+        if path is None:
+            return
+        weights = [_edge_manual_likelihood(edge_id)
+                   for edge_id in path.edge_ids]
+        if not weights or any(weight <= 0 for weight in weights):
+            return
+        if edge_subset is None:
+            _bump_l3_record(
+                path_stats, path.path_id, amount=sign * V2_L3_LR,
+                manual_weight=math.prod(weights),
+                relative_cap=V2_L3_PATH_RELATIVE_CAP,
+                graph_version=explanation.graph_version,
+                outcome_id=outcome_id)
+            updates += 1
+        for edge_id, weight in zip(path.edge_ids, weights):
+            if edge_subset is not None and edge_id not in edge_subset:
+                continue
+            _bump_l3_record(
+                edge_stats, edge_id, amount=sign * V2_L3_LR,
+                manual_weight=weight,
+                relative_cap=V2_L3_EDGE_RELATIVE_CAP,
+                graph_version=explanation.graph_version,
+                outcome_id=outcome_id)
+            updates += 1
+
+    if positive:
+        for path_id in explanation.selected_path_ids:
+            update_path(path_id, 1.0)
+    for attempt in negative_attempts:
+        affected = set(attempt.affected_edge_ids)
+        update_path(attempt.selected_path_id, -1.0,
+                    edge_subset=affected)
+    doc.setdefault("processed_outcomes", []).append(outcome_id)
+    _save_v2_doc("causal_weights.yaml", doc)
+    return updates
+
+
+def mark_v2_stale(*, graph_version: str | None = None,
+                  scenario_revision: int | None = None,
+                  tool_schema_version: int | None = None) -> int:
+    """Mark incompatible L2/L4 records stale without deleting audit history."""
+    changed = 0
+    for filename in ("investigation_policy.yaml",
+                     "tool_information_gain.yaml"):
+        doc = _load_v2_doc(filename, {"records": {}})
+        file_changed = False
+        for record in (doc.get("records") or {}).values():
+            mismatch = (
+                (graph_version is not None and
+                 record.get("graph_version") != graph_version) or
+                (scenario_revision is not None and
+                 int(record.get("scenario_revision", 1)) != scenario_revision) or
+                (tool_schema_version is not None and
+                 int(record.get("tool_schema_version", 0)) !=
+                 tool_schema_version))
+            if mismatch and not record.get("stale", False):
+                record["stale"] = True
+                changed += 1
+                file_changed = True
+        if file_changed:
+            _save_v2_doc(filename, doc)
+    return changed
+
+
+def learn_v2(st, score, *, split: str = "train",
+             provenance: str = "sandbox",
+             enabled_layers: set[str] | None = None) -> dict:
+    """Idempotently update L2-L4 from one v2 episode.
+
+    Eval input is rejected before any file is opened for writing.  L2/L4 only
+    consume need-bound audit events; arbitrary scratchpad co-occurrence is not
+    a learning source.
+    """
+    layers = ({"l2", "l3", "l4"} if enabled_layers is None else
+              {str(layer).lower() for layer in enabled_layers})
+    unknown = layers - {"l2", "l3", "l4"}
+    if unknown:
+        raise ValueError(f"unsupported v2 learning layers: {sorted(unknown)}")
+    if split == "eval":
+        return {"written": False, "reason": "eval provenance excluded",
+                "l2": 0, "l3": 0, "l4": 0}
+    if provenance not in {"sandbox", "production", "human_labeled"}:
+        raise ValueError("unsupported v2 learning provenance")
+    explanation = getattr(st, "explanation_graph", None)
+    if explanation is not None:
+        mark_v2_stale(
+            graph_version=explanation.graph_version,
+            scenario_revision=int((getattr(st, "incident_window", {}) or {}).get(
+                "scenario_revision", 1)),
+            tool_schema_version=V2_TOOL_SCHEMA_VERSION)
+    observations = [item for item in getattr(st, "evidence_task_audit", [])
+                    if item.get("event") == "tool_learning_observation"]
+    l2_updates, l4_updates = _update_v2_tool_learning(
+        observations, use_l2="l2" in layers, use_l4="l4" in layers)
+    l3_updates = _update_l3_v2(st, score) if "l3" in layers else 0
+    return {
+        "written": bool(l2_updates or l3_updates or l4_updates),
+        "l2": l2_updates,
+        "l3": l3_updates,
+        "l4": l4_updates,
+        "provenance": provenance,
+    }
+
+
+def stats_v2() -> dict:
+    l2 = _load_v2_doc("investigation_policy.yaml", {"records": {}})
+    l3 = _load_v2_doc("causal_weights.yaml", {
+        "processed_outcomes": [], "edge_stats": {}, "path_stats": {}})
+    l4 = _load_v2_doc("tool_information_gain.yaml", {"records": {}})
+    return {
+        "l2_records": len(l2.get("records") or {}),
+        "l3_edges": len(l3.get("edge_stats") or {}),
+        "l3_paths": len(l3.get("path_stats") or {}),
+        "l4_records": len(l4.get("records") or {}),
+        "processed_outcomes": len(l3.get("processed_outcomes") or []),
     }
 
 

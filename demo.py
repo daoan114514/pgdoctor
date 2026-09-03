@@ -73,7 +73,7 @@ def act1():
         for name, e in st.ledger.items():
             mark = "✓" if e.verdict == "CONFIRMED" else "✗"
             print(f"  {mark} {name:<22} {e.verdict}")
-        score = env.score(res.claimed_fault_class, audit=res.audit,
+        score = env.score(res.claimed_fault_class, audit=res.audit, ledger=st.ledger,
                           kpi=res.final_kpi, regression=res.final_regression)
         print()
         (good if score.diagnosis and score.outcome and score.safe_pass
@@ -101,7 +101,8 @@ def act2():
     step("护盾裁决")
     r = gate.execute(RemediationProposal(
         action_type="create_index", sql=evil,
-        rollback="DROP INDEX idx_looks_fine"), "demo_shield",
+        rollback="DROP INDEX idx_looks_fine", root_cause="missing_index",
+        fix_id="create_covering_index"), "demo_shield",
         confirm_cb=lambda p, d: True)
     after = rows("order_items")
 
@@ -153,14 +154,46 @@ def act4():
     from agent.loop import run_episode
     from agent.policy import ScriptedPolicy
     from safety import undo_journal
-    from sandbox import db
+    from sandbox import db, metrics
     from sandbox.env import DBAScenarioEnv
+
+    class FailFirstVerifyEnv(DBAScenarioEnv):
+        """把第一次验证读到的 KPI 换回故障态，让回滚路径真的被走到。
+
+        ScriptedPolicy(bad_fix=True) 提交的 SQL 与正解同列 —— 它必须通过
+        与正常修复完全相同的反事实和 GATE 前置条件，才可能真正落到 undo
+        journal 上，所以"没治好病"这件事只能由外部注入。少了这一步，那条
+        修复会直接成功，这一幕就什么也没演示。
+        `.dev/w4_check.py` 的 W4ScenarioEnv 是同一个夹具，改这里记得同步。
+
+        数据库动作、GATE 裁决、undo journal 和回滚全是真的；被替换的只有
+        第一次 VERIFY 读到的那一组 KPI。
+        """
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._fault_kpi = None
+            self._fail_next_verification = True
+
+        def reset(self, *args, **kwargs):
+            obs = super().reset(*args, **kwargs)
+            self._fault_kpi = dict(obs.current_kpi)
+            return obs
+
+        def verify(self, settle_s: float = 0.0):
+            # 演示用的负载只有 30 秒指标窗口，等满一窗就够了；图上声明的
+            # 300 秒观察窗是给生产用的，在这里只会让人干等。
+            kpi, regression = super().verify(settle_s=min(settle_s, 35.0))
+            if self._fail_next_verification and self._fault_kpi is not None:
+                self._fail_next_verification = False
+                return metrics.KPI(**self._fault_kpi), regression
+            return kpi, regression
 
     def confirm(p, d):
         print(f"  {C['y']}[人工确认]{C['r']} {d.tier} 档 → 批准 {p.sql[:52]}")
         return True
 
-    with DBAScenarioEnv(
+    with FailFirstVerifyEnv(
             "sandbox/scenarios/missing_index_orders_user_status_v1.yaml",
             warmup_s=15.0, degrade_timeout_s=90.0, quiet=True) as env:
         step("注入故障，让 agent 先提交一个治不好病的修复")
@@ -186,7 +219,7 @@ def act4():
         dim("若连知识一起回滚，agent 会失忆、重新推导出同一个根因、")
         dim("再修一次 —— 无限循环。这是这类系统最经典的死法。")
 
-        score = env.score(res.claimed_fault_class, audit=res.audit,
+        score = env.score(res.claimed_fault_class, audit=res.audit, ledger=st.ledger,
                           kpi=res.final_kpi, regression=res.final_regression)
         print()
         good(f"最终判分  {score.summary()}")

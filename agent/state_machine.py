@@ -32,6 +32,7 @@ class Phase(str, Enum):
 READ_TOOLS = {
     "explain_query", "get_active_sessions", "get_top_queries",
     "get_blocking_chain", "get_table_stats", "get_indexes",
+    "get_physical_bloat",
     "get_connection_stats",
     # 按官方手册扩图后新增：xmin 视界的四个持有者、库级累计计数器
     "get_vacuum_horizon", "get_database_stats",
@@ -42,11 +43,13 @@ REASON_TOOLS = {"note_evidence", "set_hypothesis", "declare_root_cause"}
 # agent 自始至终没有任何能改数据库的工具 —— 执行是系统阶段，由门用
 # 它独占的 agent_rw 凭据完成。
 PROPOSE_TOOLS = {"submit_proposal"}
-# 子 agent 汇报裁决的唯一通道。忘了把它加进 INVESTIGATE 的允许集，
+# 子 agent 的结构化回传通道。report_verdict 只供 v1 使用；v2 只允许
+# report_evidence 回传观测，因果方向由系统 predicate 判定。
+# 忘了把回传工具加进 INVESTIGATE 的允许集，
 # 结果 PreToolUse hook 把子 agent 的输出口拦死了：它反复重试直到 turn
 # 预算耗尽，三条假设全部返回 INCONCLUSIVE。教训是工具表与工具实现
 # 必须一起改 —— 白名单漏掉自己的工具，症状看起来像模型不听话。
-SUBAGENT_TOOLS = {"report_verdict"}
+SUBAGENT_TOOLS = {"report_verdict", "report_evidence"}
 
 # 每个阶段允许的工具。只读区与写区被状态机硬性隔开 ——
 # INVESTIGATE 阶段调 propose_remediation 会被直接拒绝。
@@ -73,13 +76,16 @@ TRANSITIONS: dict[Phase, set[Phase]] = {
     Phase.HYPOTHESIZE: {Phase.INVESTIGATE, Phase.ESCALATE},
     Phase.INVESTIGATE: {Phase.DIAGNOSE, Phase.HYPOTHESIZE, Phase.ESCALATE},
     # DIAGNOSE 可退回 INVESTIGATE：ESC 判证据不足时走这条
-    Phase.DIAGNOSE: {Phase.PLAN, Phase.REPORT, Phase.INVESTIGATE, Phase.ESCALATE},
+    Phase.DIAGNOSE: {Phase.PLAN, Phase.REPORT, Phase.INVESTIGATE,
+                     Phase.HYPOTHESIZE, Phase.ESCALATE},
     Phase.PLAN: {Phase.GATE, Phase.ESCALATE},
-    Phase.GATE: {Phase.EXECUTE, Phase.PLAN, Phase.ESCALATE},
-    Phase.EXECUTE: {Phase.VERIFY, Phase.ROLLBACK},
+    Phase.GATE: {Phase.EXECUTE, Phase.PLAN, Phase.INVESTIGATE, Phase.ESCALATE},
+    Phase.EXECUTE: {Phase.VERIFY, Phase.ROLLBACK, Phase.PLAN,
+                    Phase.INVESTIGATE, Phase.ESCALATE},
     # VERIFY 失败 -> ROLLBACK -> 换假设重来
     Phase.VERIFY: {Phase.REPORT, Phase.ROLLBACK},
-    Phase.ROLLBACK: {Phase.HYPOTHESIZE, Phase.ESCALATE},
+    Phase.ROLLBACK: {Phase.PLAN, Phase.INVESTIGATE, Phase.HYPOTHESIZE,
+                     Phase.ESCALATE},
     Phase.REPORT: {Phase.DONE},
     Phase.ESCALATE: {Phase.DONE},
     Phase.DONE: set(),
@@ -122,4 +128,4 @@ class StateMachine:
         self.state.save()
 
     def terminal(self) -> bool:
-        return self.phase in (Phase.DONE, Phase.REPORT, Phase.ESCALATE)
+        return self.phase is Phase.DONE

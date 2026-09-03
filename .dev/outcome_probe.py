@@ -92,7 +92,9 @@ for scen, label in CASES:
             time.sleep(wait)
             kpi = metrics.collect()
             try:
-                passed = metrics.eval_expr(spec["success"]["outcome"], kpi)
+                passed = metrics.eval_expr(
+                    spec["success"]["outcome"], kpi,
+                    baseline=env.healthy_kpi)
             except Exception as exc:
                 passed = False
                 print(f"    判据求值失败: {exc}")
@@ -120,9 +122,11 @@ for scen, label in CASES:
 
         kpi, reg = env.verify()
         try:
-            final = metrics.eval_expr(spec["success"]["outcome"], kpi)
-        except Exception:
+            final = metrics.eval_expr(spec["success"]["outcome"], kpi,
+                                      baseline=env.healthy_kpi)
+        except Exception as exc:
             final = False
+            print(f"    判据求值失败: {exc}")
         print(f"\n  最终: p99={kpi.p99_ms}ms errors={kpi.errors} "
               f"cpu={kpi.cpu_pct}%")
         print(f"  {'PASS' if final else 'FAIL'}  人工正解能否达到成功判据")

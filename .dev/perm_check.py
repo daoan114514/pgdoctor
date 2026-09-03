@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agent.hooks import make_phase_hook
+from agent.explanation import EvidenceNeed
 from agent.permissions import (INVESTIGATOR_DENIED, INVESTIGATOR_ONLY,
                                INVESTIGATOR_PHASES, SYSTEM_PHASES, Role,
                                allowed_tools, matrix)
@@ -110,7 +111,40 @@ check("收窄后不在集合里的工具被拦",
       not guard_says(Phase.INVESTIGATE, Role.INVESTIGATOR,
                      "explain_query", hypothesis="lock_contention"))
 
-print("\n[7] 权限矩阵")
+print("\n[7] v2 EvidenceNeed uses the strict four-way intersection")
+need = EvidenceNeed.create(
+    path_ids=["path_fixture"], target_kind="BRANCH",
+    target_ids=["edge_fixture"], evidence_type="lock_blocking_chain",
+    predicate_id="lock_blocking_chain_v2", required=True,
+    freshness_seconds=60,
+    candidate_tools=["get_blocking_chain", "explain_query"])
+environment = {"get_blocking_chain", "report_evidence", "report_verdict"}
+v2 = allowed_tools(
+    Phase.INVESTIGATE, Role.INVESTIGATOR, evidence_need=need,
+    environment_tools=environment)
+check("v2 set is exactly phase/role/need/environment intersection",
+      v2 == {"get_blocking_chain", "report_evidence"}, sorted(v2))
+check("v2 investigator never receives report_verdict",
+      "report_verdict" not in v2)
+empty_need = EvidenceNeed.create(
+    path_ids=["path_fixture"], target_kind="NODE",
+    target_ids=["node_fixture"], evidence_type="unavailable_fixture",
+    predicate_id="fixture_v2", required=True, freshness_seconds=60,
+    candidate_tools=[])
+empty = allowed_tools(
+    Phase.INVESTIGATE, Role.INVESTIGATOR, evidence_need=empty_need,
+    environment_tools=environment)
+check("empty v2 derivation does not expand to the full toolbox",
+      empty == {"report_evidence"}, sorted(empty))
+v2_hook = make_phase_hook(
+    Phase.INVESTIGATE, role=Role.INVESTIGATOR,
+    evidence_need=need, environment_tools=environment)
+guard = v2_hook["PreToolUse"][0].hooks[0]
+denied = asyncio.run(guard(
+    {"tool_name": "mcp__pgdoctor__explain_query"}, "v2", None))
+check("v2 hook consumes the same strict set", denied != {})
+
+print("\n[8] 权限矩阵")
 print("      " + "\n      ".join(
     f"{r['phase']:<13} 主 {len(r['main']):>2}  子 {len(r['investigator']):>2}"
     for r in matrix()))

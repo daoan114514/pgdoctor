@@ -133,8 +133,11 @@ def inspect_sql(sql: str) -> ShieldVerdict:
 
         if kind == "AlterTableStmt":
             for cmd in (stmt.cmds or []):
-                sub = str(getattr(cmd, "subtype", ""))
-                if not any(a in sub for a in ALTER_SUBTYPE_ALLOW):
+                subtype = getattr(cmd, "subtype", "")
+                # pglast 8.x 的 IntEnum.__str__ 只返回数值（例如 "34"），
+                # 不能再靠 str(enum) 取得 AT_SetRelOptions。
+                sub = getattr(subtype, "name", str(subtype))
+                if sub not in ALTER_SUBTYPE_ALLOW:
                     v.allowed = False
                     v.reasons.append(f"ALTER TABLE 子类型不被允许: {sub}")
 

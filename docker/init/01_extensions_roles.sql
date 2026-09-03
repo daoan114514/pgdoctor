@@ -21,12 +21,17 @@ GRANT USAGE  ON SCHEMA public  TO agent_ro, agent_rw;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO agent_ro;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO agent_ro;
 GRANT pg_read_all_stats TO agent_ro;
+-- 读取 data_directory 等只读设置，供磁盘容量观测定位数据所在文件系统。
+GRANT pg_read_all_settings TO agent_ro;
+-- 只开放近似物理膨胀测量；函数仍受表级 SELECT 权限约束。
+GRANT EXECUTE ON FUNCTION pgstattuple_approx(regclass) TO agent_ro;
 
 -- 写角色：DML + 通过 app_owner 获得 DDL/VACUUM 能力
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO agent_rw;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO agent_rw;
 GRANT pg_read_all_stats TO agent_rw;
+GRANT pg_read_all_settings TO agent_rw;
 GRANT CREATE ON SCHEMA public TO agent_rw;
 GRANT app_owner TO agent_rw;
 

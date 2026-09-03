@@ -75,7 +75,7 @@ print("      → 说明 D2 拦的是「没做鉴别诊断」，不是「结论�
 
 print("\n[3] 正解：声称 long_idle_transaction 并排掉陷阱")
 st = mk("long_idle_transaction",
-        refuted=("connection_exhaustion", "lock_contention"))
+        refuted=("connection_exhaustion", "lock_contention", "deadlock"))
 rep = esc.check(st)
 dims = {d.name: d for d in rep.dims}
 print(f"      裁决 {rep.verdict}   "

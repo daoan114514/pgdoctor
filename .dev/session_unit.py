@@ -4,12 +4,23 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
 
 from safety import gate
-from safety.gate import RemediationProposal as P
+from safety.gate import RemediationProposal
 from safety.shield import classify, inspect_sql
 
 ok = True
+
+
+def P(action_type, sql, rollback, **kwargs):
+    if action_type == "session_control" or "pg_terminate_backend" in sql:
+        root_cause, fix_id = "lock_contention", "terminate_blocker"
+    else:
+        root_cause, fix_id = "missing_index", "create_covering_index"
+    return RemediationProposal(
+        action_type, sql, rollback, root_cause=root_cause, fix_id=fix_id,
+        **kwargs)
 print("=" * 74)
 print("[1] 语法是 SELECT、语义有副作用的函数要被正确归类")
 for sql, want in [
@@ -53,7 +64,7 @@ print(f"  {'PASS' if not d4.approved else 'FAIL'}  {d4.reasons[0][:80]}")
 
 print("\n[6] 护盾回归：23 项对抗测试")
 r = subprocess.run([sys.executable, ".dev/shield_check.py"],
-                   cwd="/home/daoan/pgdoctor", capture_output=True, text=True)
+                   cwd=ROOT, capture_output=True, text=True)
 passed = "SHIELD: PASS" in r.stdout
 ok &= passed
 print(f"  {'PASS' if passed else 'FAIL'}  {r.stdout.strip().splitlines()[-1]}")
@@ -62,7 +73,7 @@ if not passed:
 
 print("\n[7] ESC 回归：六个离线场景")
 r2 = subprocess.run([sys.executable, ".dev/esc_check.py"],
-                    cwd="/home/daoan/pgdoctor", capture_output=True, text=True)
+                    cwd=ROOT, capture_output=True, text=True)
 passed2 = "ESC OFFLINE: PASS" in r2.stdout
 ok &= passed2
 print(f"  {'PASS' if passed2 else 'FAIL'}  {r2.stdout.strip().splitlines()[-1]}")

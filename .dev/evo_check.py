@@ -13,9 +13,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from knowledge import evolution as ev
+from knowledge import structure as struct
 from knowledge.causal_graph import graph as G
 
-REPO = Path("/home/daoan/pgdoctor")
+REPO = Path(__file__).resolve().parent.parent
 # 用干净的学习状态跑，同时绝不碰真实产物。
 #
 # 原来的写法是把 knowledge/learned/ 复制到 learned_backup/ 再删掉原目录，
@@ -27,12 +28,18 @@ REPO = Path("/home/daoan/pgdoctor")
 # 改成把落盘目录重定向到临时目录，退出时还原，真实产物全程只读。
 _TMP = Path(tempfile.mkdtemp(prefix="evo_check_"))
 _ORIG_LEARNED = ev.LEARNED
+_ORIG_STRUCT_LEARNED = struct.LEARNED
+_ORIG_CANDIDATES = struct.CANDIDATES
 ev.LEARNED = _TMP
+struct.LEARNED = _TMP
+struct.CANDIDATES = _TMP / "candidate_edges.yaml"
 
 
 @atexit.register
 def _restore_learned():
     ev.LEARNED = _ORIG_LEARNED
+    struct.LEARNED = _ORIG_STRUCT_LEARNED
+    struct.CANDIDATES = _ORIG_CANDIDATES
     shutil.rmtree(_TMP, ignore_errors=True)
 
 ok = True
@@ -58,7 +65,8 @@ print("[1] 喂入真实历史轨迹")
 fed = 0
 for res_file in sorted((REPO / "eval/results").glob("*.json")):
     d = json.loads(res_file.read_text(encoding="utf-8"))
-    for e in d["episodes"]:
+    episodes = d.get("episodes", []) if isinstance(d, dict) else []
+    for e in episodes:
         if not e.get("episode_id") or not e.get("fired"):
             continue
         low = (e.get("error") or "").lower()

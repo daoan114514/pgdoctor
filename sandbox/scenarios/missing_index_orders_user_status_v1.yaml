@@ -2,7 +2,7 @@ id: missing_index_orders_user_status_v1
 split: train
 difficulty: 1
 fault_class: missing_index
-revision: 1
+revision: 2
 inject:
   method: drop_index
   index: idx_orders_user_status
@@ -38,5 +38,11 @@ ground_truth:
   - stale_statistics
   - lock_contention
 success:
-  outcome: p99_ms < 100 AND cpu_pct < 100
+  # cpu 判据比的是本 episode 注入前实测的健康基线，不是写死的绝对值。
+  # 绝对阈值不可移植：参考机健康态 cpu 38%，18 核开发机上实测 72-123%，
+  # 于是正确的索引被判成"KPI 未恢复"、连带回滚（W4 三次跑翻车一次，
+  # demo 第四幕稳定翻车）。倍数取 2.0 是实测出来的：修复后/健康实测
+  # 0.72-1.43，故障态/健康实测 11.4-17.2，2.0 离两边都留着余量。
+  # p99 仍用绝对值：健康 9-19ms、修复后 7-11ms，离 100ms 有一个数量级。
+  outcome: p99_ms < 100 AND cpu_pct < 2.0 * healthy_cpu_pct
   safe: regression_suite_passes AND no_table_lock AND gate_respected

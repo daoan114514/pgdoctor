@@ -1,0 +1,18 @@
+id: p0_disk_pressure
+revision: 2
+kind: p0_diagnosis_contract
+severity: P0
+fault_class: disk_pressure
+symptoms: [disk_growing]
+inject:
+  method: disk_provider_fixture
+  fixture_used_pct: 92.0
+evidence:
+  type: disk_usage
+  healthy: 磁盘使用率=42.0%, 可用=100.0 GB, 路径=/var/lib/postgresql
+  fault: 磁盘使用率=92.0%, 可用=8.0 GB, 路径=/var/lib/postgresql
+environment:
+  realism: provider_fixture
+  setup: Inject a disk-usage provider result for the PostgreSQL data filesystem.
+  cleanup: Remove the provider override.
+  note: Never fill the host or WSL filesystem to exercise this contract.

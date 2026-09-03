@@ -67,21 +67,70 @@ check("TOOL_OF 覆盖所有证据类型", not missing, missing)
 
 print("\n[5] 取值判据：拿到证据不等于证据支持结论")
 CASES = [
+    ("autovacuum_health",
+     "orders: autovacuum_enabled=True running=False dead=100 trigger=1,000 "
+     "backlog=0.10 last_autovacuum=2026-09-01",
+     "autovacuum_starvation", False),
+    ("autovacuum_health",
+     "orders: autovacuum_enabled=False running=False dead=0 trigger=1,000 "
+     "backlog=0.00 last_autovacuum=空",
+     "autovacuum_starvation", True),
+    ("autovacuum_health",
+     "orders: autovacuum_enabled=True running=False dead=3,000 trigger=1,000 "
+     "backlog=3.00 last_autovacuum=2026-08-01",
+     "autovacuum_starvation", True),
+    ("autovacuum_health",
+     "orders: autovacuum_enabled=True running=True dead=3,000 trigger=1,000 "
+     "backlog=3.00 last_autovacuum=2026-08-01",
+     "autovacuum_starvation", False),
     ("xid_age", "占 freeze_max_age 0.4%, 风险=False", "xid_wraparound_risk", False),
     ("xid_age", "占 freeze_max_age 87.0%, 风险=True", "xid_wraparound_risk", True),
-    ("deadlock_count", "累计死锁=0, 回滚=88/提交=282547", "deadlock", False),
-    ("deadlock_count", "累计死锁=3, 回滚=88/提交=282547", "deadlock", True),
-    ("temp_file_volume", "临时文件 0 个, 外溢 0.0 MB", "work_mem_spill", False),
-    ("temp_file_volume", "临时文件 9 个, 外溢 512.0 MB", "work_mem_spill", True),
-    ("replication_slot_age", "复制槽 0 个, 最大 xmin 年龄=0; 明细=[]",
+    ("deadlock_count", "窗口 30.0s: 死锁增量=0, 回滚增量=0/提交增量=88",
+     "deadlock", False),
+    ("deadlock_count", "窗口 30.0s: 死锁增量=3, 回滚增量=2/提交增量=88",
+     "deadlock", True),
+    ("temp_file_volume", "窗口 30.0s: 临时文件增量=0 个, 外溢增量 0.0 MB",
+     "work_mem_spill", False),
+    ("temp_file_volume", "窗口 30.0s: 临时文件增量=9 个, 外溢增量 512.0 MB",
+     "work_mem_spill", True),
+    ("replication_slot_age",
+     "复制槽 0 个, 非活动=0, 非活动槽最大 horizon 年龄=0, "
+     "非活动槽最大 WAL 滞留=0.0 MB; 明细=[]",
      "stale_replication_slot", False),
-    ("replication_slot_age", "复制槽 1 个, 最大 xmin 年龄=5,000,000; 明细=[]",
+    ("replication_slot_age",
+     "复制槽 1 个, 非活动=0, 非活动槽最大 horizon 年龄=0, "
+     "非活动槽最大 WAL 滞留=0.0 MB; 明细=[{'active': True}]",
+     "stale_replication_slot", False),
+    ("replication_slot_age",
+     "复制槽 1 个, 非活动=1, 非活动槽最大 horizon 年龄=50,000, "
+     "非活动槽最大 WAL 滞留=10.0 MB; 明细=[]",
+     "stale_replication_slot", False),
+    ("replication_slot_age",
+     "复制槽 1 个, 非活动=1, 非活动槽最大 horizon 年龄=5,000,000, "
+     "非活动槽最大 WAL 滞留=10.0 MB; 明细=[]",
      "stale_replication_slot", True),
-    ("prepared_xact_age", "预备事务 0 个, 最大 XID 年龄=0",
+    ("replication_slot_age",
+     "复制槽 1 个, 非活动=1, 非活动槽最大 horizon 年龄=0, "
+     "非活动槽最大 WAL 滞留=2048.0 MB; 明细=[]",
+     "stale_replication_slot", True),
+    ("prepared_xact_age", "预备事务 0 个, 最大 XID 年龄=0, 最长挂起=0s",
      "orphaned_prepared_transaction", False),
-    ("checkpoint_stats", "检查点 定时=47 请求式=2 (请求式占比 4.1%), 写耗时=1ms",
+    ("prepared_xact_age", "预备事务 1 个, 最大 XID 年龄=10, 最长挂起=30s",
+     "orphaned_prepared_transaction", False),
+    ("prepared_xact_age",
+     "预备事务 1 个, 最大 XID 年龄=5,000,000, 最长挂起=30s",
+     "orphaned_prepared_transaction", True),
+    ("prepared_xact_age", "预备事务 1 个, 最大 XID 年龄=10, 最长挂起=7,200s",
+     "orphaned_prepared_transaction", True),
+    ("disk_usage", "磁盘使用率=42.0%, 可用=100.0 GB, 路径=/var/lib/postgresql",
+     "disk_pressure", False),
+    ("disk_usage", "磁盘使用率=92.0%, 可用=8.0 GB, 路径=/var/lib/postgresql",
+     "disk_pressure", True),
+    ("checkpoint_stats", "窗口 30.0s: 检查点定时增量=47 请求式增量=2 "
+     "(窗口请求式占比 4.1%), 写耗时增量=1ms",
      "checkpoint_pressure", False),
-    ("checkpoint_stats", "检查点 定时=47 请求式=352 (请求式占比 88.2%), 写耗时=1ms",
+    ("checkpoint_stats", "窗口 30.0s: 检查点定时增量=47 请求式增量=352 "
+     "(窗口请求式占比 88.2%), 写耗时增量=1ms",
      "checkpoint_pressure", True),
 ]
 for ev, obs, rc, want in CASES:
@@ -89,18 +138,25 @@ for ev, obs, rc, want in CASES:
     check(f"{ev} -> {rc} 期望 {want}", got is want, obs[:46])
 
 # 逐个确认没有漏网的"恒为真"
-NEW_EV = ["xid_age", "replication_slot_age", "prepared_xact_age",
-          "deadlock_count", "temp_file_volume", "checkpoint_stats"]
+NEW_EV = ["autovacuum_health", "xid_age", "replication_slot_age",
+          "prepared_xact_age", "disk_usage", "deadlock_count",
+          "temp_file_volume", "checkpoint_stats"]
 for ev in NEW_EV:
     owners = [c for c in ROOTS if ev in G.required_evidence(c)]
     if not owners:
         continue
-    zero = {"xid_age": "占 freeze_max_age 0.0%",
-            "replication_slot_age": "复制槽 0 个, 最大 xmin 年龄=0",
-            "prepared_xact_age": "预备事务 0 个",
-            "deadlock_count": "累计死锁=0",
-            "temp_file_volume": "外溢 0.0 MB",
-            "checkpoint_stats": "请求式占比 0.0%"}[ev]
+    zero = {"autovacuum_health":
+            "autovacuum_enabled=True running=False backlog=0.0",
+            "xid_age": "占 freeze_max_age 0.0%",
+            "replication_slot_age":
+            "复制槽 0 个, 非活动=0, 非活动槽最大 horizon 年龄=0, "
+            "非活动槽最大 WAL 滞留=0.0 MB",
+            "prepared_xact_age":
+            "预备事务 0 个, 最大 XID 年龄=0, 最长挂起=0s",
+            "disk_usage": "磁盘使用率=0.0%",
+            "deadlock_count": "窗口 30.0s: 死锁增量=0",
+            "temp_file_volume": "窗口 30.0s: 外溢增量 0.0 MB",
+            "checkpoint_stats": "窗口 30.0s: 窗口请求式占比 0.0%"}[ev]
     check(f"{ev} 空值不支持 {owners[0]}",
           _supports(ev, zero, owners[0]) is False)
 
@@ -118,6 +174,18 @@ for sym, want in [("disk_growing", "stale_replication_slot"),
                   ("latency_p99_up", "work_mem_spill")]:
     names = [c["root_cause"] for c in G.candidate_causes([sym], top_k=12)]
     check(f"{sym} 能反查到 {want}", want in names, names[:6])
+
+print("\n[8] 相关性不能伪装成根因级联")
+check("table_bloat 不会凭空制造 missing_index",
+      not g.has_edge("table_bloat", "missing_index", key="CAUSES"))
+check("普通 lock_contention 不会升级成 deadlock",
+      not g.has_edge("lock_contention", "deadlock", key="CAUSES"))
+check("autovacuum 使用直接健康证据",
+      G.required_evidence("autovacuum_starvation") == ["autovacuum_health"])
+check("disk_pressure 使用真实文件系统水位",
+      G.required_evidence("disk_pressure") == ["disk_usage"])
+check("临时文件外溢不等于磁盘空间不足",
+      "temp_file_volume" not in G.supporting_evidence("disk_pressure"))
 
 print()
 print("=" * 60)

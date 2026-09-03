@@ -27,11 +27,14 @@ from claude_agent_sdk import (
     tool,
 )
 
-from agent.episode_state import EpisodeState, Verdict
-from agent.policy import Policy
+from agent.episode_state import EpisodeState
+from agent.explanation import EvidenceNeed
 from agent.hooks import make_phase_hook
-from agent.orchestrator import run_investigation
-from agent.state_machine import ALLOWED_TOOLS, Phase
+from agent.orchestrator import run_evidence_investigation
+from agent.permissions import Role, allowed_tools
+from agent.policy import Policy
+from agent.state_machine import Phase
+from agent.tool_planner import ToolPlanningConfig
 from agent.toolbox import Toolbox
 
 MODEL = os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5")
@@ -55,6 +58,8 @@ _UNAVAILABLE_HINTS = (
     "quota", "overloaded", "429", "exceeded",
 )
 SERVER = "pgdoctor"
+V2_MODEL_FORBIDDEN = frozenset({"set_hypothesis", "declare_root_cause",
+                                "report_verdict"})
 
 
 def _proxy_env() -> dict[str, str]:
@@ -94,9 +99,15 @@ def _build_tools(tb: Toolbox) -> list:
              {"table": str})(
             wrap(lambda a: tb.get_indexes(a.get("table", "orders")))),
 
-        tool("get_table_stats", "表统计：活元组/死元组/膨胀率/last_analyze/大小",
+        tool("get_table_stats", "表统计：活元组/死元组清理压力/last_analyze/"
+             "autovacuum 有效开关、触发阈值与 worker 状态/大小",
              {"table": str})(
             wrap(lambda a: tb.get_table_stats(a.get("table", "orders")))),
+
+        tool("get_physical_bloat",
+             "用 pgstattuple_approx 测量物理可回收比例；不可用时返回 UNKNOWN",
+             {"table": str})(
+            wrap(lambda a: tb.get_physical_bloat(a.get("table", "orders")))),
 
         tool("get_top_queries", "按累计耗时排序的最慢查询", {"n": int})(
             wrap(lambda a: tb.get_top_queries(int(a.get("n", 5))))),
@@ -120,8 +131,10 @@ def _build_tools(tb: Toolbox) -> list:
             wrap(lambda a: tb.get_vacuum_horizon())),
 
         tool("get_database_stats",
-             "库级累计计数器：死锁数、临时文件外溢量、检查点定时/请求式"
-             "次数与耗时、I/O 等待时间",
+             "库级累计计数器的窗口差分：死锁、临时文件外溢、检查点定时/"
+             "请求式次数与耗时；同时返回数据目录文件系统的即时使用率。"
+             "累计项首次调用只建立基线，证据为 UNKNOWN；"
+             "故障持续一段时间后再次调用，才能得到可判定的窗口增量",
              {})(
             wrap(lambda a: tb.get_database_stats())),
 
@@ -151,10 +164,14 @@ def _build_tools(tb: Toolbox) -> list:
              "提交修复提案给安全门。这里不会执行任何东西 —— 提案要经过"
              "AST 校验、风险分级与确认后才由系统执行。必须提供可回滚语句。",
              {"action_type": str, "sql": str, "rollback": str,
-              "rationale": str})(
+              "rationale": str, "selected_path_id": str,
+              "fix_id": str, "intervention_target": str})(
             wrap(lambda a: tb.submit_proposal(
                 a["action_type"], a["sql"], a["rollback"],
-                a.get("rationale", "")))),
+                a.get("rationale", ""),
+                selected_path_id=a.get("selected_path_id", ""),
+                fix_id=a.get("fix_id", ""),
+                intervention_target=a.get("intervention_target", "")))),
     ]
 
 
@@ -162,16 +179,10 @@ SYSTEM = """你是一名资深 PostgreSQL DBA，正在排查一次线上告警�
 
 工作方式：
 - 只能用给定工具取证。不要臆测，每个结论都要有工具返回的证据支撑。
-- 做鉴别诊断：不是"找到一个能解释的就收工"，而是要主动排除竞争假设。
-- 一个假设被排除，也要用 set_hypothesis 记下来并说明依据。
+- 调查对象是系统给出的路径分叉或路径片段，不是孤立的根因字符串。
+- 只提交调查意图、结构化观测和修复提案；节点/边状态、证据方向、
+  ESC 与 GATE 因果上下文均由系统根据持久状态确定。
 - 数据库很大（orders 表 1200 万行），注意区分"慢"和"扫了太多行"。
-
-可用的 fault_class 枚举：
-  missing_index      缺少可用索引，导致全表扫
-  stale_statistics   统计信息过期，优化器选了坏计划
-  lock_contention    锁等待/阻塞链
-  table_bloat        表膨胀
-  connection_exhaustion  连接打满
 
 简洁行动，不要复述工具输出。"""
 
@@ -208,7 +219,7 @@ class LLMPolicy(Policy):
         }
 
     async def _ask(self, prompt: str, tb: Toolbox, phase: Phase) -> str:
-        allowed = sorted(ALLOWED_TOOLS[phase])
+        allowed = sorted(allowed_tools(phase, Role.MAIN) - V2_MODEL_FORBIDDEN)
         srv = create_sdk_mcp_server(SERVER, "1.0.0", _build_tools(tb))
         names = [f"mcp__{SERVER}__{t}" for t in allowed]
 
@@ -283,7 +294,7 @@ class LLMPolicy(Policy):
         # 确定性阶段：固定动作，不花模型额度
         if phase is Phase.MONITOR:
             tb.get_active_sessions()
-            st.symptoms = ctx.get("symptoms", [])
+            tb.get_database_stats()
             return Phase.OBSERVE
 
         if phase is Phase.OBSERVE:
@@ -291,61 +302,56 @@ class LLMPolicy(Policy):
             return Phase.HYPOTHESIZE
 
         if phase is Phase.HYPOTHESIZE:
-            # W6 起候选集改由故障因果图多跳遍历给出以保证覆盖率；
-            # 现在先用固定枚举，模型只负责后续取证与排除。
-            st.ensure_hypotheses(ctx.get("candidates") or self.CANDIDATES)
+            # Path recall and P0 obligations are system-owned and already
+            # persisted by the loop before policy code runs.
             return Phase.INVESTIGATE
 
         if phase is Phase.INVESTIGATE:
+            needs = [EvidenceNeed.from_dict(item) for item in
+                     ctx.get("explanation", {}).get("needs", [])]
+            if not needs:
+                return Phase.DIAGNOSE
             if self.use_subagents:
-                # 每条假设一个独立上下文：取证的中间数据（大量 EXPLAIN、
-                # 视图输出）全留在子上下文里，主上下文只收结构化裁决。
-                import asyncio as _aio
-                r = self._run(run_investigation(
-                    st, tb, ctx.get("candidates") or self.CANDIDATES, hot,
-                    batch_size=self.batch_size, verbose=self.verbose,
-                    case_prior=ctx.get("case_prior", "")))
-                self.orchestration = r
+                # Planning owns tool selection and merges one tool call across
+                # every need it can satisfy.  Subagents only return reports;
+                # deterministic predicates update the explanation graph.
+                result = self._run(run_evidence_investigation(
+                    st, tb, needs, hot, max_concurrency=self.batch_size,
+                    planning_config=ToolPlanningConfig(
+                        use_learned=bool(ctx.get("use_learned", True)),
+                        use_l2="l2" in set(ctx.get("learned_layers", [])),
+                        use_l4="l4" in set(ctx.get("learned_layers", []))),
+                    verbose=self.verbose, model=self.model))
+                self.orchestration = result
                 self.usage.append({"phase": "INVESTIGATE(subagents)",
-                                   "cost_usd": r.cost_usd, "turns": r.turns,
+                                   "cost_usd": result.cost_usd,
+                                   "turns": result.turns,
                                    "usage": None})
-                if self.verbose and r.conflicts:
-                    for c in r.conflicts:
-                        print(f"      冲突: {c}")
+                for task_result in result.task_results:
+                    if task_result.error:
+                        st.note("investigator", "subagent_error",
+                                task_result.error[:180])
+                    for blocked in task_result.blocked:
+                        st.note("investigator", "blocked_call", blocked[:180])
                 return Phase.DIAGNOSE
 
             prompt = f"""{st.render_context()}
 
-{ctx.get("case_prior", "")}
-{ctx.get("playbook_hint", "")}
-
 告警指向的慢查询：
 {hot}
 
-请逐条调查下列假设，每条都要用工具取证，然后用 set_hypothesis 记录裁决：
-{chr(10).join('  - ' + c for c in (ctx.get('candidates') or self.CANDIDATES))}
-
-注意做真正的鉴别诊断：确认一个的同时也要排除其他的。"""
+请采集下面这些路径前沿所需的结构化证据。只调用 candidate_tools，
+不要用 set_hypothesis 或自然语言自行判断支持/反证：
+{json.dumps([need.to_dict() for need in needs[:6]], ensure_ascii=False)}"""
             self._run(self._ask(prompt, tb, phase))
             return Phase.DIAGNOSE
 
         if phase is Phase.DIAGNOSE:
-            prompt = f"""{st.render_context()}
-
-告警指向的慢查询：
-{hot}
-
-现在收敛结论。要求：
-1. 若某个根因证据充分，先用 simulate_index 之类的手段做反事实验证
-   （对缺索引类问题尤其重要：不改数据库就能预先证伪）。
-2. 验证通过后用 declare_root_cause 声明根因。
-3. 若证据不足以区分多个假设，不要硬下结论，直接说明缺什么证据。"""
-            out = self._run(self._ask(prompt, tb, phase))
-
-            if not st.claimed_fault_class:
-                st.outcome_note = f"模型未声明根因: {out[:200]}"
-                return Phase.ESCALATE
-            return Phase.PLAN
+            explanation = st.explanation_graph
+            if explanation is None or not explanation.selected_path_ids:
+                st.outcome_note = "没有可选择的已支持解释路径"
+                return Phase.INVESTIGATE
+            return Phase.PLAN if ctx.get("allow_repair", False) else Phase.REPORT
 
         if phase is Phase.PLAN:
             tried = "\n".join(
@@ -361,6 +367,14 @@ class LLMPolicy(Policy):
                     f"  档位     : {g.get('tier', '')}\n"
                     f"  理由     : {'; '.join(g.get('reasons', []))}\n"
                     "  必须针对上面的理由修改，原样重提只会再被拒一次。\n")
+            options = ctx.get("remediation_options", [])
+            graph_fixes = "\n".join(
+                f"  - {f['fix']}: action_type={f['action_type']}, "
+                f"path_id={f['path_id']}, target={f['target_node_id']}, "
+                f"kind={f['intervention_kind']}, "
+                f"最低门槛={f['risk_tier']}, SQL 模板={f['template']}, "
+                f"rollback={f['rollback']}"
+                for f in options) or "  （因果图没有可执行修复）"
 
             prompt = f"""{st.render_context()}
 
@@ -370,11 +384,15 @@ class LLMPolicy(Policy):
 {hot}
 
 已确认根因：{st.claimed_fault_class} — {st.claimed_root_cause}
+因果图允许的修复：
+{graph_fixes}
 {denial}
 此前试过且失败的修复（不要重复提交）：
 {tried}
 
-请用 submit_proposal 提交一个修复方案。
+请用 submit_proposal 提交一个修复方案，并原样填写所选项的
+selected_path_id、fix_id 和 intervention_target。它们只是选择意图，
+系统会从持久解释图重新校验，不能覆盖可信因果上下文。
 
 action_type 必须取自：create_index / vacuum_analyze（含 ANALYZE）/
 set_parameter / alter_table_options / session_control / dml_update / dml_delete
@@ -393,7 +411,7 @@ set_parameter / alter_table_options / session_control / dml_update / dml_delete
    锁竞争用 pg_terminate_backend 终止阻塞源，action_type 填
    session_control、rollback 填 IRREVERSIBLE（终止会话本就撤不回来，
    写假的回滚语句会制造"以为能回滚"的错觉）。
-4. 提交前可以用 simulate_index 确认该索引确实会被优化器采用。
+5. 提交前可以用 simulate_index 确认该索引确实会被优化器采用。
 
 提案会经过 AST 校验与风险分级，不合规会被拒。"""
             out = self._run(self._ask(prompt, tb, phase))

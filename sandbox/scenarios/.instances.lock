@@ -17,14 +17,14 @@ misleading_idle_txn_eval_v1:
   fingerprint: af88d51ef16f2484
   revision: 1
 misleading_idle_txn_train_v1:
-  fingerprint: dde5b568307abdb7
-  revision: 1
-missing_index_eval_v1:
-  fingerprint: e7fea9581d2b39df
+  fingerprint: cd7c2f41b33ed8d4
   revision: 2
+missing_index_eval_v1:
+  fingerprint: 569120f581daecd2
+  revision: 3
 missing_index_orders_user_status_v1:
-  fingerprint: 3eba932efb4d3a6c
-  revision: 1
+  fingerprint: 9ca8ff115fa57ee5
+  revision: 2
 stale_statistics_eval_v1:
   fingerprint: de4abdbd53559019
   revision: 2

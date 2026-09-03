@@ -5,6 +5,7 @@ pglast>=5.0                  # Postgres 原生 SQL 解析器 → 护盾的 AST �
 networkx>=3.0                # 故障因果图
 PyYAML>=6.0                  # 场景 DSL / 图定义 / 案例库
 numpy>=1.24
+psutil>=5.9                    # 非 Docker/WSL 原生 PostgreSQL 的进程 CPU 采集
 
 # ── 后续阶段 ──
 # sentence-transformers      # W7 案例库稠密检索（较重，用到再装）

@@ -1,0 +1,32 @@
+schema_version: 2
+v1_import:
+  enabled: false
+  sources:
+    - ../playbooks.yaml
+    - ../graph_delta.yaml
+    - ../query_library.yaml
+    - ../candidate_edges.yaml
+  trust: untrusted_audit_only
+tool_schema_version: 2
+layers:
+  l1: cases.yaml
+  l2: investigation_policy.yaml
+  l3: causal_weights.yaml
+  l4: tool_information_gain.yaml
+  structure: structure_proposals.yaml
+schema: schema.yaml
+datasets:
+  authoritative_replay_v2:
+    path: eval/authoritative_cases_v2.yaml
+    source_catalog: eval/authoritative_sources.yaml
+    generator: eval/build_authoritative_cases.py
+    validation: .dev/authoritative_case_check.py
+    revision: 2
+    graph_version: graph_e08cdb62d9441aeaa798a033
+    fidelity: source_grounded_controlled_replay
+    case_count: 100
+    splits:
+      train: 70
+      eval: 30
+    l1_train_seed_count: 70
+    eval_training_eligible: false

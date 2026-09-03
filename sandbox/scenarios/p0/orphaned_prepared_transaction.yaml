@@ -1,0 +1,18 @@
+id: p0_orphaned_prepared_transaction
+revision: 2
+kind: p0_diagnosis_contract
+severity: P0
+fault_class: orphaned_prepared_transaction
+symptoms: [latency_p99_up]
+inject:
+  method: prepare_transaction
+  gid: pgdoctor_p0_prepared
+evidence:
+  type: prepared_xact_age
+  healthy: 预备事务 1 个, 最大 XID 年龄=10, 最长挂起=30s
+  fault: 预备事务 1 个, 最大 XID 年龄=10, 最长挂起=7,200s
+environment:
+  realism: live_object_with_age_fixture
+  setup: Create one prepared transaction, then inject its observed age.
+  cleanup: ROLLBACK PREPARED the scenario GID.
+  note: Production thresholds remain at XID age 1,000,000 or elapsed time 3,600s.
