@@ -35,9 +35,18 @@
 
 | | 怎么修 |
 |---|---|
-| 无环 | 改判别**顺序**，按拓扑序走，污染源先解决 |
-| 有环 | 顺序无解，**必须改证据**，引入不在环内任何失效模式上的判据 |
+| 缺口（该根因所有可反证证据都被污染） | **改证据**，补一条不经过那个失效模式的可反证证据 |
+| 有污染但仍有干净的可反证证据 | 不用改结构，可信度规则会让顺序自己涌现 |
 | 自环 | 合法，那是"用真实数据检验该假设自己的声称"，不用改 |
+
+**不要做环检测。** 接地覆盖检查完全覆盖它 —— 互相污染且都没有干净证据必然
+表现为接地缺口 —— 而且环检测会误报（粗粒度的根因级环，可能因为某个根因另有
+一条干净证据而实际可解），报出来也只说"这儿有个环"，不说该补什么。
+
+这些不用手写：证据节点标 `provenance`（值由什么算出来），
+`knowledge/causal_graph/nodes.yaml` 的 `provenance_rules` 段落把它映射到
+失效条件，`graph.invalidators_of()` / `ungrounded_root_causes()` 推导，
+`graph_lint` 第 [8] 节把缺口报成失败。
 
 已确认的污染边：`stale_statistics ⇝ missing_index`，经 `explain_seq_scan` /
 `explain_plan` / `counterfactual_index`——它们都是**规划器的输出**，而规划器吃的
@@ -53,9 +62,13 @@ agent 全程只持有只读连接 `agent_ro`，没有任何能改数据库的工
 - **新增工具**：`state_machine.READ_TOOLS`、`toolbox`、`observe`、`investigator`（两处）、
   `llm_policy`、`policy`、`depth_policy`、`tool_planner`（三处）、`evolution`。漏一处的
   症状是"模型不听话"，实际是自己的 hook 把出口拦死了。能并进已有工具就别新增。
-- **改因果图**：`graph_lint` 会查结构；权威数据集锁着 `graph_version`，要
-  `python eval/build_authoritative_cases.py --install-l1-seeds` 重生成并更新
-  `knowledge/learned/v2/manifest.yaml`。
+- **改因果图**：`graph_lint` 会查结构（含 provenance 与接地覆盖）；权威数据集锁着
+  `graph_version`，要跑 `python eval/build_authoritative_cases.py --install-l1-seeds`
+  重生成（它会自己同步 `manifest.yaml` 的 `graph_version`）。
+- **新增证据类型**：除图上的节点与边，还要补 `knowledge/evolution.py` 的 `TOOL_OF`
+  和 `.dev/p0_gate_check.py` 的 SUPPORT_VALUES / REFUTE_VALUES。窗口类判据还要在
+  夹具里传 `window=`，否则一律 NOT_APPLICABLE、反证根本不成立。
+  `.dev/graph_expand_check.py` 会查 `TOOL_OF` 覆盖率。
 - **改场景实例定义**：bump `revision`，再跑 `python .dev/relock.py` 更新实例锁，
   否则 `harness_lint` 报错（历史结果就分不清对应哪个版本了）。
 

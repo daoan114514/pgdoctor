@@ -978,6 +978,52 @@ def refuting_evidence(root_cause: str) -> list[dict]:
             if k == "REFUTED_BY"]
 
 
+@functools.lru_cache(maxsize=1)
+def provenance_rules() -> dict:
+    """证据来源 -> 失效规则。见 nodes.yaml 的 provenance_rules 段落。"""
+    nodes = yaml.safe_load((HERE / "nodes.yaml").read_text(encoding="utf-8"))
+    return dict(nodes.get("provenance_rules") or {})
+
+
+def invalidators_of(evidence_type: str) -> set[str]:
+    """哪些根因为真时，这条证据关于**别的**根因的裁决不可信。
+
+    不逐对手写，而是从证据自己的 provenance 标签查表推出来 —— N 个标签
+    取代 N×M 条声明，而且标签本身有文档出处（source 字段）可查。
+
+    自身不算在内：证据判它自己的来源失真，那是检验不是污染
+    （row_estimate_deviation 判 stale_statistics、stats_range_drift 判
+    stale_statistics 都属于这一类）。
+    """
+    node = load().nodes.get(evidence_type, {})
+    rule = provenance_rules().get(str(node.get("provenance") or ""), {})
+    return set(rule.get("invalidated_by") or [])
+
+
+def ungrounded_root_causes() -> dict[str, list[str]]:
+    """哪些根因没有"未被污染的可反证证据"。
+
+    这是取代环检测的检查。环检测只会说"这儿有个环"，而且会误报 —— 粗粒度
+    的根因级环，可能因为某个根因另有一条干净证据而实际可解。这个检查直接
+    回答该修哪里：**哪个根因、缺哪个角色的证据**。
+
+    只看反证角色：ESC 关闭竞争路径靠的是 REFUTED_BY，能干净地"支持"却
+    关不干净的根因，仍然会让 ALTERNATIVE_PATHS 卡住。
+    """
+    out: dict[str, list[str]] = {}
+    graph = load()
+    for node_id, data in graph.nodes(data=True):
+        if data.get("kind") != "RootCause":
+            continue
+        refuters = sorted({item["evidence"]
+                           for item in refuting_evidence(node_id)})
+        clean = [ev for ev in refuters
+                 if not (invalidators_of(ev) - {node_id})]
+        if not clean:
+            out[node_id] = refuters
+    return out
+
+
 def discriminators_of(root_cause: str) -> set[str]:
     """哪些证据类型能把这个根因和别的候选分开。
 

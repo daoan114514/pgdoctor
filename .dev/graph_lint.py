@@ -347,6 +347,32 @@ for s in symptoms:
 unreach = [c for c, k in KIND.items() if k == "RootCause" and c not in reach]
 check("每个根因都能从某个症状反查到", not unreach, unreach)
 
+# ══ 证据接地：判别证据不能与它要判别的假设共享失效模式 ═══════════
+#
+# 不做环检测。环检测被这条检查完全覆盖 —— 互相污染且都没有干净证据，
+# 必然表现为接地缺口 —— 而且它会误报（粗粒度的根因级环，可能因为某个
+# 根因另有一条干净证据而实际可解），报出来也只说"这儿有个环"，不说该
+# 补什么。这条直接回答：哪个根因、缺哪个角色的证据。
+#
+# 只看反证角色：ESC 关闭竞争路径靠的是 REFUTED_BY。一个"支持得干净、
+# 关不干净"的根因照样会让 ALTERNATIVE_PATHS 卡死 —— missing_index 之前
+# 就是这个状态，两条可反证证据全是规划器输出。
+print()
+print("[8] 每个根因都要有未被污染的可反证证据")
+prov_missing = [n for n, k in KIND.items()
+                if k == "Evidence" and not g.nodes[n].get("provenance")]
+check("证据都标了 provenance", not prov_missing, prov_missing[:6])
+
+rules = G.provenance_rules()
+unknown_prov = sorted({str(g.nodes[n].get("provenance")) for n, k in KIND.items()
+                       if k == "Evidence" and g.nodes[n].get("provenance")
+                       and str(g.nodes[n].get("provenance")) not in rules})
+check("provenance 都在规则表里", not unknown_prov, unknown_prov)
+
+ungrounded = G.ungrounded_root_causes()
+check("每个根因都有未被污染的可反证证据", not ungrounded,
+      [f"{rc}: 可反证证据 {evs} 全部被污染" for rc, evs in ungrounded.items()])
+
 print()
 print("=" * 62)
 if fails:

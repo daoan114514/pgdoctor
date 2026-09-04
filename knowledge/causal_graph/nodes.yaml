@@ -98,27 +98,38 @@ root_causes:
 # 证据类型 —— id 与 Toolbox 的 evidence_type 一一对应
 evidence:
   - id: explain_seq_scan
+    provenance: planner_output
+    source: pg_explain
     desc: EXPLAIN 显示 Seq Scan 且过滤掉大量行
     obtained_by: explain_query
     predicate_id: explain_seq_scan_v2
   - id: explain_plan
+    provenance: planner_output
+    source: pg_explain
     desc: EXPLAIN 显示走了索引
     obtained_by: explain_query
     predicate_id: explain_plan_v2
   - id: index_existence
+    provenance: catalog_metadata
     desc: pg_indexes 上是否存在可覆盖该谓词的索引
     obtained_by: get_indexes
     predicate_id: index_existence_v2
   - id: stats_freshness
+    provenance: catalog_metadata
+    source: pg_planner_stats
     desc: last_analyze 是否新鲜
     obtained_by: get_table_stats
     predicate_id: stats_freshness_v2
   - id: row_estimate_deviation
+    provenance: planner_output
+    source: pg_planner_stats
     desc: EXPLAIN 里估计行数与实际行数的偏差倍数。统计过期的真正判别
       特征 —— 时间戳"看着新"也可能因为刚灌过数据而严重失真
     obtained_by: explain_query
     predicate_id: row_estimate_deviation_v2
   - id: stats_range_drift
+    provenance: catalog_vs_actual
+    source: pg_planner_stats
     desc: 落在统计已知值域之外的行数占比。它是估计偏差的成因而不是代理 ——
       规划器之所以估错，正因为这些行的取值旧直方图从没见过；而它本身
       不经过规划器，所以不会被过期统计污染。EXPLAIN 在写负载上取不到时
@@ -127,6 +138,8 @@ evidence:
     obtained_by: get_table_stats
     predicate_id: stats_range_drift_v2
   - id: seq_scan_volume
+    provenance: cumulative_counter
+    source: pg_statistics
     desc: 窗口内热表上顺序扫描的次数与每次平均读掉的表比例。记的是实际执行了
       什么，不经过规划器 —— missing_index 唯一一条不被过期统计污染的可反证
       证据。实测同样跑 20 次热查询：索引在 seq_scan=0；索引丢 seq_scan=20 且
@@ -134,41 +147,59 @@ evidence:
     obtained_by: get_table_stats
     predicate_id: seq_scan_volume_v2
   - id: lock_blocking_chain
+    provenance: live_state
+    source: pg_blocking_pids
     desc: pg_locks 阻塞链，谁挡住了谁
     obtained_by: get_blocking_chain
     predicate_id: lock_blocking_chain_v2
   - id: session_wait_profile
+    provenance: live_state
+    source: pg_locks
     desc: 活动会话的等待事件分布
     obtained_by: get_active_sessions
     predicate_id: session_wait_profile_v2
   - id: slow_query_ranking
+    provenance: cumulative_counter
+    source: pg_statistics
     desc: pg_stat_statements 里按累计耗时排序的慢查询
     obtained_by: get_top_queries
     predicate_id: slow_query_ranking_v2
   - id: counterfactual_index
+    provenance: planner_output
+    source: pg_planner_stats
     desc: hypopg 模拟索引后优化器是否改用它、成本降幅多少
     obtained_by: simulate_index
     predicate_id: counterfactual_index_v2
   - id: dead_tuple_ratio
+    provenance: collector_estimate
+    source: pg_statistics
     desc: 死元组占比，只表示清理压力，不能单独证明或反证物理膨胀
     obtained_by: get_table_stats
     predicate_id: dead_tuple_ratio_v2
   - id: physical_bloat_ratio
+    provenance: sampled_measurement
+    source: pg_routine_vacuuming
     desc: pgstattuple_approx 测得的 dead tuple 与可复用空闲空间占物理表大小比例
     obtained_by: get_physical_bloat
     predicate_id: physical_bloat_ratio_v2
     algorithm: pgstattuple_approx_reclaimable_pct_v1
     unavailable_status: UNKNOWN
   - id: autovacuum_health
+    provenance: live_state
+    source: aws_autovacuum
     desc: 表级 autovacuum 有效开关、触发阈值、死元组积压与当前 worker 状态
     obtained_by: get_table_stats
     predicate_id: autovacuum_health_v2
     source: pgdoc:routine-vacuuming
   - id: idle_in_transaction
+    provenance: live_state
+    source: pg_connection_incident
     desc: 处于 idle in transaction 的会话数
     obtained_by: get_connection_stats
     predicate_id: idle_in_transaction_v2
   - id: connection_count
+    provenance: live_state
+    source: pg_connection_incident
     desc: 当前连接数与上限、按状态与角色的分布
     obtained_by: get_connection_stats
     predicate_id: connection_count_v2
@@ -177,41 +208,56 @@ evidence:
   # 每一条都必须真有工具能产出，否则 ESC 只能退化成看模型自述 ——
   # 这是本文件开头那条约束，扩图时最容易破的也是它。
   - id: xid_age
+    provenance: live_state
+    source: gcp_txid_wraparound
     desc: 数据库与最老表的 XID 年龄，以及占 autovacuum_freeze_max_age 的比例
     obtained_by: get_vacuum_horizon
     predicate_id: xid_age_v2
     source: pgdoc:routine-vacuuming
   - id: replication_slot_age
+    provenance: live_state
+    source: pg_replication_slots_view
     desc: 各复制槽的 age(xmin) / age(catalog_xmin) 与是否 active
     obtained_by: get_vacuum_horizon
     predicate_id: replication_slot_age_v2
     source: pgdoc:routine-vacuuming
   - id: prepared_xact_age
+    provenance: live_state
+    source: pg_routine_vacuuming
     desc: pg_prepared_xacts 里各预备事务的 age(transactionid) 与挂起时长
     obtained_by: get_vacuum_horizon
     predicate_id: prepared_xact_age_v2
     source: pgdoc:routine-vacuuming
   - id: backend_xmin_age
+    provenance: live_state
+    source: pg_routine_vacuuming
     desc: 最老的 backend_xmin 年龄 —— 谁在挡着 xmin 视界前进
     obtained_by: get_vacuum_horizon
     predicate_id: backend_xmin_age_v2
     source: pgdoc:routine-vacuuming
   - id: deadlock_count
+    provenance: cumulative_counter
+    source: pg_statistics
     desc: pg_stat_database.deadlocks 在故障窗口内的增量
     obtained_by: get_database_stats
     predicate_id: deadlock_count_v2
     source: pgdoc:monitoring-stats
   - id: temp_file_volume
+    provenance: cumulative_counter
+    source: pg_work_mem
     desc: 故障窗口内 temp_files / temp_bytes 增量，表示排序哈希外溢量
     obtained_by: get_database_stats
     predicate_id: temp_file_volume_v2
     source: pgdoc:monitoring-stats
   - id: checkpoint_stats
+    provenance: cumulative_counter
+    source: pg_checkpoints
     desc: 故障窗口内定时与请求式检查点增量、耗时增量及请求式占比
     obtained_by: get_database_stats
     predicate_id: checkpoint_stats_v2
     source: pgdoc:monitoring-stats
   - id: disk_usage
+    provenance: host_capacity
     desc: PostgreSQL 数据目录所在文件系统的使用率与剩余空间
     obtained_by: get_database_stats
     predicate_id: disk_usage_v2
@@ -472,3 +518,46 @@ fixes:
       - {id: conflicting_transaction_patterns_bound, required: true}
       - {id: retry_idempotency_reviewed, required: true}
     expected_effect_nodes: [deadlock, throughput_down, queries_blocked]
+
+# ── 证据来源与失效规则 ────────────────────────────────────────
+# provenance 说的是一条证据的**值由什么算出来**，和 obtained_by（谁去取）
+# 是两件事：explain_seq_scan 与 lock_blocking_chain 都由某个工具取，但前者
+# 是规划器算出来的（依赖统计准确），后者是 pg_locks 的当下事实（不依赖任何
+# 东西）。
+#
+# 它存在的理由是这条标准：判别 A 和 B 的证据，不能与 A 或 B 共享失效模式。
+# 而"共享失效模式"可以从来源机械推出来，不必逐对手写 N×M 条声明 —— 只需
+# 给每条证据打一个标签，再配下面这张小表。
+#
+# invalidated_by 里的根因为真时，该族证据关于**别的**根因的裁决不可信；
+# 关于它自己的裁决仍然成立 —— 那是用真实数据检验该假设自己的声称，是验证
+# 不是污染。
+provenance_rules:
+  planner_output:
+    desc: 值由查询规划器算出。规划器的选择性与行数估计来自 pg_statistic，
+      所以统计失真时这一族证据关于别的根因的结论也跟着失真
+    invalidated_by: [stale_statistics]
+    source: pg_planner_stats
+  catalog_vs_actual:
+    desc: 拿真实数据检验目录或统计声称的内容。被检验对象失真正是它要测的
+      信号本身，因此不构成污染
+    invalidated_by: []
+  catalog_metadata:
+    desc: 读目录里的定义或时间戳，不含任何推算
+    invalidated_by: []
+  cumulative_counter:
+    desc: 自统计周期起单调累加，必须取窗口增量。缺基线、统计被 reset、计数器
+      回退都没有可解释的窗口，一律 UNKNOWN
+    invalidated_by: []
+  collector_estimate:
+    desc: 累计统计系统维护的近似值，不是精确计数
+    invalidated_by: []
+  sampled_measurement:
+    desc: 抽样测量，带采样误差
+    invalidated_by: []
+  live_state:
+    desc: 读当下事实（会话、锁、复制槽、预备事务），不经过任何推算
+    invalidated_by: []
+  host_capacity:
+    desc: 宿主机容量，由外部 provider 提供，不来自 PostgreSQL
+    invalidated_by: []
