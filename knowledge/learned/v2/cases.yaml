@@ -18,11 +18,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -30,7 +30,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -40,7 +40,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -51,7 +51,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_e70622a851b710a566c94373
+  - path_38b0b3d3e068919707fcff17
   decisive_evidence_bindings:
   - binding_id: source_binding_3e73355660977e5fa7b65da2
     episode_id: authority_autovacuum_starvation_01
@@ -134,9 +134,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -181,7 +181,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231512
+  created_at: 1788494271.3736932
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -206,11 +206,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -218,7 +218,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -228,7 +228,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -239,7 +239,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_e70622a851b710a566c94373
+  - path_38b0b3d3e068919707fcff17
   decisive_evidence_bindings:
   - binding_id: source_binding_e83e492d8359b18a8bc0fe10
     episode_id: authority_autovacuum_starvation_02
@@ -322,9 +322,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -369,7 +369,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231564
+  created_at: 1788494271.373698
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -394,11 +394,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -406,7 +406,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -416,7 +416,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -427,7 +427,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_e70622a851b710a566c94373
+  - path_38b0b3d3e068919707fcff17
   decisive_evidence_bindings:
   - binding_id: source_binding_9d4349eeef5eab46c1b52a2f
     episode_id: authority_autovacuum_starvation_03
@@ -510,9 +510,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -557,7 +557,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231616
+  created_at: 1788494271.3737032
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -582,11 +582,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -594,7 +594,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -604,7 +604,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -615,7 +615,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_e70622a851b710a566c94373
+  - path_38b0b3d3e068919707fcff17
   decisive_evidence_bindings:
   - binding_id: source_binding_90e23b343db03d2df29b64d9
     episode_id: authority_autovacuum_starvation_04
@@ -698,9 +698,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -745,7 +745,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231662
+  created_at: 1788494271.3737082
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -770,11 +770,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -782,7 +782,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -792,7 +792,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -803,7 +803,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_e70622a851b710a566c94373
+  - path_38b0b3d3e068919707fcff17
   decisive_evidence_bindings:
   - binding_id: source_binding_85c95bd449fb30900a25fe90
     episode_id: authority_autovacuum_starvation_05
@@ -886,9 +886,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -933,7 +933,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231714
+  created_at: 1788494271.3737135
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -958,11 +958,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -970,7 +970,7 @@ cases:
     - edge_a7fd139adecb2904bf0f9db4
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -980,7 +980,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -989,7 +989,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1c47678778b99bd51e1e1b80
+  - path_29876f581699843fe9dbbdbb
   decisive_evidence_bindings:
   - binding_id: source_binding_6c32ecb85627c45fdf40124f
     episode_id: authority_checkpoint_pressure_01
@@ -1097,9 +1097,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -1144,7 +1144,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233805
+  created_at: 1788494271.373919
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -1169,11 +1169,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1181,7 +1181,7 @@ cases:
     - edge_a7fd139adecb2904bf0f9db4
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1191,7 +1191,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -1200,7 +1200,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1c47678778b99bd51e1e1b80
+  - path_29876f581699843fe9dbbdbb
   decisive_evidence_bindings:
   - binding_id: source_binding_f9e15b42b8b35fc1e8f457f8
     episode_id: authority_checkpoint_pressure_02
@@ -1308,9 +1308,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -1355,7 +1355,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233855
+  created_at: 1788494271.3739238
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -1380,11 +1380,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1392,7 +1392,7 @@ cases:
     - edge_a7fd139adecb2904bf0f9db4
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1402,7 +1402,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -1411,7 +1411,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1c47678778b99bd51e1e1b80
+  - path_29876f581699843fe9dbbdbb
   decisive_evidence_bindings:
   - binding_id: source_binding_6bf0ccd2f1c69055fe237291
     episode_id: authority_checkpoint_pressure_03
@@ -1519,9 +1519,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -1566,7 +1566,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023391
+  created_at: 1788494271.3739285
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -1591,11 +1591,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1603,7 +1603,7 @@ cases:
     - edge_a7fd139adecb2904bf0f9db4
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1613,7 +1613,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -1622,7 +1622,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1c47678778b99bd51e1e1b80
+  - path_29876f581699843fe9dbbdbb
   decisive_evidence_bindings:
   - binding_id: source_binding_7e78014e86a780ea4f76d13e
     episode_id: authority_checkpoint_pressure_04
@@ -1730,9 +1730,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -1777,7 +1777,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233955
+  created_at: 1788494271.373933
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -1802,11 +1802,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1814,7 +1814,7 @@ cases:
     - edge_a7fd139adecb2904bf0f9db4
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1824,7 +1824,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -1833,7 +1833,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1c47678778b99bd51e1e1b80
+  - path_29876f581699843fe9dbbdbb
   decisive_evidence_bindings:
   - binding_id: source_binding_634d758534f2920ccd1d8e00
     episode_id: authority_checkpoint_pressure_05
@@ -1941,9 +1941,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_4405e0b9c353daa8cbb30fa3
+  - path_id: path_7c6bec75feb26b88e6d5eb53
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -1988,7 +1988,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0234003
+  created_at: 1788494271.3739378
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2013,11 +2013,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -2025,7 +2025,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -2036,7 +2036,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_c477e96b9c04d7db4def3b70
+  - path_e1650230e38f79f9cd4938a6
   decisive_evidence_bindings:
   - binding_id: source_binding_e993a77938498115f0d03a42
     episode_id: authority_connection_exhaustion_01
@@ -2066,7 +2066,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2086,7 +2086,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231767
+  created_at: 1788494271.3737185
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2111,11 +2111,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -2123,7 +2123,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -2134,7 +2134,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_c477e96b9c04d7db4def3b70
+  - path_e1650230e38f79f9cd4938a6
   decisive_evidence_bindings:
   - binding_id: source_binding_c00b726adbe0647a9f299898
     episode_id: authority_connection_exhaustion_02
@@ -2164,7 +2164,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2184,7 +2184,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231812
+  created_at: 1788494271.373724
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2209,11 +2209,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -2221,7 +2221,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -2232,7 +2232,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_c477e96b9c04d7db4def3b70
+  - path_e1650230e38f79f9cd4938a6
   decisive_evidence_bindings:
   - binding_id: source_binding_4cd5000ec1440c4907e13228
     episode_id: authority_connection_exhaustion_03
@@ -2262,7 +2262,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2282,7 +2282,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231862
+  created_at: 1788494271.373729
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2307,11 +2307,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -2319,7 +2319,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -2330,7 +2330,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_c477e96b9c04d7db4def3b70
+  - path_e1650230e38f79f9cd4938a6
   decisive_evidence_bindings:
   - binding_id: source_binding_472127447ce1004afad31d01
     episode_id: authority_connection_exhaustion_04
@@ -2360,7 +2360,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2380,7 +2380,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023191
+  created_at: 1788494271.373734
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2405,11 +2405,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -2417,7 +2417,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -2428,7 +2428,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_c477e96b9c04d7db4def3b70
+  - path_e1650230e38f79f9cd4938a6
   decisive_evidence_bindings:
   - binding_id: source_binding_f0056d46fdbd667f16c8afcc
     episode_id: authority_connection_exhaustion_05
@@ -2458,7 +2458,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2478,7 +2478,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231957
+  created_at: 1788494271.3737385
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2503,11 +2503,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - queries_blocked
   candidate_paths:
-  - path_id: path_83d5abf8f4535a064b890304
+  - path_id: path_4e675a4e696ef1e2be08bb1b
     node_ids:
     - deadlock
     - queries_blocked
@@ -2515,7 +2515,7 @@ cases:
     - edge_8913196747bb1f3027bec012
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     node_ids:
     - lock_contention
     - queries_blocked
@@ -2523,7 +2523,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -2532,7 +2532,7 @@ cases:
     observed_symptom_id: queries_blocked
     selected: false
   selected_path_ids:
-  - path_83d5abf8f4535a064b890304
+  - path_4e675a4e696ef1e2be08bb1b
   decisive_evidence_bindings:
   - binding_id: source_binding_699f36c68e770add5ab44c2f
     episode_id: authority_deadlock_01
@@ -2560,9 +2560,9 @@ cases:
     window_end: 2.0
     source_epoch: epoch_authority_deadlock_01
   excluded_branches:
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2588,7 +2588,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233316
+  created_at: 1788494271.3738706
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2613,11 +2613,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - queries_blocked
   candidate_paths:
-  - path_id: path_83d5abf8f4535a064b890304
+  - path_id: path_4e675a4e696ef1e2be08bb1b
     node_ids:
     - deadlock
     - queries_blocked
@@ -2625,7 +2625,7 @@ cases:
     - edge_8913196747bb1f3027bec012
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     node_ids:
     - lock_contention
     - queries_blocked
@@ -2633,7 +2633,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -2642,7 +2642,7 @@ cases:
     observed_symptom_id: queries_blocked
     selected: false
   selected_path_ids:
-  - path_83d5abf8f4535a064b890304
+  - path_4e675a4e696ef1e2be08bb1b
   decisive_evidence_bindings:
   - binding_id: source_binding_1873ae818ac90da45e243d1f
     episode_id: authority_deadlock_02
@@ -2670,9 +2670,9 @@ cases:
     window_end: 2.0
     source_epoch: epoch_authority_deadlock_02
   excluded_branches:
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2698,7 +2698,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233366
+  created_at: 1788494271.3738756
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2723,11 +2723,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - queries_blocked
   candidate_paths:
-  - path_id: path_83d5abf8f4535a064b890304
+  - path_id: path_4e675a4e696ef1e2be08bb1b
     node_ids:
     - deadlock
     - queries_blocked
@@ -2735,7 +2735,7 @@ cases:
     - edge_8913196747bb1f3027bec012
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     node_ids:
     - lock_contention
     - queries_blocked
@@ -2743,7 +2743,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -2752,7 +2752,7 @@ cases:
     observed_symptom_id: queries_blocked
     selected: false
   selected_path_ids:
-  - path_83d5abf8f4535a064b890304
+  - path_4e675a4e696ef1e2be08bb1b
   decisive_evidence_bindings:
   - binding_id: source_binding_1214e253ce5f95416c803375
     episode_id: authority_deadlock_03
@@ -2780,9 +2780,9 @@ cases:
     window_end: 2.0
     source_epoch: epoch_authority_deadlock_03
   excluded_branches:
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2808,7 +2808,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233417
+  created_at: 1788494271.373881
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2833,11 +2833,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - queries_blocked
   candidate_paths:
-  - path_id: path_83d5abf8f4535a064b890304
+  - path_id: path_4e675a4e696ef1e2be08bb1b
     node_ids:
     - deadlock
     - queries_blocked
@@ -2845,7 +2845,7 @@ cases:
     - edge_8913196747bb1f3027bec012
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     node_ids:
     - lock_contention
     - queries_blocked
@@ -2853,7 +2853,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -2862,7 +2862,7 @@ cases:
     observed_symptom_id: queries_blocked
     selected: false
   selected_path_ids:
-  - path_83d5abf8f4535a064b890304
+  - path_4e675a4e696ef1e2be08bb1b
   decisive_evidence_bindings:
   - binding_id: source_binding_87e1491c3a9ea89ce7e765ab
     episode_id: authority_deadlock_04
@@ -2890,9 +2890,9 @@ cases:
     window_end: 2.0
     source_epoch: epoch_authority_deadlock_04
   excluded_branches:
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -2918,7 +2918,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233464
+  created_at: 1788494271.3738856
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -2943,11 +2943,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - queries_blocked
   candidate_paths:
-  - path_id: path_83d5abf8f4535a064b890304
+  - path_id: path_4e675a4e696ef1e2be08bb1b
     node_ids:
     - deadlock
     - queries_blocked
@@ -2955,7 +2955,7 @@ cases:
     - edge_8913196747bb1f3027bec012
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     node_ids:
     - lock_contention
     - queries_blocked
@@ -2963,7 +2963,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -2972,7 +2972,7 @@ cases:
     observed_symptom_id: queries_blocked
     selected: false
   selected_path_ids:
-  - path_83d5abf8f4535a064b890304
+  - path_4e675a4e696ef1e2be08bb1b
   decisive_evidence_bindings:
   - binding_id: source_binding_186c35f85a73885721db8093
     episode_id: authority_deadlock_05
@@ -3000,9 +3000,9 @@ cases:
     window_end: 2.0
     source_epoch: epoch_authority_deadlock_05
   excluded_branches:
-  - path_id: path_2366f4dbe67917dd6c1aa6dc
+  - path_id: path_17fa676b677d4795fd348d05
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_56f3bf823d1f72ee70165650
+  - path_id: path_7b0e148d1a915e14e40bc3ed
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -3028,7 +3028,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233512
+  created_at: 1788494271.3738906
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -3053,11 +3053,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -3065,7 +3065,7 @@ cases:
     - edge_cf1915e40ff544fd0c211dce
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3075,7 +3075,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -3088,7 +3088,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_d137e4169c89f12769e51848
+  - path_b0803cbaa626b7155587a72d
   decisive_evidence_bindings:
   - binding_id: source_binding_0d55fbf001a262b7b061c6d6
     episode_id: authority_disk_pressure_01
@@ -3190,9 +3190,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -3243,7 +3243,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023252
+  created_at: 1788494271.3737934
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -3268,11 +3268,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -3280,7 +3280,7 @@ cases:
     - edge_cf1915e40ff544fd0c211dce
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3290,7 +3290,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -3303,7 +3303,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_d137e4169c89f12769e51848
+  - path_b0803cbaa626b7155587a72d
   decisive_evidence_bindings:
   - binding_id: source_binding_b5ec1494cb8aa088e9f75060
     episode_id: authority_disk_pressure_02
@@ -3405,9 +3405,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -3458,7 +3458,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232592
+  created_at: 1788494271.3737988
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -3483,11 +3483,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -3495,7 +3495,7 @@ cases:
     - edge_cf1915e40ff544fd0c211dce
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3505,7 +3505,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -3518,7 +3518,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_d137e4169c89f12769e51848
+  - path_b0803cbaa626b7155587a72d
   decisive_evidence_bindings:
   - binding_id: source_binding_75f422cf07ff352e24560f5b
     episode_id: authority_disk_pressure_03
@@ -3620,9 +3620,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -3673,7 +3673,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232644
+  created_at: 1788494271.3738043
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -3698,11 +3698,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -3710,7 +3710,7 @@ cases:
     - edge_cf1915e40ff544fd0c211dce
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3720,7 +3720,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -3733,7 +3733,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_d137e4169c89f12769e51848
+  - path_b0803cbaa626b7155587a72d
   decisive_evidence_bindings:
   - binding_id: source_binding_c427dd5cdf128477f1d1f0aa
     episode_id: authority_disk_pressure_04
@@ -3835,9 +3835,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -3888,7 +3888,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.02327
+  created_at: 1788494271.3738086
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -3913,11 +3913,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -3925,7 +3925,7 @@ cases:
     - edge_cf1915e40ff544fd0c211dce
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3935,7 +3935,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -3948,7 +3948,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_d137e4169c89f12769e51848
+  - path_b0803cbaa626b7155587a72d
   decisive_evidence_bindings:
   - binding_id: source_binding_b62547d7fbab20e2b7789bbc
     episode_id: authority_disk_pressure_05
@@ -4050,9 +4050,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_751f5fe0e0b5cb651c61744f
+  - path_id: path_238cf0f3c64cce29defbcfcf
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -4103,7 +4103,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232747
+  created_at: 1788494271.3738134
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -4128,11 +4128,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_ef8bf106f726c873c393f348
+  - path_id: path_277b6a2470915056369c9912
     node_ids:
     - lock_contention
     - latency_p99_up
@@ -4140,7 +4140,7 @@ cases:
     - edge_60259fd0a9790cdddb0f375e
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4150,7 +4150,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4159,7 +4159,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_ef8bf106f726c873c393f348
+  - path_277b6a2470915056369c9912
   decisive_evidence_bindings:
   - binding_id: source_binding_7c37cc2eef11317c01db4b5e
     episode_id: authority_lock_contention_01
@@ -4270,9 +4270,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -4315,7 +4315,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230973
+  created_at: 1788494271.3736389
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -4340,11 +4340,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_ef8bf106f726c873c393f348
+  - path_id: path_277b6a2470915056369c9912
     node_ids:
     - lock_contention
     - latency_p99_up
@@ -4352,7 +4352,7 @@ cases:
     - edge_60259fd0a9790cdddb0f375e
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4362,7 +4362,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4371,7 +4371,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_ef8bf106f726c873c393f348
+  - path_277b6a2470915056369c9912
   decisive_evidence_bindings:
   - binding_id: source_binding_0ba69f478276f6d8b8ec8a6b
     episode_id: authority_lock_contention_02
@@ -4482,9 +4482,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -4527,7 +4527,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231028
+  created_at: 1788494271.3736444
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -4552,11 +4552,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_ef8bf106f726c873c393f348
+  - path_id: path_277b6a2470915056369c9912
     node_ids:
     - lock_contention
     - latency_p99_up
@@ -4564,7 +4564,7 @@ cases:
     - edge_60259fd0a9790cdddb0f375e
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4574,7 +4574,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4583,7 +4583,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_ef8bf106f726c873c393f348
+  - path_277b6a2470915056369c9912
   decisive_evidence_bindings:
   - binding_id: source_binding_41967f53b587e365c80cf31c
     episode_id: authority_lock_contention_03
@@ -4694,9 +4694,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -4739,7 +4739,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231078
+  created_at: 1788494271.3736498
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -4764,11 +4764,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_ef8bf106f726c873c393f348
+  - path_id: path_277b6a2470915056369c9912
     node_ids:
     - lock_contention
     - latency_p99_up
@@ -4776,7 +4776,7 @@ cases:
     - edge_60259fd0a9790cdddb0f375e
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4786,7 +4786,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4795,7 +4795,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_ef8bf106f726c873c393f348
+  - path_277b6a2470915056369c9912
   decisive_evidence_bindings:
   - binding_id: source_binding_20b8795001334133a826dcf2
     episode_id: authority_lock_contention_04
@@ -4906,9 +4906,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -4951,7 +4951,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023113
+  created_at: 1788494271.3736548
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -4976,11 +4976,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_ef8bf106f726c873c393f348
+  - path_id: path_277b6a2470915056369c9912
     node_ids:
     - lock_contention
     - latency_p99_up
@@ -4988,7 +4988,7 @@ cases:
     - edge_60259fd0a9790cdddb0f375e
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4998,7 +4998,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -5007,7 +5007,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_ef8bf106f726c873c393f348
+  - path_277b6a2470915056369c9912
   decisive_evidence_bindings:
   - binding_id: source_binding_b5c48f561e406c629cb5a39d
     episode_id: authority_lock_contention_05
@@ -5118,9 +5118,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -5163,7 +5163,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231192
+  created_at: 1788494271.3736603
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -5188,11 +5188,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -5202,7 +5202,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -5211,7 +5211,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_3bb455547552164d8ad031c0
+  - path_f312f993a8ac115b4dd29b6a
   decisive_evidence_bindings:
   - binding_id: source_binding_84f0f38fdb820bef0ff66575
     episode_id: authority_long_idle_transaction_01
@@ -5295,7 +5295,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -5322,7 +5322,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023201
+  created_at: 1788494271.3737435
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -5347,11 +5347,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -5361,7 +5361,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -5370,7 +5370,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_3bb455547552164d8ad031c0
+  - path_f312f993a8ac115b4dd29b6a
   decisive_evidence_bindings:
   - binding_id: source_binding_713d9dca4a7169ce6a3f394e
     episode_id: authority_long_idle_transaction_02
@@ -5454,7 +5454,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -5481,7 +5481,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232055
+  created_at: 1788494271.3737485
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -5506,11 +5506,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -5520,7 +5520,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -5529,7 +5529,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_3bb455547552164d8ad031c0
+  - path_f312f993a8ac115b4dd29b6a
   decisive_evidence_bindings:
   - binding_id: source_binding_9ca496d69cae119cb03639d9
     episode_id: authority_long_idle_transaction_03
@@ -5613,7 +5613,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -5640,7 +5640,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232103
+  created_at: 1788494271.373753
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -5665,11 +5665,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -5679,7 +5679,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -5688,7 +5688,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_3bb455547552164d8ad031c0
+  - path_f312f993a8ac115b4dd29b6a
   decisive_evidence_bindings:
   - binding_id: source_binding_0a40eb05080a05263271397a
     episode_id: authority_long_idle_transaction_04
@@ -5772,7 +5772,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -5799,7 +5799,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023215
+  created_at: 1788494271.3737576
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -5824,11 +5824,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - conn_near_limit
   candidate_paths:
-  - path_id: path_3bb455547552164d8ad031c0
+  - path_id: path_f312f993a8ac115b4dd29b6a
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -5838,7 +5838,7 @@ cases:
     - edge_d1e2a98675f74572b5886b4d
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -5847,7 +5847,7 @@ cases:
     observed_symptom_id: conn_near_limit
     selected: false
   selected_path_ids:
-  - path_3bb455547552164d8ad031c0
+  - path_f312f993a8ac115b4dd29b6a
   decisive_evidence_bindings:
   - binding_id: source_binding_bdc3ed15d6dff0cdc2d9a061
     episode_id: authority_long_idle_transaction_05
@@ -5931,7 +5931,7 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_c477e96b9c04d7db4def3b70
+  - path_id: path_e1650230e38f79f9cd4938a6
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations: {}
   intervention_plan: {}
@@ -5958,7 +5958,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232203
+  created_at: 1788494271.3737624
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -5983,11 +5983,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_cdaa7aec65723d504da523d5
+  - path_id: path_c6d821d276a91dc74e3b3d35
     node_ids:
     - missing_index
     - latency_p99_up
@@ -5995,7 +5995,7 @@ cases:
     - edge_4d0e39960c2b59c5b8eddebc
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6005,7 +6005,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6014,7 +6014,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_cdaa7aec65723d504da523d5
+  - path_c6d821d276a91dc74e3b3d35
   decisive_evidence_bindings:
   - binding_id: source_binding_200d9ecfb269765787801f02
     episode_id: authority_missing_index_01
@@ -6147,9 +6147,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -6194,7 +6194,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230317
+  created_at: 1788494271.373578
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -6219,11 +6219,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_cdaa7aec65723d504da523d5
+  - path_id: path_c6d821d276a91dc74e3b3d35
     node_ids:
     - missing_index
     - latency_p99_up
@@ -6231,7 +6231,7 @@ cases:
     - edge_4d0e39960c2b59c5b8eddebc
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6241,7 +6241,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6250,7 +6250,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_cdaa7aec65723d504da523d5
+  - path_c6d821d276a91dc74e3b3d35
   decisive_evidence_bindings:
   - binding_id: source_binding_c3154a2b30dd113bfbd1142e
     episode_id: authority_missing_index_02
@@ -6383,9 +6383,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -6430,7 +6430,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023043
+  created_at: 1788494271.3735883
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -6455,11 +6455,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_cdaa7aec65723d504da523d5
+  - path_id: path_c6d821d276a91dc74e3b3d35
     node_ids:
     - missing_index
     - latency_p99_up
@@ -6467,7 +6467,7 @@ cases:
     - edge_4d0e39960c2b59c5b8eddebc
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6477,7 +6477,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6486,7 +6486,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_cdaa7aec65723d504da523d5
+  - path_c6d821d276a91dc74e3b3d35
   decisive_evidence_bindings:
   - binding_id: source_binding_547f47d85101aa521ec06050
     episode_id: authority_missing_index_03
@@ -6619,9 +6619,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -6666,7 +6666,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230498
+  created_at: 1788494271.3735955
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -6691,11 +6691,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_cdaa7aec65723d504da523d5
+  - path_id: path_c6d821d276a91dc74e3b3d35
     node_ids:
     - missing_index
     - latency_p99_up
@@ -6703,7 +6703,7 @@ cases:
     - edge_4d0e39960c2b59c5b8eddebc
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6713,7 +6713,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6722,7 +6722,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_cdaa7aec65723d504da523d5
+  - path_c6d821d276a91dc74e3b3d35
   decisive_evidence_bindings:
   - binding_id: source_binding_9f5465bddc3547676ab90acb
     episode_id: authority_missing_index_04
@@ -6855,9 +6855,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -6902,7 +6902,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023056
+  created_at: 1788494271.373601
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -6927,11 +6927,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_cdaa7aec65723d504da523d5
+  - path_id: path_c6d821d276a91dc74e3b3d35
     node_ids:
     - missing_index
     - latency_p99_up
@@ -6939,7 +6939,7 @@ cases:
     - edge_4d0e39960c2b59c5b8eddebc
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6949,7 +6949,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6958,7 +6958,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_cdaa7aec65723d504da523d5
+  - path_c6d821d276a91dc74e3b3d35
   decisive_evidence_bindings:
   - binding_id: source_binding_64349ebd7264d9acc4675fbf
     episode_id: authority_missing_index_05
@@ -7091,9 +7091,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -7138,7 +7138,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023062
+  created_at: 1788494271.3736062
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -7163,11 +7163,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -7177,7 +7177,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -7185,7 +7185,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -7196,7 +7196,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_d6aa8a39dc3fc3b374968be2
+  - path_b1418845777fc3407d7869e4
   decisive_evidence_bindings:
   - binding_id: source_binding_703b15b51aa56f9ad2024c54
     episode_id: authority_orphaned_prepared_transaction_01
@@ -7287,9 +7287,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -7334,7 +7334,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233073
+  created_at: 1788494271.373846
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -7359,11 +7359,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -7373,7 +7373,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -7381,7 +7381,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -7392,7 +7392,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_d6aa8a39dc3fc3b374968be2
+  - path_b1418845777fc3407d7869e4
   decisive_evidence_bindings:
   - binding_id: source_binding_aa8eea7a125048d0b18337af
     episode_id: authority_orphaned_prepared_transaction_02
@@ -7483,9 +7483,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -7530,7 +7530,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233119
+  created_at: 1788494271.373851
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -7555,11 +7555,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -7569,7 +7569,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -7577,7 +7577,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -7588,7 +7588,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_d6aa8a39dc3fc3b374968be2
+  - path_b1418845777fc3407d7869e4
   decisive_evidence_bindings:
   - binding_id: source_binding_2099050945b52cde5eb46537
     episode_id: authority_orphaned_prepared_transaction_03
@@ -7679,9 +7679,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -7726,7 +7726,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233166
+  created_at: 1788494271.3738558
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -7751,11 +7751,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -7765,7 +7765,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -7773,7 +7773,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -7784,7 +7784,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_d6aa8a39dc3fc3b374968be2
+  - path_b1418845777fc3407d7869e4
   decisive_evidence_bindings:
   - binding_id: source_binding_96ec7783647256ad0ba412fd
     episode_id: authority_orphaned_prepared_transaction_04
@@ -7875,9 +7875,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -7922,7 +7922,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233212
+  created_at: 1788494271.3738604
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -7947,11 +7947,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - autovacuum_unhealthy
   candidate_paths:
-  - path_id: path_d6aa8a39dc3fc3b374968be2
+  - path_id: path_b1418845777fc3407d7869e4
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -7961,7 +7961,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -7969,7 +7969,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -7980,7 +7980,7 @@ cases:
     observed_symptom_id: autovacuum_unhealthy
     selected: false
   selected_path_ids:
-  - path_d6aa8a39dc3fc3b374968be2
+  - path_b1418845777fc3407d7869e4
   decisive_evidence_bindings:
   - binding_id: source_binding_59341a67bb426d43dab3a116
     episode_id: authority_orphaned_prepared_transaction_05
@@ -8071,9 +8071,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_e70622a851b710a566c94373
+  - path_id: path_38b0b3d3e068919707fcff17
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_04cb6920186e78ee5b2c48a4
+  - path_id: path_d4863d7643e38006640af677
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -8118,7 +8118,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233262
+  created_at: 1788494271.373865
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -8143,11 +8143,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_5a7ac120ed3ae511aea58e9b
+  - path_id: path_ebd57bbc33911189fca62c74
     node_ids:
     - stale_replication_slot
     - disk_growing
@@ -8155,7 +8155,7 @@ cases:
     - edge_c10eb047ffbf52e2b68768e4
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -8165,7 +8165,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -8174,7 +8174,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_5a7ac120ed3ae511aea58e9b
+  - path_ebd57bbc33911189fca62c74
   decisive_evidence_bindings:
   - binding_id: source_binding_97cac0b980760655a14ba582
     episode_id: authority_stale_replication_slot_01
@@ -8288,9 +8288,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -8348,7 +8348,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232804
+  created_at: 1788494271.3738196
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -8373,11 +8373,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_5a7ac120ed3ae511aea58e9b
+  - path_id: path_ebd57bbc33911189fca62c74
     node_ids:
     - stale_replication_slot
     - disk_growing
@@ -8385,7 +8385,7 @@ cases:
     - edge_c10eb047ffbf52e2b68768e4
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -8395,7 +8395,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -8404,7 +8404,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_5a7ac120ed3ae511aea58e9b
+  - path_ebd57bbc33911189fca62c74
   decisive_evidence_bindings:
   - binding_id: source_binding_587124bdd0e4372ccab5a080
     episode_id: authority_stale_replication_slot_02
@@ -8518,9 +8518,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -8578,7 +8578,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232854
+  created_at: 1788494271.3738248
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -8603,11 +8603,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_5a7ac120ed3ae511aea58e9b
+  - path_id: path_ebd57bbc33911189fca62c74
     node_ids:
     - stale_replication_slot
     - disk_growing
@@ -8615,7 +8615,7 @@ cases:
     - edge_c10eb047ffbf52e2b68768e4
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -8625,7 +8625,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -8634,7 +8634,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_5a7ac120ed3ae511aea58e9b
+  - path_ebd57bbc33911189fca62c74
   decisive_evidence_bindings:
   - binding_id: source_binding_c3e0b8752423ae8961c5714c
     episode_id: authority_stale_replication_slot_03
@@ -8748,9 +8748,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -8808,7 +8808,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232906
+  created_at: 1788494271.3738298
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -8833,11 +8833,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_5a7ac120ed3ae511aea58e9b
+  - path_id: path_ebd57bbc33911189fca62c74
     node_ids:
     - stale_replication_slot
     - disk_growing
@@ -8845,7 +8845,7 @@ cases:
     - edge_c10eb047ffbf52e2b68768e4
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -8855,7 +8855,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -8864,7 +8864,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_5a7ac120ed3ae511aea58e9b
+  - path_ebd57bbc33911189fca62c74
   decisive_evidence_bindings:
   - binding_id: source_binding_cca725c0bf430e1b5ac7913e
     episode_id: authority_stale_replication_slot_04
@@ -8978,9 +8978,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -9038,7 +9038,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232968
+  created_at: 1788494271.373835
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -9063,11 +9063,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_5a7ac120ed3ae511aea58e9b
+  - path_id: path_ebd57bbc33911189fca62c74
     node_ids:
     - stale_replication_slot
     - disk_growing
@@ -9075,7 +9075,7 @@ cases:
     - edge_c10eb047ffbf52e2b68768e4
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -9085,7 +9085,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -9094,7 +9094,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_5a7ac120ed3ae511aea58e9b
+  - path_ebd57bbc33911189fca62c74
   decisive_evidence_bindings:
   - binding_id: source_binding_99714ff788f05d63b90d46e3
     episode_id: authority_stale_replication_slot_05
@@ -9208,9 +9208,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -9268,7 +9268,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233018
+  created_at: 1788494271.3738403
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -9293,11 +9293,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_c0f43dbfa611c1a252995f9a
+  - path_id: path_df79ba49c1568e89ddea81c3
     node_ids:
     - stale_statistics
     - latency_p99_up
@@ -9305,7 +9305,7 @@ cases:
     - edge_b49e7deec519b386d9903171
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -9315,7 +9315,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -9324,7 +9324,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_c0f43dbfa611c1a252995f9a
+  - path_df79ba49c1568e89ddea81c3
   decisive_evidence_bindings:
   - binding_id: source_binding_e7b3465a442df8b6f463ee84
     episode_id: authority_stale_statistics_01
@@ -9436,9 +9436,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -9483,7 +9483,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230684
+  created_at: 1788494271.3736129
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -9508,11 +9508,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_c0f43dbfa611c1a252995f9a
+  - path_id: path_df79ba49c1568e89ddea81c3
     node_ids:
     - stale_statistics
     - latency_p99_up
@@ -9520,7 +9520,7 @@ cases:
     - edge_b49e7deec519b386d9903171
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -9530,7 +9530,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -9539,7 +9539,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_c0f43dbfa611c1a252995f9a
+  - path_df79ba49c1568e89ddea81c3
   decisive_evidence_bindings:
   - binding_id: source_binding_bfa07d1cf1cf6a50b11cc97d
     episode_id: authority_stale_statistics_02
@@ -9651,9 +9651,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -9698,7 +9698,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230746
+  created_at: 1788494271.3736184
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -9723,11 +9723,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_c0f43dbfa611c1a252995f9a
+  - path_id: path_df79ba49c1568e89ddea81c3
     node_ids:
     - stale_statistics
     - latency_p99_up
@@ -9735,7 +9735,7 @@ cases:
     - edge_b49e7deec519b386d9903171
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -9745,7 +9745,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -9754,7 +9754,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_c0f43dbfa611c1a252995f9a
+  - path_df79ba49c1568e89ddea81c3
   decisive_evidence_bindings:
   - binding_id: source_binding_a32b727991dfc8224a701437
     episode_id: authority_stale_statistics_03
@@ -9866,9 +9866,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -9913,7 +9913,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230799
+  created_at: 1788494271.3736234
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -9938,11 +9938,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_c0f43dbfa611c1a252995f9a
+  - path_id: path_df79ba49c1568e89ddea81c3
     node_ids:
     - stale_statistics
     - latency_p99_up
@@ -9950,7 +9950,7 @@ cases:
     - edge_b49e7deec519b386d9903171
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -9960,7 +9960,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -9969,7 +9969,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_c0f43dbfa611c1a252995f9a
+  - path_df79ba49c1568e89ddea81c3
   decisive_evidence_bindings:
   - binding_id: source_binding_5bc71d444527c1d91aada58d
     episode_id: authority_stale_statistics_04
@@ -10081,9 +10081,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -10128,7 +10128,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230854
+  created_at: 1788494271.3736284
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -10153,11 +10153,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_c0f43dbfa611c1a252995f9a
+  - path_id: path_df79ba49c1568e89ddea81c3
     node_ids:
     - stale_statistics
     - latency_p99_up
@@ -10165,7 +10165,7 @@ cases:
     - edge_b49e7deec519b386d9903171
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -10175,7 +10175,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -10184,7 +10184,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_c0f43dbfa611c1a252995f9a
+  - path_df79ba49c1568e89ddea81c3
   decisive_evidence_bindings:
   - binding_id: source_binding_94fdb4ca2150bde7812ccc73
     episode_id: authority_stale_statistics_05
@@ -10296,9 +10296,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -10343,7 +10343,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0230913
+  created_at: 1788494271.3736334
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -10368,11 +10368,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_64991ccb85a32e242191a9c9
+  - path_id: path_f060ff436391f6537341abca
     node_ids:
     - table_bloat
     - disk_growing
@@ -10380,7 +10380,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -10390,7 +10390,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -10399,7 +10399,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_64991ccb85a32e242191a9c9
+  - path_f060ff436391f6537341abca
   decisive_evidence_bindings:
   - binding_id: source_binding_2e9b834869cc33029aa14128
     episode_id: authority_table_bloat_01
@@ -10523,9 +10523,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -10569,7 +10569,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231247
+  created_at: 1788494271.373666
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -10594,11 +10594,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_64991ccb85a32e242191a9c9
+  - path_id: path_f060ff436391f6537341abca
     node_ids:
     - table_bloat
     - disk_growing
@@ -10606,7 +10606,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -10616,7 +10616,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -10625,7 +10625,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_64991ccb85a32e242191a9c9
+  - path_f060ff436391f6537341abca
   decisive_evidence_bindings:
   - binding_id: source_binding_1d2dc7990c8a06fc26926238
     episode_id: authority_table_bloat_02
@@ -10749,9 +10749,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -10795,7 +10795,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.02313
+  created_at: 1788494271.3736718
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -10820,11 +10820,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_64991ccb85a32e242191a9c9
+  - path_id: path_f060ff436391f6537341abca
     node_ids:
     - table_bloat
     - disk_growing
@@ -10832,7 +10832,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -10842,7 +10842,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -10851,7 +10851,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_64991ccb85a32e242191a9c9
+  - path_f060ff436391f6537341abca
   decisive_evidence_bindings:
   - binding_id: source_binding_006f0c375d73a6e1f1873cb8
     episode_id: authority_table_bloat_03
@@ -10975,9 +10975,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -11021,7 +11021,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231347
+  created_at: 1788494271.3736768
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -11046,11 +11046,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_64991ccb85a32e242191a9c9
+  - path_id: path_f060ff436391f6537341abca
     node_ids:
     - table_bloat
     - disk_growing
@@ -11058,7 +11058,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -11068,7 +11068,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -11077,7 +11077,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_64991ccb85a32e242191a9c9
+  - path_f060ff436391f6537341abca
   decisive_evidence_bindings:
   - binding_id: source_binding_bfa2c97d0fd1ed0ed7f1f1c2
     episode_id: authority_table_bloat_04
@@ -11201,9 +11201,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -11247,7 +11247,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231402
+  created_at: 1788494271.373682
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -11272,11 +11272,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_64991ccb85a32e242191a9c9
+  - path_id: path_f060ff436391f6537341abca
     node_ids:
     - table_bloat
     - disk_growing
@@ -11284,7 +11284,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -11294,7 +11294,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -11303,7 +11303,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_64991ccb85a32e242191a9c9
+  - path_f060ff436391f6537341abca
   decisive_evidence_bindings:
   - binding_id: source_binding_4a1cc4714c75dbb5a14b346c
     episode_id: authority_table_bloat_05
@@ -11427,9 +11427,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -11473,7 +11473,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0231452
+  created_at: 1788494271.3736875
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -11498,11 +11498,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1f43b583027d76ac645d62ed
+  - path_id: path_49b10e499b241f92516e050f
     node_ids:
     - work_mem_spill
     - latency_p99_up
@@ -11510,7 +11510,7 @@ cases:
     - edge_f3ccdc9851a605d259af8895
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -11520,7 +11520,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -11529,7 +11529,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1f43b583027d76ac645d62ed
+  - path_49b10e499b241f92516e050f
   decisive_evidence_bindings:
   - binding_id: source_binding_5767b28acc768fed6763665b
     episode_id: authority_work_mem_spill_01
@@ -11637,9 +11637,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -11684,7 +11684,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233564
+  created_at: 1788494271.3738956
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -11709,11 +11709,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1f43b583027d76ac645d62ed
+  - path_id: path_49b10e499b241f92516e050f
     node_ids:
     - work_mem_spill
     - latency_p99_up
@@ -11721,7 +11721,7 @@ cases:
     - edge_f3ccdc9851a605d259af8895
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -11731,7 +11731,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -11740,7 +11740,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1f43b583027d76ac645d62ed
+  - path_49b10e499b241f92516e050f
   decisive_evidence_bindings:
   - binding_id: source_binding_9a92ffae24c9000dbed61e7e
     episode_id: authority_work_mem_spill_02
@@ -11848,9 +11848,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -11895,7 +11895,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023361
+  created_at: 1788494271.3739002
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -11920,11 +11920,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1f43b583027d76ac645d62ed
+  - path_id: path_49b10e499b241f92516e050f
     node_ids:
     - work_mem_spill
     - latency_p99_up
@@ -11932,7 +11932,7 @@ cases:
     - edge_f3ccdc9851a605d259af8895
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -11942,7 +11942,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -11951,7 +11951,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1f43b583027d76ac645d62ed
+  - path_49b10e499b241f92516e050f
   decisive_evidence_bindings:
   - binding_id: source_binding_390aa33dae39567b8dfeea1c
     episode_id: authority_work_mem_spill_03
@@ -12059,9 +12059,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -12106,7 +12106,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023366
+  created_at: 1788494271.373905
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -12131,11 +12131,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1f43b583027d76ac645d62ed
+  - path_id: path_49b10e499b241f92516e050f
     node_ids:
     - work_mem_spill
     - latency_p99_up
@@ -12143,7 +12143,7 @@ cases:
     - edge_f3ccdc9851a605d259af8895
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -12153,7 +12153,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -12162,7 +12162,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1f43b583027d76ac645d62ed
+  - path_49b10e499b241f92516e050f
   decisive_evidence_bindings:
   - binding_id: source_binding_6b64dc956a78e8ae3d5b1545
     episode_id: authority_work_mem_spill_04
@@ -12270,9 +12270,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -12317,7 +12317,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233705
+  created_at: 1788494271.3739097
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -12342,11 +12342,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - latency_p99_up
   candidate_paths:
-  - path_id: path_1f43b583027d76ac645d62ed
+  - path_id: path_49b10e499b241f92516e050f
     node_ids:
     - work_mem_spill
     - latency_p99_up
@@ -12354,7 +12354,7 @@ cases:
     - edge_f3ccdc9851a605d259af8895
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -12364,7 +12364,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -12373,7 +12373,7 @@ cases:
     observed_symptom_id: latency_p99_up
     selected: false
   selected_path_ids:
-  - path_1f43b583027d76ac645d62ed
+  - path_49b10e499b241f92516e050f
   decisive_evidence_bindings:
   - binding_id: source_binding_aea8e458a61624a5c0a5b091
     episode_id: authority_work_mem_spill_05
@@ -12481,9 +12481,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_0c6c07346d91b724762bfb39
+  - path_id: path_0a943a88cf13de475b9d60ab
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_1c47678778b99bd51e1e1b80
+  - path_id: path_29876f581699843fe9dbbdbb
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -12528,7 +12528,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0233753
+  created_at: 1788494271.3739145
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -12553,11 +12553,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_fc0b209ab6e4bc259f34232f
+  - path_id: path_28a105b82672bcde9a1cada3
     node_ids:
     - xid_wraparound_risk
     - disk_growing
@@ -12565,7 +12565,7 @@ cases:
     - edge_c7979789a378d0723757d286
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -12575,7 +12575,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -12584,7 +12584,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_fc0b209ab6e4bc259f34232f
+  - path_28a105b82672bcde9a1cada3
   decisive_evidence_bindings:
   - binding_id: source_binding_84d8299e2ecf18a0a60420d2
     episode_id: authority_xid_wraparound_risk_01
@@ -12713,9 +12713,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -12773,7 +12773,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023226
+  created_at: 1788494271.373768
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -12798,11 +12798,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_fc0b209ab6e4bc259f34232f
+  - path_id: path_28a105b82672bcde9a1cada3
     node_ids:
     - xid_wraparound_risk
     - disk_growing
@@ -12810,7 +12810,7 @@ cases:
     - edge_c7979789a378d0723757d286
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -12820,7 +12820,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -12829,7 +12829,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_fc0b209ab6e4bc259f34232f
+  - path_28a105b82672bcde9a1cada3
   decisive_evidence_bindings:
   - binding_id: source_binding_a668503ae122769c25f0b4b5
     episode_id: authority_xid_wraparound_risk_02
@@ -12958,9 +12958,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -13018,7 +13018,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.023231
+  created_at: 1788494271.373773
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -13043,11 +13043,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_fc0b209ab6e4bc259f34232f
+  - path_id: path_28a105b82672bcde9a1cada3
     node_ids:
     - xid_wraparound_risk
     - disk_growing
@@ -13055,7 +13055,7 @@ cases:
     - edge_c7979789a378d0723757d286
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -13065,7 +13065,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -13074,7 +13074,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_fc0b209ab6e4bc259f34232f
+  - path_28a105b82672bcde9a1cada3
   decisive_evidence_bindings:
   - binding_id: source_binding_6b79970da8a98ead150c752e
     episode_id: authority_xid_wraparound_risk_03
@@ -13203,9 +13203,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -13263,7 +13263,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232358
+  created_at: 1788494271.3737779
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -13288,11 +13288,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_fc0b209ab6e4bc259f34232f
+  - path_id: path_28a105b82672bcde9a1cada3
     node_ids:
     - xid_wraparound_risk
     - disk_growing
@@ -13300,7 +13300,7 @@ cases:
     - edge_c7979789a378d0723757d286
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -13310,7 +13310,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -13319,7 +13319,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_fc0b209ab6e4bc259f34232f
+  - path_28a105b82672bcde9a1cada3
   decisive_evidence_bindings:
   - binding_id: source_binding_d171b37e909663b695004c76
     episode_id: authority_xid_wraparound_risk_04
@@ -13448,9 +13448,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -13508,7 +13508,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232408
+  created_at: 1788494271.3737829
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0
@@ -13533,11 +13533,11 @@ cases:
     pg_major: '16'
     scenario_revision: 2
     fidelity: source_grounded_controlled_replay
-  graph_version: graph_e08cdb62d9441aeaa798a033
+  graph_version: graph_122649df58ba78574b6fb57f
   observed_symptoms:
   - disk_growing
   candidate_paths:
-  - path_id: path_fc0b209ab6e4bc259f34232f
+  - path_id: path_28a105b82672bcde9a1cada3
     node_ids:
     - xid_wraparound_risk
     - disk_growing
@@ -13545,7 +13545,7 @@ cases:
     - edge_c7979789a378d0723757d286
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -13555,7 +13555,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     node_ids:
     - disk_pressure
     - disk_growing
@@ -13564,7 +13564,7 @@ cases:
     observed_symptom_id: disk_growing
     selected: false
   selected_path_ids:
-  - path_fc0b209ab6e4bc259f34232f
+  - path_28a105b82672bcde9a1cada3
   decisive_evidence_bindings:
   - binding_id: source_binding_57276842e9ea2d0ad5db4cb5
     episode_id: authority_xid_wraparound_risk_05
@@ -13693,9 +13693,9 @@ cases:
     window_end: null
     source_epoch: ''
   excluded_branches:
-  - path_id: path_f4e6ebf770437210a1eb821f
+  - path_id: path_985748c120d1965c3c7d1c22
     status: HUMAN_LABELED_ALTERNATIVE
-  - path_id: path_d137e4169c89f12769e51848
+  - path_id: path_b0803cbaa626b7155587a72d
     status: HUMAN_LABELED_ALTERNATIVE
   p0_obligations:
     autovacuum_starvation:
@@ -13753,7 +13753,7 @@ cases:
   evidence_quality: source_grounded_structured_replay
   review_status: approved
   training_eligible: true
-  created_at: 1788416254.0232458
+  created_at: 1788494271.3737874
   reuse_count: 0
   reuse_episode_ids: []
   recall_help_count: 0

@@ -118,6 +118,14 @@ evidence:
       特征 —— 时间戳"看着新"也可能因为刚灌过数据而严重失真
     obtained_by: explain_query
     predicate_id: row_estimate_deviation_v2
+  - id: stats_range_drift
+    desc: 落在统计已知值域之外的行数占比。它是估计偏差的成因而不是代理 ——
+      规划器之所以估错，正因为这些行的取值旧直方图从没见过；而它本身
+      不经过规划器，所以不会被过期统计污染。EXPLAIN 在写负载上取不到时
+      （只读角色无权 EXPLAIN 写语句），这是 stale_statistics 唯一的只读判据。
+      实测 orders 表：健康态 0.0070%，统计过期注入态 3.2346%
+    obtained_by: get_table_stats
+    predicate_id: stats_range_drift_v2
   - id: lock_blocking_chain
     desc: pg_locks 阻塞链，谁挡住了谁
     obtained_by: get_blocking_chain

@@ -108,6 +108,38 @@ def _row_estimate(value: dict, _ctx: PredicateContext) -> PredicateDecision:
     )
 
 
+def _stats_range_drift(value: dict, _ctx: PredicateContext) -> PredicateDecision:
+    """统计的已知值域是否还盖得住实际数据。
+
+    阈值 0.5% 是量出来的，不是拍的（orders 表 1200 万行，四个有直方图的列）：
+        健康态 golden          840 行超范围 = 0.0070%
+        统计过期注入态     401,102 行超范围 = 3.2346%
+    462 倍分离，0.5% 落在中间，下有 71 倍余量、上有 6.5 倍余量。
+
+    直方图两端本来就有采样误差，所以判据不能用"有没有超范围"，只能用占比。
+    """
+    pct = _number(value.get("stats_range_drift_pct"), 0.0)
+    rows = _number(value.get("stats_range_drift_rows"), 0.0)
+    if pct >= 0.5:
+        # 下界已经越过阈值，真值必然也越过 —— 这个方向即使测不全也成立。
+        return _decision(
+            PredicateResult.SUPPORTS,
+            f"{rows:.0f} rows ({pct:.4f}%) fall outside the value range the "
+            f"statistics know about, at or above the 0.5% bar")
+    missed = value.get("stats_range_incomplete") or []
+    if missed:
+        # 有列测不到时这个占比只是下界，拿它去 REFUTE 就是用一个偏低的数
+        # 否定一个可能为真的根因 —— 正是本项目要防的静默失败。
+        return _decision(
+            PredicateResult.NOT_APPLICABLE,
+            f"range drift is only a lower bound: {len(missed)} column(s) could "
+            f"not be measured ({[item.get('column') for item in missed][:3]})")
+    return _decision(
+        PredicateResult.REFUTES,
+        f"only {rows:.0f} rows ({pct:.4f}%) fall outside the known value "
+        f"range, below the 0.5% bar")
+
+
 def _lock_chain(value: Any, _ctx: PredicateContext) -> PredicateDecision:
     chains = value.get("chains", []) if isinstance(value, dict) else value
     chains = chains or []
@@ -287,6 +319,7 @@ _PREDICATES: dict[str, Predicate] = {
     "index_existence_v2": _collected,
     "stats_freshness_v2": _stats_freshness,
     "row_estimate_deviation_v2": _row_estimate,
+    "stats_range_drift_v2": _stats_range_drift,
     "lock_blocking_chain_v2": _lock_chain,
     "session_wait_profile_v2": _session_wait,
     "slow_query_ranking_v2": _collected,
@@ -369,6 +402,9 @@ def legacy_structured_value(predicate_id: str, observation: str) -> Any:
     if predicate_id == "stats_freshness_v2":
         return {"last_analyze_present": bool(re.search(
             r"last_analyze=\d{4}-\d{2}-\d{2}", low))}
+    if predicate_id == "stats_range_drift_v2":
+        match = re.search(r"占 ([\d.]+)%", text)
+        return {"stats_range_drift_pct": _number(match.group(1)) if match else 0.0}
     if predicate_id == "row_estimate_deviation_v2":
         match = re.search(r"\u6700\u5927\u504f\u5dee ([\d.]+) \u500d", text)
         return {"max_ratio": _number(match.group(1)) if match else 0.0}

@@ -13,7 +13,7 @@ import json
 import os
 import re
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from sandbox import db
@@ -60,6 +60,12 @@ class TableStats:
     autovacuum_enabled: bool
     autovacuum_running: bool
     autovacuum_trigger: int
+    # 统计信息的已知值域是否还盖得住实际数据。见 _stats_range_drift。
+    stats_range_drift_rows: int = 0
+    stats_range_drift_pct: float = 0.0
+    stats_range_columns: list = field(default_factory=list)
+    # 测不到的列。非空时占比只是下界，不许据此做否定裁决。
+    stats_range_incomplete: list = field(default_factory=list)
     raw_ref: str = ""
 
 
@@ -254,6 +260,78 @@ class Observer:
         self.last_raw_refs["get_blocking_chain"] = ref
         return out
 
+    def _stats_range_drift(self, table: str) -> tuple[int, list, list]:
+        """统计信息的已知值域，还盖不盖得住实际数据。
+
+        为什么需要它：`stale_statistics` 的判别特征是估计与实际行数的偏差
+        倍数，而那个倍数只有 EXPLAIN 给得出来。可 EXPLAIN 在写负载上取不到
+        （只读角色无权 EXPLAIN 一条 UPDATE，架构不变式），于是这条竞争路径
+        在锁竞争场景里结构上关不掉，ESC 空转到预算耗尽。
+
+        这里换一个只读、且**不经过规划器**的量：直方图记录了每一列的已知
+        取值范围，落在范围之外的行数就是"统计没见过的数据有多少"。它不是
+        偏差倍数的代理，它是偏差倍数的成因 —— 实测统计过期场景里规划器对
+        `created_at > now() - 1 hour` 估 1,185 行、实际 400,000 行（337 倍），
+        正因为那 40 万行的 created_at 全部落在旧直方图上界之外。
+
+        实测分离度（orders 表，1200 万行）：
+            健康态 golden        118 行超范围   (0.001%)
+            统计过期注入态   400,288 行超范围   (3.2%)
+
+        注意这不构成循环论证：直方图是**被检验的对象**，不是判据的依据 ——
+        用真实行数去检验统计声称的值域，而不是拿统计去证明统计。
+
+        更直觉的几个量实测都不行，别再试了：reltuples 对 n_live_tup 只有
+        1.033 倍；n_mod_since_analyze 是 40 万，而 PostgreSQL 自己的
+        autoanalyze 阈值是 50 + 0.1 x 1200 万 = 120 万 —— 按它自己的标准
+        这份统计根本不算过期。这个故障是倾斜不是增量。
+
+        **不筛选列**，凡是有直方图的都测。第一版为了省钱只测"有 btree 索引
+        做前导列"的列，那是个错误：它把测量的**覆盖范围**变成了索引存在性
+        的函数。missing_index 场景丢掉 idx_orders_created_at 之后，承载信号
+        的 created_at 列直接从测量里消失（实测：测到的列从
+        ['id','user_id','created_at'] 变成 ['id','user_id']）。于是
+
+            stale_statistics ⇝ missing_index    经 explain 一族
+            missing_index    ⇝ stale_statistics 经这里的索引限制
+
+        形成 2-环。有环就不能靠调整判别顺序解决 —— 无论先判哪个，用到的
+        证据都已经被另一个污染了，只能改证据本身。
+
+        代价其实微不足道：实测走索引 2.5ms，全表并行扫 253ms。为省 250 毫秒
+        引入一条污染边，是笔亏本买卖。
+        """
+        cols = db.query(
+            "SELECT s.attname, format_type(a.atttypid, a.atttypmod),"
+            "       (s.histogram_bounds::text::text[])[1],"
+            "       (s.histogram_bounds::text::text[])["
+            "         array_length(s.histogram_bounds::text::text[], 1)]"
+            " FROM pg_stats s"
+            " JOIN pg_class c ON c.relname = s.tablename"
+            " JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = s.attname"
+            " WHERE s.tablename = %s AND s.histogram_bounds IS NOT NULL",
+            (table,), role="ro")
+        worst, detail, incomplete = 0, [], []
+        for name, coltype, lo, hi in cols:
+            if lo is None or hi is None:
+                continue
+            try:
+                rows = db.query(
+                    f'SELECT count(*) FROM "{table}"'
+                    f' WHERE "{name}" < %s::{coltype} OR "{name}" > %s::{coltype}',
+                    (lo, hi), role="ro")
+            except Exception as exc:
+                # 跳过一列会让 max() 只在剩下的列上取，结果**只可能偏低** ——
+                # 偏低的占比会让判据返回 REFUTES，把真的统计过期排除掉。
+                # 所以测不到必须如实上报，由判据决定不能据此否定。
+                incomplete.append({"column": name, "error": str(exc)[:120]})
+                continue
+            beyond = int(rows[0][0] or 0) if rows else 0
+            detail.append({"column": name, "known_min": str(lo),
+                           "known_max": str(hi), "rows_outside": beyond})
+            worst = max(worst, beyond)
+        return worst, detail, incomplete
+
     def get_table_stats(self, table: str) -> TableStats:
         r = db.query(
             "SELECT n_live_tup, n_dead_tup, last_analyze, last_autoanalyze,"
@@ -276,10 +354,16 @@ class Observer:
         if not r:
             raise KeyError(table)
         live, dead, la, laa, lav, size, av_enabled, av_running, av_trigger = r[0]
+        drift_rows, drift_cols, drift_gaps = self._stats_range_drift(table)
         st = TableStats(table, live or 0, dead or 0,
                         round((dead or 0) / max(live or 1, 1), 4),
                         str(la or laa or ""), str(lav or ""), size,
-                        bool(av_enabled), bool(av_running), int(av_trigger or 0))
+                        bool(av_enabled), bool(av_running), int(av_trigger or 0),
+                        stats_range_drift_rows=drift_rows,
+                        stats_range_drift_pct=round(
+                            100.0 * drift_rows / max(live or 1, 1), 4),
+                        stats_range_columns=drift_cols,
+                        stats_range_incomplete=drift_gaps)
         raw = asdict(st)
         raw.pop("raw_ref", None)
         ref = self.trace.record("get_table_stats", {"table": table},

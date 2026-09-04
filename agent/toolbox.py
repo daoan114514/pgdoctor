@@ -250,6 +250,17 @@ class Toolbox:
         # table_bloat 的必需证据是 dead_tuple_ratio，而这条以前从没有
         # 任何工具产出过 —— 数据取到了却混在 stats_freshness 的观测串里，
         # 于是 table_bloat 这个根因结构上无法被诊断，D1 永远失败。
+        # 统计的已知值域还盖不盖得住实际数据。这条是 stale_statistics 唯一
+        # 不经过规划器的判别证据 —— row_estimate_deviation 的偏差倍数只有
+        # EXPLAIN 给得出来，而只读角色 EXPLAIN 不了写语句，写负载场景下那条
+        # 竞争路径结构上关不掉（实测锁竞争场景因此空转 47 轮到预算耗尽）。
+        self._evidence(
+            "stats_range_drift", raw_ref,
+            f"{table}: 落在统计已知值域之外 {s.stats_range_drift_rows:,} 行"
+            f"（占 {s.stats_range_drift_pct}%）；"
+            f"明细 {s.stats_range_columns[:3]}",
+            bears_on=["stale_statistics"],
+            structured_value=structured_stats)
         self._evidence(
             "dead_tuple_ratio", raw_ref,
             f"{table}: live={s.n_live_tup:,} dead={s.n_dead_tup:,} "

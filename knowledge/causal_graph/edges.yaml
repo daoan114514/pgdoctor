@@ -81,6 +81,7 @@ confirmed_by:
   # 而 last_analyze 看着是新的（刚灌完数据、autovacuum 被关）。
   - {cause: stale_statistics, evidence: row_estimate_deviation, necessity: required}
   - {cause: stale_statistics, evidence: stats_freshness,  necessity: supporting}
+  - {cause: stale_statistics, evidence: stats_range_drift, necessity: supporting}
   - {cause: lock_contention,  evidence: lock_blocking_chain, necessity: required}
   - {cause: lock_contention,  evidence: session_wait_profile, necessity: supporting}
   # dead_tuple_ratio 只描述清理压力，不能替代物理空间测量。
@@ -120,6 +121,12 @@ refuted_by:
   - {cause: stale_statistics, evidence: row_estimate_deviation,
      predicate_id: row_estimate_deviation_v2, scope: NODE,
      when: "估计与实际行数偏差不大"}
+  # 只读反证通道。写负载场景里 explain_query 拿不到 row_estimate_deviation，
+  # 上面那条边就永远用不上，stale_statistics 这条竞争路径结构上关不掉 ——
+  # 实测锁竞争场景因此空转 47 轮直到预算耗尽。
+  - {cause: stale_statistics, evidence: stats_range_drift,
+     predicate_id: stats_range_drift_v2, scope: NODE,
+     when: "统计的已知值域仍然覆盖实际数据"}
   - {cause: lock_contention,  evidence: lock_blocking_chain,
      predicate_id: lock_blocking_chain_v2, scope: PATH, window_required: true,
      when: "阻塞链为空"}
@@ -174,6 +181,10 @@ discriminates:
      separates: [missing_index, stale_statistics], power: 0.8}
   - {evidence: stats_freshness,
      separates: [stale_statistics, missing_index, autovacuum_starvation], power: 0.9}
+  # 判别力低于 EXPLAIN 的偏差倍数（0.85）：它答得出"统计的值域盖不住数据了"，
+  # 答不出"这个谓词估错了多少倍"。标低一档，别让只读近似量顶替强证据。
+  - {evidence: stats_range_drift,
+     separates: [stale_statistics, missing_index], power: 0.7}
   - {evidence: lock_blocking_chain,
      separates: [lock_contention, long_idle_transaction, missing_index], power: 0.95}
   - {evidence: index_existence,
