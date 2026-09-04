@@ -801,7 +801,7 @@ Claude Agent SDK (Python) · 自写 MAPE-K 状态机 · PostgreSQL 16 + hypopg �
 - L1–L4 的行为变化来自受控 fixture/replay 消融。它证明读取端生效和安全约束未被放宽，不等于生产事故上的收益评测。
 - 最新 W4 活库验收 A/B/C 通过，但 A 只覆盖 `missing_index` 的成功修复；C 的第一次失败由测试夹具固定 KPI 结果触发，不是错误索引在自然负载下自行失败。
 - 负载生成器的指标会在长时间连跑后失去刷新。实测 `demo.py` 四幕连跑到第 4 个 episode 时，缺索引造成的 CPU 飙升照常记到，但热查询 p99 全程 12.8→17.8ms、`current_kpi.stale=True`，症状只剩 `cpu_saturated`——延迟劣化没进指标窗口。没有可观测的延迟改善，建索引的预期效果就判 `REFUTED`，**连正确的修复也会被回滚**。单独跑第 4 幕不复现。判分器对 `stale` 有单独归因，但 VERIFY 的路径预测这一环还没有。
-- `lock_contention_eval_v1` 上 ESC 不收敛：确定性基线连吐 47 次 `INSUFFICIENT` 直到耗尽 60 步预算。它不会放行错误结论（安全侧是对的），但也拿不出结论，Outcome 必然为 0。
+- 写负载场景下 `missing_index` / `stale_statistics` 这两条竞争路径**结构上关不掉**。反证它们要 `explain_seq_scan` 与 `row_estimate_deviation`，而这两类证据在图上只有 `explain_query` 一个来源；`lock_contention` 的热查询是 `UPDATE`，只读的 `agent_ro` 无权 EXPLAIN 写语句（架构不变式，不是 bug）。所以 ESC 的 `ALTERNATIVE_PATHS` 永远判不过，episode 只能升级人工，Outcome 必然为 0。要解决得给这两个根因补一条只读可得的判别证据，或让图知道这类证据在写负载上不可得。
 - autovacuum / slot / prepared 使用真实 PostgreSQL 对象验证直接证据；slot 和 prepared 的年龄或滞留量由指标夹层放大。disk 使用容量 provider，不会真实填满宿主机磁盘。
 - 多根因可以保留为多路径解释，但一个 plan 只干预一个目标。现有 E2E 已验证一条路径效果成功、总 KPI 因另一根因未恢复时会归因 `CONTEXT`，不会反证两个正确根因；独立故障仍需顺序处理或升级人工，尚未支持并行写操作。
 - 历史 D1–D5、D2 阈值和 500 例受控跑批属于 v1/rev2 评测，不能外推成 v2 的生产误诊率。受控策略轨迹也不是独立事故样本。

@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from agent import esc
 from agent import explanation_runtime as xr
-from agent.episode_state import EpisodeState, Verdict
+from agent.episode_state import EpisodeState, EvidenceStatus, Verdict
 from agent.explanation import (EvidenceBinding, ExplanationGraph,
                                ExplanationScope, P0Obligation,
                                PredicateResult)
@@ -394,6 +394,50 @@ try:
         unavailable_long, persist=False)
     check("repeatedly unavailable required evidence yields EXHAUSTED",
           unavailable_report["verdict"] == "EXHAUSTED")
+
+    # 工具在取到东西之前就失败时（只读连接 EXPLAIN 写语句、超时、对象不存在），
+    # 它不知道自己在服务哪条 need，只能按自己的方式记账 —— 记下的 evidence_type
+    # 与 need 要的那个对不上，need_id 通道和 binding 通道会同时失明。实测里
+    # lock_contention 就因此空转 47 轮直到预算耗尽：EXHAUSTED 这个出口没通电。
+    tool_dead = copy.deepcopy(edge_gap)
+    tool_need = next(
+        need for need in esc.check_explanation(tool_dead, persist=False)[
+            "evidence_needs"]
+        if need["required"] and need["candidate_tools"])
+    failing_tool = tool_need["candidate_tools"][0]
+    base_seq = len(tool_dead.scratchpad)
+    for offset in range(2):
+        tool_dead.scratchpad.append({
+            "seq": base_seq + offset, "ts": time.time(), "author": "agent",
+            # 关键：类型与 need 要的不同，正是两条旧通道看不见的那种记法
+            "evidence_type": "explain_unavailable",
+            "observation": "InsufficientPrivilege: permission denied",
+            "raw_ref": f"trace://{episode_id}/tool_fail_{offset}",
+            "bears_on": [], "status": EvidenceStatus.ERROR.value,
+            "structured_value": None, "predicate_id": "",
+            "target_kind": "NODE", "target_ids": [],
+            "collection_tool": failing_tool,
+        })
+    tool_report = esc.check_explanation(tool_dead, persist=False)
+    check("a tool that keeps failing outright yields EXHAUSTED",
+          tool_report["verdict"] == "EXHAUSTED", tool_report["verdict"])
+
+    # 反面：工具后来成功过就说明它可用，早先的失败不该继续累计 —— 否则
+    # 一次抖动会永久拉黑这个工具，把还能取到的 need 误判成长期不可得。
+    tool_recovered = copy.deepcopy(tool_dead)
+    tool_recovered.scratchpad.append({
+        "seq": base_seq + 9, "ts": time.time(), "author": "agent",
+        "evidence_type": "explain_unavailable",
+        "observation": "recovered", "raw_ref": f"trace://{episode_id}/tool_ok",
+        "bears_on": [], "status": EvidenceStatus.OBSERVED.value,
+        "structured_value": None, "predicate_id": "",
+        "target_kind": "NODE", "target_ids": [],
+        "collection_tool": failing_tool,
+    })
+    recovered_report = esc.check_explanation(tool_recovered, persist=False)
+    check("a tool that recovers stops counting toward EXHAUSTED",
+          recovered_report["verdict"] != "EXHAUSTED",
+          recovered_report["verdict"])
 
     print("\n[6] PARTIAL scope is explicit and never AUTO")
     partial_id = f"{episode_id}_partial"

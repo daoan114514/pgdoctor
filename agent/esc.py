@@ -624,6 +624,58 @@ def _need_for(*, path_ids: list[str], target_kind: str,
     )
 
 
+def _tool_failures(st: EpisodeState, need: EvidenceNeed) -> int:
+    """这条 need 的取证工具整体失败了多少次 —— 上面两条通道看不见的那类。
+
+    按 need_id 和按 evidence_type 认账，都要求失败被记在"这条 need 要的
+    那个类型"上。可工具在真正取到东西之前就失败时（权限不足、超时、对象
+    不存在），它并不知道自己在服务哪条 need，只能按自己的方式记账：只读
+    连接 EXPLAIN 一条写语句会记成 explain_unavailable，而 need 要的是
+    explain_seq_scan —— 类型对不上，两条通道同时失明。
+
+    实测后果：lock_contention 的热查询是 UPDATE，agent_ro 只有 SELECT，
+    explain_query 连续 47 次返回 InsufficientPrivilege，而 long_unavailable
+    始终是 0，ESC 47 轮吐同一批 directive 直到 60 步预算耗尽 —— EXHAUSTED
+    这个专为"证据取不到"设计的出口从头到尾没通电。
+
+    所以这里改按**工具**认账。三条收紧规则都是必要的：
+
+    1. 按 raw_ref 去重。一次工具调用可能吐好几条证据（`get_database_stats`
+       一次就给 deadlock/temp_file/checkpoint/disk 四类），按条目数累加会
+       把"一次部分失败的调用"算成四次失败，进而把工具其实可用的 need 误判
+       成永久不可得、提前升级人工。数的是调用失败次数，不是失败条目数。
+    2. 只数最后一次成功之后的失败。工具成功过就说明它可用，早先的失败不该
+       继续累计 —— 否则一次抖动会永久拉黑这个工具。
+    3. 跳过那些失败已经按 need 自己的 evidence_type 记账的调用，它们已经被
+       上面的 binding 通道数过了，重复计数会让阈值提前一半触发。
+
+    不要求 target 对得上：工具失败的那一刻并不知道调用方要的是哪个节点、
+    哪条边。
+    """
+    tools = [tool for tool in need.candidate_tools if tool]
+    if not tools:
+        return 0
+    bad = {EvidenceStatus.UNKNOWN.value, EvidenceStatus.ERROR.value}
+    per_tool = []
+    for tool in tools:
+        entries = [entry for entry in st.scratchpad
+                   if entry.get("collection_tool") == tool]
+        last_ok = max(
+            (int(entry.get("seq") or 0) for entry in entries
+             if entry.get("status") == EvidenceStatus.OBSERVED.value),
+            default=-1)
+        failed_refs = {
+            entry.get("raw_ref") for entry in entries
+            if entry.get("status") in bad and
+            int(entry.get("seq") or 0) > last_ok and
+            entry.get("evidence_type") != need.evidence_type
+        }
+        per_tool.append(len(failed_refs))
+    # 取各候选工具的最小值：只要还有一个工具没失败过，这条 need 就仍有
+    # 取到的可能，不该被判成长期不可得。
+    return min(per_tool)
+
+
 def _need_unavailable_attempts(st: EpisodeState, need: EvidenceNeed) -> int:
     audited = sum(
         1 for item in st.evidence_task_audit
@@ -641,7 +693,7 @@ def _need_unavailable_attempts(st: EpisodeState, need: EvidenceNeed) -> int:
                            EvidenceStatus.ERROR.value} and
         targets.intersection(binding.target_node_ids + binding.target_edge_ids)
     )
-    return audited + reports
+    return audited + reports + _tool_failures(st, need)
 
 
 def _directive(need: EvidenceNeed) -> str:
