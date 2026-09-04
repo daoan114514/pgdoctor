@@ -176,10 +176,24 @@ SUPPORT_VALUES = {
         "prepared_age_s": 7200,
     }]},
     "disk_usage": {"used_pct": 92.0},
+    # 每次顺序扫描读满全表 -> 支持 missing_index
+    "seq_scan_volume": {"seq_scan": 20, "idx_scan": 0,
+                        "seq_tup_read": 240_000_000, "reltuples": 12_000_016},
+    # 3.2% 的行落在统计已知值域之外 -> 支持 stale_statistics
+    "stats_range_drift": {"stats_range_drift_pct": 3.2346,
+                          "stats_range_drift_rows": 401_102,
+                          "stats_range_incomplete": []},
 }
 
 REFUTE_VALUES = {
     "explain_plan": {"indexes_used": ["idx_existing"]},
+    # 窗口内只有索引扫描、没有顺序扫描 -> 反证 missing_index
+    "seq_scan_volume": {"seq_scan": 0, "idx_scan": 20,
+                        "seq_tup_read": 0, "reltuples": 12_000_016},
+    # 超出统计值域的行可以忽略 -> 反证 stale_statistics
+    "stats_range_drift": {"stats_range_drift_pct": 0.007,
+                          "stats_range_drift_rows": 840,
+                          "stats_range_incomplete": []},
     "row_estimate_deviation": {"max_ratio": 1.0},
     "lock_blocking_chain": {"chains": []},
     "physical_bloat_ratio": {
@@ -269,9 +283,13 @@ class _RoutePolicy(Policy):
             evidence_type = relation["evidence"]
             value = REFUTE_VALUES[evidence_type]
             if relation["scope"] == "NODE":
+                # 窗口类判据（seq_scan_volume 等）没有窗口和 source_epoch
+                # 就一律 NOT_APPLICABLE，反证根本不成立 —— PATH 分支早就
+                # 传了，NODE 分支漏了。
                 self._add_binding(
                     st, store, evidence_type=evidence_type, value=value,
-                    node_ids=[root_cause])
+                    node_ids=[root_cause],
+                    window=bool(relation.get("window_required")))
             else:
                 for edge_id in {path.edge_ids[0] for path in candidate_paths}:
                     self._add_binding(

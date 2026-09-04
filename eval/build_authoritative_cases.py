@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -579,6 +580,27 @@ def install_l1_seeds(document: dict) -> None:
     case_store.save_cases_v2(list(existing.values()))
 
 
+def _sync_manifest_graph_version() -> str:
+    """把 manifest 里记的 graph_version 同步成当前图的版本。
+
+    以前这步靠手改。改图 -> 数据集失效 -> 重生成 -> 忘了改 manifest，
+    是个必然会踩的顺序；而 manifest 记的版本正是给 reader 判模板是否
+    过期用的，记错了不会立刻报错，只会让 L1 召回悄悄失效。生成器自己
+    知道当前版本，让它顺手写掉。
+    """
+    from knowledge.causal_graph import graph as causal_graph
+    version = causal_graph.graph_version()
+    manifest = ROOT / "knowledge" / "learned" / "v2" / "manifest.yaml"
+    if not manifest.exists():
+        return ""
+    text = manifest.read_text(encoding="utf-8")
+    updated = re.sub(r"graph_version: graph_[0-9a-f]+",
+                     f"graph_version: {version}", text)
+    if updated != text:
+        manifest.write_text(updated, encoding="utf-8")
+    return version
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install-l1-seeds", action="store_true")
@@ -589,11 +611,13 @@ def main() -> None:
                        width=100), encoding="utf-8")
     if args.install_l1_seeds:
         install_l1_seeds(document)
+    manifest_synced = _sync_manifest_graph_version()
     print(json.dumps({
         "output": str(OUTPUT_FILE), "cases": len(document["cases"]),
         "train": document["splits"]["train"],
         "eval": document["splits"]["eval"],
         "l1_installed": args.install_l1_seeds,
+        "manifest_graph_version": manifest_synced,
     }, ensure_ascii=False))
 
 

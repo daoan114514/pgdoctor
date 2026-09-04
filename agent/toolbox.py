@@ -250,6 +250,38 @@ class Toolbox:
         # table_bloat 的必需证据是 dead_tuple_ratio，而这条以前从没有
         # 任何工具产出过 —— 数据取到了却混在 stats_freshness 的观测串里，
         # 于是 table_bloat 这个根因结构上无法被诊断，D1 永远失败。
+        # 窗口内热表上有没有大规模顺序扫描。这是 missing_index 唯一一条
+        # **不经过规划器**的可反证证据 —— counterfactual_index 和 explain_plan
+        # 都是规划器的输出，而规划器吃统计，统计过期时用它们判缺索引是循环
+        # 论证。这条记的是实际执行了什么：实测同样跑 20 次热查询，索引在时
+        # seq_scan=0，索引丢后 seq_scan=20 / 每次读满 1200 万行整张表；而
+        # 统计过期场景 seq_scan=0（规划器仍走索引），所以它能干净地把这两个
+        # 根因分开。
+        scan_delta, scan_status, scan_note = self._cumulative_delta(
+            f"table_scan:{table}", {
+                "seq_scan": s.seq_scan, "seq_tup_read": s.seq_tup_read,
+                "idx_scan": s.idx_scan, "stats_reset": s.stats_reset,
+            }, ("seq_scan", "seq_tup_read", "idx_scan"), "stats_reset")
+        if scan_delta is None:
+            self._evidence(
+                "seq_scan_volume", raw_ref, scan_note,
+                bears_on=["missing_index"], status=scan_status)
+        else:
+            scan_delta["reltuples"] = s.reltuples
+            per_scan = (scan_delta["seq_tup_read"] / scan_delta["seq_scan"]
+                        if scan_delta["seq_scan"] else 0.0)
+            self._evidence(
+                "seq_scan_volume", raw_ref,
+                f"{table} 窗口 {scan_delta['window_s']:.1f}s: "
+                f"顺序扫描 {scan_delta['seq_scan']} 次、共读 "
+                f"{scan_delta['seq_tup_read']:,} 行（每次平均 {per_scan:,.0f} 行"
+                f"／全表 {s.reltuples:,} 行），索引扫描 {scan_delta['idx_scan']} 次",
+                bears_on=["missing_index"], status=scan_status,
+                structured_value=scan_delta,
+                window_start=scan_delta["window_start"],
+                window_end=scan_delta["window_end"],
+                source_epoch=scan_delta["source_epoch"])
+
         # 统计的已知值域还盖不盖得住实际数据。这条是 stale_statistics 唯一
         # 不经过规划器的判别证据 —— row_estimate_deviation 的偏差倍数只有
         # EXPLAIN 给得出来，而只读角色 EXPLAIN 不了写语句，写负载场景下那条

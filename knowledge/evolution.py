@@ -447,6 +447,8 @@ TOOL_OF = {
     "row_estimate_deviation": "explain_query",
     "index_existence": "get_indexes", "stats_freshness": "get_table_stats",
     "dead_tuple_ratio": "get_table_stats",
+    "stats_range_drift": "get_table_stats",
+    "seq_scan_volume": "get_table_stats",
     "physical_bloat_ratio": "get_physical_bloat",
     "autovacuum_health": "get_table_stats",
     "lock_blocking_chain": "get_blocking_chain",

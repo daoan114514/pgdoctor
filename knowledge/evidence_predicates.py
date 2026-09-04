@@ -163,6 +163,45 @@ def _stats_range_drift(value: dict, _ctx: PredicateContext) -> PredicateDecision
         f"range, below the 0.5% bar")
 
 
+def _seq_scan_volume(value: dict, _ctx: PredicateContext) -> PredicateDecision:
+    """窗口内热表上有没有大规模顺序扫描。
+
+    这是 missing_index 唯一一条不经过规划器的可反证证据。它记的是实际执行
+    了什么，而不是规划器打算怎么做 —— counterfactual_index 与 explain_plan
+    都是规划器输出，统计过期时拿它们判缺索引是循环论证。
+
+    实测（orders 1200 万行，同样跑 20 次热查询）：
+        索引在        seq_scan=0                              -> 反证
+        索引丢        seq_scan=20, 每次读满 12,000,000 行     -> 支持
+        统计过期      seq_scan=0（规划器仍走索引）            -> 反证
+    判据取"每次顺序扫描平均读了全表的多大比例"，而不是原始行数 —— 原始值
+    随窗口长短变化，比例不随。0.5 即每次扫描平均读掉半张表以上。
+
+    窗口内完全没有扫描活动（顺序和索引都是 0）时返回 NEUTRAL：那说明这段
+    时间根本没有负载，不能据此否定任何根因。
+    """
+    seq = _number(value.get("seq_scan"), 0.0)
+    idx = _number(value.get("idx_scan"), 0.0)
+    rows = _number(value.get("seq_tup_read"), 0.0)
+    total = _number(value.get("reltuples"), 0.0)
+    if seq <= 0 and idx <= 0:
+        return _decision(PredicateResult.NEUTRAL,
+                         "no scan activity of either kind in the window")
+    if seq <= 0:
+        return _decision(
+            PredicateResult.REFUTES,
+            f"the window has {idx:.0f} index scans and no sequential scan")
+    per_scan = rows / seq
+    share = per_scan / total if total > 0 else 0.0
+    return _supports_if(
+        share >= 0.5,
+        support=(f"each of {seq:.0f} sequential scans read {per_scan:,.0f} rows "
+                 f"on average, {share:.1%} of the table"),
+        refute=(f"sequential scans read only {per_scan:,.0f} rows on average, "
+                f"{share:.1%} of the table, below the 50% bar"),
+    )
+
+
 def _lock_chain(value: Any, _ctx: PredicateContext) -> PredicateDecision:
     chains = value.get("chains", []) if isinstance(value, dict) else value
     chains = chains or []
@@ -343,6 +382,7 @@ _PREDICATES: dict[str, Predicate] = {
     "stats_freshness_v2": _stats_freshness,
     "row_estimate_deviation_v2": _row_estimate,
     "stats_range_drift_v2": _stats_range_drift,
+    "seq_scan_volume_v2": _seq_scan_volume,
     "lock_blocking_chain_v2": _lock_chain,
     "session_wait_profile_v2": _session_wait,
     "slow_query_ranking_v2": _collected,
@@ -363,7 +403,7 @@ _PREDICATES: dict[str, Predicate] = {
 }
 
 _WINDOW_PREDICATES = frozenset({
-    "lock_blocking_chain_v2", "deadlock_count_v2",
+    "lock_blocking_chain_v2", "deadlock_count_v2", "seq_scan_volume_v2",
     "temp_file_volume_v2", "checkpoint_stats_v2",
 })
 

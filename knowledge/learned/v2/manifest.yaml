@@ -22,7 +22,7 @@ datasets:
     generator: eval/build_authoritative_cases.py
     validation: .dev/authoritative_case_check.py
     revision: 2
-    graph_version: graph_64b9145a9b1b1517ce4914ef
+    graph_version: graph_6e0676140a51659796ed6594
     fidelity: source_grounded_controlled_replay
     case_count: 100
     splits:

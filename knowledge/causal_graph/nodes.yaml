@@ -126,6 +126,13 @@ evidence:
       实测 orders 表：健康态 0.0070%，统计过期注入态 3.2346%
     obtained_by: get_table_stats
     predicate_id: stats_range_drift_v2
+  - id: seq_scan_volume
+    desc: 窗口内热表上顺序扫描的次数与每次平均读掉的表比例。记的是实际执行了
+      什么，不经过规划器 —— missing_index 唯一一条不被过期统计污染的可反证
+      证据。实测同样跑 20 次热查询：索引在 seq_scan=0；索引丢 seq_scan=20 且
+      每次读满全表；统计过期 seq_scan=0（规划器仍走索引）
+    obtained_by: get_table_stats
+    predicate_id: seq_scan_volume_v2
   - id: lock_blocking_chain
     desc: pg_locks 阻塞链，谁挡住了谁
     obtained_by: get_blocking_chain

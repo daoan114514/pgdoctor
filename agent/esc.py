@@ -461,6 +461,7 @@ _CUMULATIVE_EPOCH_KEYS = {
     "deadlock_count": "pg_stat_database",
     "temp_file_volume": "pg_stat_database",
     "checkpoint_stats": "checkpoint_stats",
+    "seq_scan_volume": "pg_stat_database",
 }
 
 

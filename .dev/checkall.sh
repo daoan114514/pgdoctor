@@ -16,7 +16,7 @@ if ! "$python_bin" -c 'import networkx, pglast, psycopg' >/dev/null 2>&1; then
   fi
 fi
 fail=0
-for f in .dev/shield_check.py .dev/esc_check.py .dev/evo_check.py \
+for f in .dev/graph_lint.py .dev/graph_expand_check.py .dev/shield_check.py .dev/esc_check.py .dev/evo_check.py \
          .dev/gate_check.py .dev/check_gate_reject.py .dev/check_lock_safe.py \
          .dev/w7_check.py .dev/coverage_check.py .dev/check_rollback_markers.py \
          .dev/cumulative_evidence_check.py .dev/p0_recall_check.py \

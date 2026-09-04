@@ -66,6 +66,13 @@ class TableStats:
     stats_range_columns: list = field(default_factory=list)
     # 测不到的列。非空时占比只是下界，不许据此做否定裁决。
     stats_range_incomplete: list = field(default_factory=list)
+    # 累计扫描计数器（原始值，窗口增量由 Toolbox 差分）。它记的是实际
+    # 执行了什么，不经过规划器，所以过期统计污染不到它。
+    seq_scan: int = 0
+    seq_tup_read: int = 0
+    idx_scan: int = 0
+    reltuples: int = 0
+    stats_reset: str = ""
     raw_ref: str = ""
 
 
@@ -349,11 +356,15 @@ class Observer:
             "                  WHERE option_name = 'autovacuum_vacuum_scale_factor'),"
             "                 current_setting('autovacuum_vacuum_scale_factor')::numeric)"
             "        * greatest(s.n_live_tup, 0))::bigint"
+            " , s.seq_scan, s.seq_tup_read, s.idx_scan, c.reltuples::bigint"
+            " , (SELECT COALESCE(stats_reset, pg_postmaster_start_time())"
+            "    FROM pg_stat_database WHERE datname = current_database())"
             " FROM pg_stat_user_tables s JOIN pg_class c ON c.oid = s.relid"
             " WHERE s.relname = %s", (table,), role="ro")
         if not r:
             raise KeyError(table)
-        live, dead, la, laa, lav, size, av_enabled, av_running, av_trigger = r[0]
+        (live, dead, la, laa, lav, size, av_enabled, av_running, av_trigger,
+         seq_scan, seq_tup_read, idx_scan, reltuples, stats_reset) = r[0]
         drift_rows, drift_cols, drift_gaps = self._stats_range_drift(table)
         st = TableStats(table, live or 0, dead or 0,
                         round((dead or 0) / max(live or 1, 1), 4),
@@ -363,7 +374,12 @@ class Observer:
                         stats_range_drift_pct=round(
                             100.0 * drift_rows / max(live or 1, 1), 4),
                         stats_range_columns=drift_cols,
-                        stats_range_incomplete=drift_gaps)
+                        stats_range_incomplete=drift_gaps,
+                        seq_scan=int(seq_scan or 0),
+                        seq_tup_read=int(seq_tup_read or 0),
+                        idx_scan=int(idx_scan or 0),
+                        reltuples=int(reltuples or 0),
+                        stats_reset=str(stats_reset or ""))
         raw = asdict(st)
         raw.pop("raw_ref", None)
         ref = self.trace.record("get_table_stats", {"table": table},

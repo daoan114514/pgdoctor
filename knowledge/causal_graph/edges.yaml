@@ -82,6 +82,7 @@ confirmed_by:
   - {cause: stale_statistics, evidence: row_estimate_deviation, necessity: required}
   - {cause: stale_statistics, evidence: stats_freshness,  necessity: supporting}
   - {cause: stale_statistics, evidence: stats_range_drift, necessity: supporting}
+  - {cause: missing_index,    evidence: seq_scan_volume, necessity: supporting}
   - {cause: lock_contention,  evidence: lock_blocking_chain, necessity: required}
   - {cause: lock_contention,  evidence: session_wait_profile, necessity: supporting}
   # dead_tuple_ratio 只描述清理压力，不能替代物理空间测量。
@@ -127,6 +128,12 @@ refuted_by:
   - {cause: stale_statistics, evidence: stats_range_drift,
      predicate_id: stats_range_drift_v2, scope: NODE,
      when: "统计的已知值域仍然覆盖实际数据"}
+  # missing_index 原先唯二的可反证证据 counterfactual_index 与 explain_plan
+  # 都是规划器的输出，而规划器吃统计 —— 统计过期时拿它们反证缺索引是循环
+  # 论证。这条补上唯一不经过规划器的反证通道。
+  - {cause: missing_index, evidence: seq_scan_volume,
+     predicate_id: seq_scan_volume_v2, scope: NODE, window_required: true,
+     when: "窗口内热表上没有大规模顺序扫描"}
   - {cause: lock_contention,  evidence: lock_blocking_chain,
      predicate_id: lock_blocking_chain_v2, scope: PATH, window_required: true,
      when: "阻塞链为空"}
@@ -188,6 +195,8 @@ discriminates:
   # 答不出"这个谓词估错了多少倍"。标低一档，别让只读近似量顶替强证据。
   - {evidence: stats_range_drift,
      separates: [stale_statistics, missing_index], power: 0.7}
+  - {evidence: seq_scan_volume,
+     separates: [missing_index, stale_statistics], power: 0.85}
   - {evidence: lock_blocking_chain,
      separates: [lock_contention, long_idle_transaction, missing_index], power: 0.95}
   - {evidence: index_existence,
