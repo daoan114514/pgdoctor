@@ -73,6 +73,14 @@ class ExplanationESCConfig:
 
     major_alternative_score_ratio: float = 0.75
     unavailable_attempts_before_exhausted: int = 2
+    # 同一个 episode 里 ESC 判 INSUFFICIENT 并退回取证的次数上限。
+    # esc_retries 这个字段一直只写不读 —— 看起来像闸门，其实不是，唯一的
+    # 界是 max_steps=60。lock_contention 因此空转 47 轮直到烧穿预算，而
+    # 步数预算太大，把"不收敛"伪装成了"还在努力"。
+    # 30 是兜底网不是主机制：正常 episode 只用 1-2 轮，取证不可得由
+    # unavailable_attempts_before_exhausted 在 2 次就拦下；这条管的是那些
+    # 可用性记账看不见、却始终推不动的情形。
+    max_esc_retries: int = 30
     max_directives: int = 12
 
 
@@ -1129,16 +1137,22 @@ def check_explanation(
     max_steps = int(st.budget.get("max_steps", 0) or 0)
     steps = int(st.budget.get("steps", 0) or 0)
     budget_exhausted = max_steps > 0 and steps >= max_steps
+    retries = int(getattr(st, "esc_retries", 0) or 0)
+    retries_exhausted = (config.max_esc_retries > 0 and
+                         retries >= config.max_esc_retries)
     budget_dim = DimResult(
         name="BUDGET_AND_AVAILABILITY",
-        passed=not budget_exhausted and not long_unavailable,
+        passed=(not budget_exhausted and not retries_exhausted and
+                not long_unavailable),
         mandatory=False,
         detail=(f"steps={steps}/{max_steps}, "
+                f"esc_retries={retries}/{config.max_esc_retries}, "
                 f"available_needs={len(available_needs)}, "
                 f"long_unavailable={len(long_unavailable)}, "
                 f"optional_unavailable={len(unavailable_optional)}"),
         missing=[need.need_id for need in long_unavailable] +
-        (["episode step budget exhausted"] if budget_exhausted else []),
+        (["episode step budget exhausted"] if budget_exhausted else []) +
+        (["esc retry budget exhausted"] if retries_exhausted else []),
     )
 
     mandatory = [coverage_dim, root_dim, continuity_dim, alternatives_dim,
@@ -1150,7 +1164,7 @@ def check_explanation(
         verdict = ESCVerdict.SUFFICIENT.value
     elif not graph_current or not selected or requires_rehypothesize:
         verdict = ESCVerdict.INSUFFICIENT.value
-    elif budget_exhausted or long_unavailable:
+    elif budget_exhausted or retries_exhausted or long_unavailable:
         verdict = ESCVerdict.EXHAUSTED.value
     elif available_needs:
         verdict = ESCVerdict.INSUFFICIENT.value

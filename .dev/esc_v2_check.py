@@ -439,6 +439,21 @@ try:
           recovered_report["verdict"] != "EXHAUSTED",
           recovered_report["verdict"])
 
+    # esc_retries 以前只写不读，看起来像闸门其实不是 —— 退回取证这条路上
+    # 没有任何东西喊停，唯一的界是 max_steps，而它太大，会把不收敛伪装成
+    # 还在努力（lock_contention 空转 47 轮就是这么来的）。
+    retry_dead = copy.deepcopy(edge_gap)
+    retry_dead.esc_retries = esc.DEFAULT_EXPLANATION_ESC.max_esc_retries
+    retry_report = esc.check_explanation(retry_dead, persist=False)
+    check("exhausting the ESC retry budget yields EXHAUSTED",
+          retry_report["verdict"] == "EXHAUSTED", retry_report["verdict"])
+
+    retry_ok = copy.deepcopy(edge_gap)
+    retry_ok.esc_retries = esc.DEFAULT_EXPLANATION_ESC.max_esc_retries - 1
+    check("one retry below the budget still asks for more evidence",
+          esc.check_explanation(retry_ok, persist=False)["verdict"]
+          != "EXHAUSTED")
+
     print("\n[6] PARTIAL scope is explicit and never AUTO")
     partial_id = f"{episode_id}_partial"
     partial_store = TraceStore(partial_id)

@@ -519,6 +519,17 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                             st.directives = rep.directives[:5]
                             st.esc_verdict = ""
                             st.esc_retries += 1
+                            # v1 的 check() 没有 BUDGET_AND_AVAILABILITY 那一维，
+                            # 退回取证这条路上没有任何东西喊停，唯一的界是
+                            # max_steps —— 而它太大，会把不收敛伪装成还在努力。
+                            limit = esc_mod.DEFAULT_EXPLANATION_ESC.max_esc_retries
+                            if limit > 0 and st.esc_retries >= limit:
+                                st.outcome_note = (
+                                    f"ESC 连续 {st.esc_retries} 轮未通过，"
+                                    f"证据推不动，升级人工")
+                                sm.goto(Phase.ESCALATE, "esc retry budget")
+                                st.save()
+                                continue
                             sm.goto(Phase.INVESTIGATE, "esc insufficient")
                             continue
 
