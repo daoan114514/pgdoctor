@@ -854,10 +854,16 @@ def check_explanation(
     for path in selected:
         path_missing = False
         for index, node_id in enumerate(path.node_ids[:-1]):
+            # 只认图上声明过与这个根因有关的证据（confirmed_by 的 required
+            # 与 supporting）。原先还并进了 discriminators_of，那是泄漏：
+            # DISCRIMINATES 的 separates 列的是"这条证据在哪个候选集里有用"，
+            # 不是"它能作用于其中每一个根因"。实测这一项只贡献不相关的类型 ——
+            # 全图 17 条，覆盖 9 个根因，最狠的是 missing_index 会把
+            # lock_blocking_chain / dead_tuple_ratio / temp_file_volume 当成
+            # 自己路径节点的支持证据。真正相关的证据已经全在前两项里了。
             allowed_evidence = (
                 set(G.required_evidence(node_id)) |
-                set(G.supporting_evidence(node_id)) |
-                set(G.discriminators_of(node_id))
+                set(G.supporting_evidence(node_id))
             )
             supports = [binding for binding in _matching_bindings(
                 trusted, result=PredicateResult.SUPPORTS.value,

@@ -179,8 +179,11 @@ refuted_by:
 discriminates:
   - {evidence: explain_seq_scan,
      separates: [missing_index, stale_statistics], power: 0.8}
+  # power 从 0.9 降到 0.3：它不在这三个根因任何一个的 refuted_by 边上，
+  # 结构上关不掉任何路径，只在"从没分析过"时能提供支持。标 0.9 会让
+  # best_discriminator 把最宝贵的第一步取证花在一个注定无效的证据上。
   - {evidence: stats_freshness,
-     separates: [stale_statistics, missing_index, autovacuum_starvation], power: 0.9}
+     separates: [stale_statistics, missing_index, autovacuum_starvation], power: 0.3}
   # 判别力低于 EXPLAIN 的偏差倍数（0.85）：它答得出"统计的值域盖不住数据了"，
   # 答不出"这个谓词估错了多少倍"。标低一档，别让只读近似量顶替强证据。
   - {evidence: stats_range_drift,

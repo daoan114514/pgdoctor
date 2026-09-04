@@ -86,10 +86,33 @@ def _explain_plan(value: dict, _ctx: PredicateContext) -> PredicateDecision:
 
 
 def _stats_freshness(value: dict, _ctx: PredicateContext) -> PredicateDecision:
-    fresh = bool(value.get("last_analyze") or value.get("last_analyze_present"))
-    return (_decision(PredicateResult.REFUTES, "analyze timestamp is present")
-            if fresh else
-            _decision(PredicateResult.SUPPORTS, "analyze timestamp is absent"))
+    """时间戳只能证明"从没分析过"，不能证明"统计是准的"。
+
+    原先是对称的：有时间戳就 REFUTES 统计过期。那是反的 —— 注入器的顺序
+    是先 ANALYZE 固化旧统计、再灌 40 万行倾斜数据，于是 last_analyze 存在
+    且很新，而规划器对热查询谓词估 1,185 行、实际 400,000 行（337 倍）。
+    项目自己早就记过这个结论（README：判别特征是偏差倍数不是时间戳；实测
+    偏差 4200 倍而 last_analyze 看着是新的），但 predicate 里编码的还是
+    时间戳判据。
+
+    当时没出事，是因为图上没给它连 refuted_by 边，v1 的 _value_checked 和
+    v2 的 _scoped_alternative_refutation 都以那条声明为门，所以这个 REFUTES
+    被挡住了。但挡它的是**另一个文件里一条不存在的声明**：谁往 refuted_by
+    里加一条看起来很合理的 stats_freshness -> stale_statistics，错误裁决
+    立刻上线。判据自身必须是对的，不能靠别处兜底。
+
+    所以改成不对称：没有时间戳 = 从没分析过，那确实支持统计过期；有时间戳
+    什么也证明不了，返回 NEUTRAL。
+    """
+    analyzed = bool(value.get("last_analyze") or
+                    value.get("last_analyze_present"))
+    if not analyzed:
+        return _decision(PredicateResult.SUPPORTS,
+                         "table has never been analyzed")
+    return _decision(
+        PredicateResult.NEUTRAL,
+        "an analyze timestamp only shows ANALYZE ran, not that the "
+        "statistics still describe the data")
 
 
 def _row_estimate(value: dict, _ctx: PredicateContext) -> PredicateDecision:
