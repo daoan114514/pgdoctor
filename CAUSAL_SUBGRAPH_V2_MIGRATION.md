@@ -339,7 +339,7 @@ v2 报告以 JSON dict 持久化。W4 最终报告的核心字段如下；完整
 
 ### `CaseV2` 与学习 YAML
 
-当前持久化 L1 样例是人工标注的冷启动 fixture，不是生产 Episode：
+当前持久化 L1 共 72 条，全部是 `human_labeled` 的 train split：70 条来自权威回放数据集（`eval/authoritative_cases_v2.yaml`，见 `eval/build_authoritative_cases.py`）的冷启动 seed，2 条是人工标注 fixture。没有一条来自生产 Episode，也没有 sandbox 样本：
 
 ```yaml
 case_id: fixture_missing_index_no_wait
@@ -434,8 +434,8 @@ v1 的问题也保留在这些文件里：playbook 把整段 `evidence_order` �
 
 | 层 | 当前持久数据 |
 |---|---:|
-| L1 cases | 2 |
-| L1 provenance | 2 条均为 `human_labeled` 冷启动 fixture |
+| L1 cases | 72 |
+| L1 provenance | 72 条均为 `human_labeled`：70 条权威回放冷启动 seed + 2 条人工标注 fixture |
 | L1 sandbox / production cases | 0 / 0 |
 | L2 investigation policy records | 0 |
 | L3 edge stats / path stats | 0 / 0 |

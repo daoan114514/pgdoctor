@@ -2,9 +2,12 @@
 命令跑不通就是失信。"""
 import re
 import subprocess
+import sys
 from pathlib import Path
 
-REPO = Path("/home/daoan/pgdoctor")
+# 用脚本自身位置推仓库根，别写死绝对路径 —— 原先写死成一台机器上的
+# WSL 路径，换台机器连 README 都读不到，这个校验就等于没有。
+REPO = Path(__file__).resolve().parent.parent
 txt = (REPO / "README.md").read_text(encoding="utf-8")
 
 print(f"行数: {len(txt.splitlines())}")
@@ -34,7 +37,9 @@ checks = [
 ]
 for mod, fn in checks:
     r = subprocess.run(
-        ["python3", "-c",
+        # 用当前解释器而不是字面量 python3：Windows 上 python3 是应用商店
+        # 的占位程序，会让存在的函数被误报成缺失。
+        [sys.executable, "-c",
          f"import sys; sys.path.insert(0,'.'); "
          f"import {mod} as m; assert hasattr(m,'{fn}'); print('ok')"],
         cwd=REPO, capture_output=True, text=True)
