@@ -39,6 +39,14 @@ def _load_injectors() -> dict:
     return INJECTORS
 
 
+class BaselineNotHealthy(RuntimeError):
+    """健康基线本身就满足告警条件 —— 该 episode 不可用，不是诊断失败。
+
+    单独一个类型而不是靠字符串匹配：跑批要把它排除出分母。混进去会让
+    "环境没散干净"看起来像"agent 没诊断出来"，那正是判分归因错误。
+    """
+
+
 @dataclass
 class Observation:
     alert: str
@@ -80,6 +88,55 @@ class DBAScenarioEnv:
             cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
 
+    def _warm_until_stable(self, tolerance: float = 0.3) -> list[str]:
+        """等指标窗口填满并且读数稳定，再采健康基线。
+
+        原先是启动负载后固定 sleep(warmup_s)=15s 就采。问题有两层：
+
+        一是**只热了半个窗口**。metrics 是 30 秒滚动窗口，15 秒采到的读数
+        里有一半窗口是空的。二是**快照回滚后缓存全冷** —— snapshot.reset()
+        走的是 DROP + CREATE DATABASE ... TEMPLATE，新库的页一张都不在
+        shared_buffers 里，头十几秒量到的是冷缓存的 I/O，不是健康水位。
+
+        实测后果：连着跑几个 episode 之后，采到的"健康基线"是
+        p99=5190ms、cpu=735%，比故障态还差。于是注入之后 current 反而比
+        baseline 好，OBSERVE 判不出任何症状，episode 3 步就停了 —— 而且是
+        静默的，看起来像"agent 没诊断出来"。同一个提交前后两次跑批
+        stale_statistics 一次 15 步一次 60 步，也是同一个来源。
+
+        所以改成等**稳定**而不是等时长：至少热满 warmup_s 和一个完整窗口，
+        然后要连续两次相隔半窗的读数在 tolerance 内一致才算稳。这是拿时间
+        换正确性 —— 一个不可信的基线会让整个 episode 静默作废，多等几十秒
+        便宜得多。
+        """
+        notes: list[str] = []
+        floor = max(self.warmup_s, metrics.WINDOW_S + 5.0)
+        time.sleep(floor)
+        # 耐心给足：上一个 episode 烧满预算之后，DROP + CREATE DATABASE
+        # 一个 1.6GB 的模板加冷缓存回填，实测要一分多钟才落回健康水位。
+        # 等不够的代价是整个 episode 作废，等久一点只是慢。
+        budget = max(300.0, floor * 6)
+        deadline = time.time() + budget
+        step = max(5.0, metrics.WINDOW_S / 2)
+        previous: metrics.KPI | None = None
+        while time.time() < deadline:
+            current = metrics.collect()
+            # p99 和 CPU 都要稳。只看 p99 会漏掉"延迟已经下来、但后台还在
+            # 回填缓存/做检查点"的那一段 —— 实测那时 cpu 仍有 323%，而
+            # 告警判据是 p99 与 cpu 的合取，采到就直接把 episode 判废。
+            if not current.stale and previous is not None:
+                def _close(a: float, b: float) -> bool:
+                    worst = max(a, b, 1e-9)
+                    return abs(a - b) / worst <= tolerance
+                if (_close(previous.p99_ms, current.p99_ms) and
+                        _close(previous.cpu_pct, current.cpu_pct)):
+                    return notes
+            previous = current
+            time.sleep(step)
+        notes.append(
+            f"警告：{budget:.0f}s 内健康基线未稳定，该 episode 的基线可能不可靠")
+        return notes
+
     def _stop_workload(self) -> None:
         if self._wl and self._wl.poll() is None:
             self._wl.terminate()
@@ -104,13 +161,31 @@ class DBAScenarioEnv:
 
         self._log("[env] 启动负载生成器 ...")
         self._start_workload()
-        time.sleep(self.warmup_s)
+        notes.extend(self._warm_until_stable())
 
         self._log("[env] 采集健康基线（必须在注入之前）...")
         self.suite.capture_baseline()
         self.healthy_kpi = metrics.collect()
         if self.healthy_kpi.stale:
             notes.append("警告：负载指标过期，健康基线可能不可靠")
+        # 硬闸：已经满足告警条件的读数不是健康基线。
+        # 它比"警告"重要得多 —— 基线偏高会让 OBSERVE 判不出任何症状，
+        # episode 静默作废却看起来像"agent 没诊断出来"，混进分母就把指标
+        # 毁了。宁可显式作废也不能出一个安静的错数（实测踩过：连着跑几个
+        # episode 之后 missing_index 采到 p99=5190ms 的"健康基线"，比故障态
+        # 还差，symptoms 为空，3 步就停了）。
+        try:
+            already_alerting = metrics.eval_expr(
+                self.spec["trigger"]["alert"], self.healthy_kpi,
+                baseline=self.healthy_kpi)
+        except Exception:
+            already_alerting = False
+        if already_alerting:
+            raise BaselineNotHealthy(
+                f"健康基线本身就满足告警条件 "
+                f"({self.spec['trigger']['alert']}): "
+                f"p99={self.healthy_kpi.p99_ms}ms cpu={self.healthy_kpi.cpu_pct}% "
+                f"—— 上一个 episode 的负载没散干净，该 episode 不可用")
         self._log(f"       p50={self.healthy_kpi.p50_ms}ms "
                   f"p99={self.healthy_kpi.p99_ms}ms cpu={self.healthy_kpi.cpu_pct}%")
 

@@ -256,8 +256,12 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 (res.audit or {}).get("shield_blocked") or [])
     except Exception as exc:
         out.error = f"{type(exc).__name__}: {exc}"
-        if type(exc).__name__ == "ModelUnavailable" or \
-                "error result: success" in str(exc).lower():
+        if type(exc).__name__ == "BaselineNotHealthy":
+            # 环境没散干净，不是诊断失败。fired 保持 False，本来就不进
+            # 分母；这里只是别打一堆 traceback 让人以为是崩溃。
+            print(f"    基线不干净，跳过: {str(exc)[:110]}", flush=True)
+        elif (type(exc).__name__ == "ModelUnavailable" or
+                "error result: success" in str(exc).lower()):
             out.unusable = True
         else:
             traceback.print_exc()
