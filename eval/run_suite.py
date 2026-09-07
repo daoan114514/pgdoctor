@@ -310,6 +310,12 @@ def main() -> None:
             continue
         if args.faults and d["fault_class"] not in args.faults.split(","):
             continue
+        # 声明式排除。让"这个实例现在测不出东西"写在场景文件里，而不是靠
+        # 跑批的人记得加 --faults —— 忘了加就会往三率里掺一个恒失败的样本。
+        if str(d.get("status") or "") == "excluded":
+            print(f"跳过 {d['id']}（场景已标记 excluded）："
+                  f"{str(d.get('excluded_reason') or '').strip()[:90]}")
+            continue
         picks.append(p)
 
     if args.order == "reverse":

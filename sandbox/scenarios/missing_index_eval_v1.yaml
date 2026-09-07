@@ -1,4 +1,17 @@
 id: missing_index_eval_v1
+# 暂时排除出跑批。不改实例定义（inject/负载/判据都没动），所以不 bump
+# revision，历史结果仍然可比。
+status: excluded
+excluded_reason: >
+  这条热查询测不出索引收益。orders.created_at 的物理相关性只有 0.0158
+  （id 是 1.0）——种子把时间随机打散，同一时间段的行散布在整张 1.6GB 表里，
+  任何 created_at 范围查询都要满表捞行，有没有索引差别不大（实测按索引定位
+  4,150 行再回表要 13.8 秒）。叠加热查询在健康态就返回 86,046 行、p99≈2000ms，
+  而本文件声明 healthy_p99_ms: 35、告警线 p99>300 —— 健康态本身就永久超标，
+  Outcome 在历史所有跑批里从未 True 过。
+  另有一个随时间漂移的问题：now() - interval '30 days' 是相对今天算的，而
+  数据时间戳停在种子生成那天，窗口正在滑出数据末端（现在"近 1 天"已是 0 行）。
+  治本要重灌种子、让 created_at 随 id 递增，见 README 已知局限。
 split: eval
 difficulty: 1
 fault_class: missing_index
