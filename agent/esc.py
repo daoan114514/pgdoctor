@@ -479,6 +479,29 @@ def _window_predicate_ids() -> set[str]:
     return ids - {""}
 
 
+def _contaminated_by(binding: EvidenceBinding,
+                     live_invalidators: set[str]) -> list[str]:
+    """这条绑定的来源，是否正被一条尚未反证的候选路径怀疑失真。
+
+    与"绑定无效"是两件事，所以单独成函数、单独计入。无效是证据本身有问题
+    （raw_ref 伪造、摘要不匹配、过期、串 episode），该报到 EVIDENCE_TRUST；
+    污染是证据本身没问题，只是上游那个问题没解决之前用不了。混成一维会让
+    "你的证据是假的"和"你得先排除另一个根因"发出同样的信号。
+
+    哪条证据被哪个根因污染，由证据自己的 provenance 标签查 provenance_rules
+    推出来，不逐对手写。典型是 explain 一族：值由规划器算出，规划器吃
+    pg_statistic，所以 stale_statistics 没排除之前，用执行计划去判缺索引是
+    循环论证。
+
+    自身豁免：证据判它自己的来源是否失真是**检验**不是污染
+    （row_estimate_deviation 与 stats_range_drift 判 stale_statistics 都属于
+    这一类），所以绑定目标里出现的污染源不算数。
+    """
+    own_targets = set(binding.target_node_ids)
+    return sorted((G.invalidators_of(binding.evidence_type) - own_targets) &
+                  live_invalidators)
+
+
 def _binding_trust(st: EpisodeState, binding: EvidenceBinding, *,
                    now: float, window_predicates: set[str]
                    ) -> tuple[bool, list[str]]:
@@ -779,6 +802,10 @@ def check_explanation(
     selected_ids = {path.path_id for path in selected}
     selected_roots = explanation.derive_selected_root_causes()
     window_predicates = _window_predicate_ids()
+    live_invalidators = {
+        path.root_node_id for path in paths.values()
+        if path.status != CausalStatus.REFUTED.value
+    }
 
     trust: dict[str, tuple[bool, list[str]]] = {
         binding_id: _binding_trust(
@@ -786,9 +813,25 @@ def check_explanation(
             window_predicates=window_predicates)
         for binding_id, binding in explanation.evidence_bindings.items()
     }
+    contaminated = {
+        binding_id
+        for binding_id, binding in explanation.evidence_bindings.items()
+        if _contaminated_by(binding, live_invalidators)
+    }
+    # 污染只压 REFUTES，不压 SUPPORTS。
+    #
+    # 危险的是拿被污染的证据去**关掉**竞争路径 —— 那正是静默选错的形状。
+    # 用它支持自己那条路径没有这个问题：竞争路径仍然活着，ALTERNATIVE_PATHS
+    # 与 AMBIGUOUS 照样把关。第一版把 SUPPORTS 也压了，结果被污染那条路径
+    # 失去支持、不再算"有支持的竞争假设"，AMBIGUOUS 这个"两个都说得通、别
+    # 硬选"的安全信号被顺手删掉，四条安全验收退化成 INSUFFICIENT。
     trusted = {
-        binding_id: explanation.evidence_bindings[binding_id]
-        for binding_id, (valid, _reasons) in trust.items() if valid
+        binding_id: binding
+        for binding_id, (valid, _reasons) in trust.items()
+        if valid and not (
+            (binding := explanation.evidence_bindings[binding_id])
+            .predicate_result == PredicateResult.REFUTES.value and
+            binding_id in contaminated)
     }
     use_events: list[str] = []
 

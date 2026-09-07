@@ -454,6 +454,48 @@ try:
           esc.check_explanation(retry_ok, persist=False)["verdict"]
           != "EXHAUSTED")
 
+    # 污染只压 REFUTES：拿被污染的证据去**关掉**竞争路径才是静默选错的形状。
+    # 用它支持自己那条路径不压 —— 竞争路径仍然活着，AMBIGUOUS 照样把关。
+    print()
+    print("[9] 被污染的来源不能用来关掉竞争路径")
+    contam_id = f"{episode_id}_contaminated"
+    contam_store = TraceStore(contam_id)
+    contam = make_state(contam_id, [missing_index, stale_stats], [stale_stats],
+                        observed=["latency_p99_up"])
+    support_path(contam, contam_store, stale_stats)
+    # explain_plan 的 provenance 是 planner_output，被 stale_statistics 污染；
+    # 而 stale_statistics 这条路径此刻正被支持着，尚未被反证。
+    add_binding(contam, contam_store, evidence_type="explain_plan",
+                value={"indexes_used": ["idx_existing"]},
+                node_ids=["missing_index"])
+    xr.recompute_statuses(contam)
+    contam_paths = contam.explanation_graph.path_map()
+    check("被污染的 REFUTES 关不掉竞争路径",
+          contam_paths[missing_index.path_id].status != "REFUTED",
+          contam_paths[missing_index.path_id].status)
+    check("污染源自己不受影响（自身豁免是检验不是污染）",
+          contam_paths[stale_stats.path_id].status == "SUPPORTED",
+          contam_paths[stale_stats.path_id].status)
+
+    # 对照：换成不经过规划器的 seq_scan_volume，同样的反证就该生效。
+    clean_id = f"{episode_id}_clean_refute"
+    clean_store = TraceStore(clean_id)
+    clean = make_state(clean_id, [missing_index, stale_stats], [stale_stats],
+                       observed=["latency_p99_up"])
+    support_path(clean, clean_store, stale_stats)
+    now_ts = time.time()
+    add_binding(clean, clean_store, evidence_type="seq_scan_volume",
+                value={"seq_scan": 0, "idx_scan": 20, "seq_tup_read": 0,
+                       "reltuples": 12_000_016},
+                node_ids=["missing_index"],
+                window_start=now_ts - 60, window_end=now_ts,
+                source_epoch=clean.episode_id)
+    xr.recompute_statuses(clean)
+    clean_paths = clean.explanation_graph.path_map()
+    check("未被污染的 REFUTES 照常关掉竞争路径",
+          clean_paths[missing_index.path_id].status == "REFUTED",
+          clean_paths[missing_index.path_id].status)
+
     print("\n[6] PARTIAL scope is explicit and never AUTO")
     partial_id = f"{episode_id}_partial"
     partial_store = TraceStore(partial_id)
