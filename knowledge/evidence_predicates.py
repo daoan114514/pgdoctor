@@ -175,7 +175,15 @@ def _seq_scan_volume(value: dict, _ctx: PredicateContext) -> PredicateDecision:
         索引丢        seq_scan=20, 每次读满 12,000,000 行     -> 支持
         统计过期      seq_scan=0（规划器仍走索引）            -> 反证
     判据取"每次顺序扫描平均读了全表的多大比例"，而不是原始行数 —— 原始值
-    随窗口长短变化，比例不随。0.5 即每次扫描平均读掉半张表以上。
+    随窗口长短变化，比例不随。
+
+    阈值 0.1 而不是直觉上的 0.5：**并行扫描会把这个比例除以 worker 数**。
+    Parallel Seq Scan 下每个 worker 各自给 seq_scan 计数、各读约 1/N 的表，
+    所以一次"全表扫"量出来的每次平均行数是全表除以 N。实测缺索引态
+    (loops=3) 连续三次采样都是 45.0% / 45.5% / 45.2%，而我最初按单进程全表扫
+    定的 0.5 正好卡在上面 —— 于是它 REFUTES 了正确的根因 missing_index，
+    诊断跑偏成 work_mem_spill。0.1 对故障态留 4.5 倍余量，对健康态更安全：
+    健康态根本没有顺序扫描，走的是上面 seq<=0 那条分支。
 
     窗口内完全没有扫描活动（顺序和索引都是 0）时返回 NEUTRAL：那说明这段
     时间根本没有负载，不能据此否定任何根因。
@@ -194,11 +202,11 @@ def _seq_scan_volume(value: dict, _ctx: PredicateContext) -> PredicateDecision:
     per_scan = rows / seq
     share = per_scan / total if total > 0 else 0.0
     return _supports_if(
-        share >= 0.5,
+        share >= 0.1,
         support=(f"each of {seq:.0f} sequential scans read {per_scan:,.0f} rows "
                  f"on average, {share:.1%} of the table"),
         refute=(f"sequential scans read only {per_scan:,.0f} rows on average, "
-                f"{share:.1%} of the table, below the 50% bar"),
+                f"{share:.1%} of the table, below the 10% bar"),
     )
 
 
