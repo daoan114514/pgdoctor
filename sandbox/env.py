@@ -184,8 +184,11 @@ class DBAScenarioEnv:
             raise BaselineNotHealthy(
                 f"健康基线本身就满足告警条件 "
                 f"({self.spec['trigger']['alert']}): "
-                f"p99={self.healthy_kpi.p99_ms}ms cpu={self.healthy_kpi.cpu_pct}% "
-                f"—— 上一个 episode 的负载没散干净，该 episode 不可用")
+                f"p99={self.healthy_kpi.p99_ms}ms cpu={self.healthy_kpi.cpu_pct}%"
+                f"（场景声明的健康值是 p99≈"
+                f"{self.spec.get('baseline', {}).get('healthy_p99_ms', '?')}ms）。"
+                f"要么环境没散干净，要么该场景的负载在本机本来就超标 —— "
+                f"两者都会让 KPI 比较失去意义，该 episode 不可用")
         self._log(f"       p50={self.healthy_kpi.p50_ms}ms "
                   f"p99={self.healthy_kpi.p99_ms}ms cpu={self.healthy_kpi.cpu_pct}%")
 
