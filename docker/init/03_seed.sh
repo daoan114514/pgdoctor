@@ -21,6 +21,14 @@ run "INSERT INTO products (sku, name, price)
 
 # orders 分块插入：避免单事务过大，并提供进度输出
 # status 倾斜分布 —— PENDING 约 10%，这是缺索引场景里被全表扫的那一片
+#
+# created_at 必须随行号递增，不能用 random()。随机时间的物理相关性实测只有
+# 0.0158（id 是 1.0）：同一时间段的行散布在整张 1662MB 表里，任何 created_at
+# 范围查询都要满表捞行 —— 按索引定位 4,150 行再回表实测 13.8 秒。那样
+# missing_index 场景测的根本不是索引收益，而是回表的随机 I/O，索引在与不在
+# 差别不大，Outcome 永远判不出来。
+# 递增之后同一时间段的行物理相邻，索引扫描才真的比顺序扫描快，"缺索引"这个
+# 故障才有可测量的效果。
 done_rows=0
 while [ "$done_rows" -lt "$ORDERS" ]; do
   n=$(( ORDERS - done_rows )); [ "$n" -gt "$CHUNK" ] && n=$CHUNK
@@ -32,7 +40,9 @@ while [ "$done_rows" -lt "$ORDERS" ]; do
                    WHEN s.rnd < 0.95 THEN 'DELIVERED'
                    ELSE 'CANCELLED' END,
               (random() * 500 + 1)::numeric(10,2),
-              now() - (random() * interval '365 days')
+              now() - interval '365 days'
+                + (interval '365 days'
+                   * (($done_rows + s.g)::numeric / $ORDERS))
        FROM (SELECT g, random() AS rnd FROM generate_series(1, $n) g) s;"
   done_rows=$(( done_rows + n ))
   echo "[seed] orders $done_rows / $ORDERS"

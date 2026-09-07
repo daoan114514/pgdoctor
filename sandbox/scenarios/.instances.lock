@@ -20,8 +20,8 @@ misleading_idle_txn_train_v1:
   fingerprint: cd7c2f41b33ed8d4
   revision: 2
 missing_index_eval_v1:
-  fingerprint: 569120f581daecd2
-  revision: 3
+  fingerprint: 5a7da4b950350037
+  revision: 4
 missing_index_orders_user_status_v1:
   fingerprint: 9ca8ff115fa57ee5
   revision: 2
