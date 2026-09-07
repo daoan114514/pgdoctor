@@ -29,6 +29,64 @@ class Policy(abc.ABC):
         """在当前阶段行动，返回下一个目标阶段。"""
 
 
+def index_columns_for(hot_query: str) -> list[str]:
+    """从热查询的 WHERE 子句推出该建哪几列的索引。
+
+    以前这里写死 orders(user_id, status)，那是 train 场景的答案。eval 场景丢
+    的是 created_at 上的索引，写死的 SQL 建出来对它毫无用处 —— hypopg 反事实
+    判定优化器不会采用，前置条件不满足，于是一个字都没写，Outcome 恒为 0。
+    更根本的问题是：写死答案让确定性基线显得比实际更强。基线本该是对照组，
+    用来说明"不做鉴别诊断能到什么水平"；喂了答案之后它的成绩就不再能支撑
+    任何对比结论 —— 那不是"推理出该建什么索引"，是"被告知了答案"。
+
+    列序按教科书规则：等值列在前、范围列在后。实测（eval 场景热查询，命中
+    3,252 行）：
+        无索引                        394.0 ms
+        orders(created_at)              5.5 ms
+        orders(status, created_at)      1.1 ms
+
+    只认最基础的 AND 连接的二元比较。认不出来就返回空，让上层照常判"没有可
+    执行的干预"，而不是猜一个 —— 猜错的索引会真的建到库上。
+    """
+    import re
+
+    lowered = hot_query.lower()
+    at = lowered.find(" where ")
+    if at < 0:
+        return []
+    body = hot_query[at + len(" where "):]
+    for stop in (" group ", " order ", " limit ", " having "):
+        cut = body.lower().find(stop)
+        if cut >= 0:
+            body = body[:cut]
+
+    equality: list[str] = []
+    ranges: list[str] = []
+    for term in re.split("(?i) and ", body):
+        term = term.strip()
+        position, operator = None, ""
+        for candidate in (">=", "<=", "=", ">", "<"):
+            found = term.find(candidate)
+            if found > 0 and (position is None or found < position):
+                position, operator = found, candidate
+        if position is None:
+            continue
+        column = term[:position].strip().strip('"')
+        # 剥掉表限定符：带 JOIN 的热查询写成 o.created_at，不剥会被下面的
+        # 字母数字检查滤掉、返回空列表，最终拼出 CREATE INDEX ON orders()
+        # —— 实测 stale_statistics 场景因此报 syntax error at or near ")"。
+        if "." in column:
+            column = column.rsplit(".", 1)[1].strip().strip('"')
+        if not column or not column[0].isalpha():
+            continue
+        if not column.replace("_", "").isalnum():
+            continue
+        bucket = equality if operator == "=" else ranges
+        if column not in bucket:
+            bucket.append(column)
+    return equality + [c for c in ranges if c not in equality]
+
+
 class ScriptedPolicy(Policy):
     """确定性基线。领域知识由人写死，不涉及任何模型调用。"""
 
@@ -77,8 +135,11 @@ class ScriptedPolicy(Policy):
         elif tool == "get_database_stats":
             tb.get_database_stats()
         elif tool == "simulate_index":
-            tb.simulate_index(
-                "CREATE INDEX ON orders(user_id, status)", hot, uid)
+            sim_columns = index_columns_for(hot)
+            if sim_columns:
+                tb.simulate_index(
+                    f"CREATE INDEX ON orders({', '.join(sim_columns)})",
+                    hot, uid)
 
     def run_phase(self, phase: Phase, tb: Toolbox, st: EpisodeState,
                   ctx: dict) -> Phase:
@@ -145,12 +206,18 @@ class ScriptedPolicy(Policy):
                 item["path_id"],
             ))[0]
             bad_attempt = self.bad_fix and st.repair_attempts == 0
+            columns = index_columns_for(hot)
+            if not columns:
+                st.outcome_note = "无法从热查询推出索引列，不猜"
+                return Phase.ESCALATE
+            column_list = ", ".join(columns)
+            index_name = "idx_orders_" + "_".join(columns)
             sql = (
-                "CREATE INDEX CONCURRENTLY idx_wrong_fix "
-                "ON orders(user_id, status)"
+                f"CREATE INDEX CONCURRENTLY idx_wrong_fix "
+                f"ON orders({column_list})"
                 if bad_attempt else
-                "CREATE INDEX CONCURRENTLY idx_orders_user_status "
-                "ON orders(user_id, status)"
+                f"CREATE INDEX CONCURRENTLY {index_name} "
+                f"ON orders({column_list})"
             )
 
             # Intervention predicates are plan preconditions, not diagnosis
@@ -201,9 +268,9 @@ class ScriptedPolicy(Policy):
                 tb.submit_proposal(
                     action_type="create_index",
                     sql=sql,
-                    rollback="DROP INDEX CONCURRENTLY idx_orders_user_status",
-                    rationale="补上覆盖 user_id+status 谓词的复合索引，消除全表扫",
-                    predicted_impact={"cost": "180975 -> 52"},
+                    rollback=f"DROP INDEX CONCURRENTLY {index_name}",
+                    rationale=f"补上覆盖 {column_list} 谓词的索引，消除全表扫",
+                    predicted_impact={"p99_ms": "<50"},
                     selected_path_id=option["path_id"],
                     fix_id=option["fix"],
                     intervention_target=option["target_node_id"])

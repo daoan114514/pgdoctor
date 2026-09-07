@@ -288,6 +288,44 @@ def _causal_relation(graph, cause_id: str, binding: EvidenceBinding,
     return confirms, refutes
 
 
+def window_spans_own_write(st: EpisodeState, binding) -> bool:
+    """这条窗口证据的观测窗，是否跨越了本 episode 自己执行的写操作。
+
+    累计计数器分不清是谁写的。实测 missing_index 场景：agent 建了一个
+    1200 万行的索引（CREATE INDEX CONCURRENTLY，67.2 秒），排序外溢
+    495.4 MB 临时文件，而 temp_file_volume 读的是 pg_stat_database 的库级
+    计数器 —— 于是 work_mem_spill 被确认。同一个 episode 里确认了两个根因，
+    严格诊断的 F1 掉到 0.67。**agent 自己的修复动作，制造出了确认另一个根因
+    的证据。**
+
+    这是"动作污染证据"，与 provenance 规则管的"根因污染证据"是两个类别：
+    前者取决于本 episode 做过什么，后者取决于图的结构。
+
+    放在这里而不是只放在 ESC 里：路径状态和由它投影出的假设台账由
+    recompute_statuses 算，它直接读绑定、不经过 ESC 的可信过滤。只在 ESC
+    那层拦，台账照样会确认错的根因（实测过一次，白改）。两处共用这一个
+    函数，别各写一份 —— 同一条规则分两份实现，迟早会漂。
+
+    没有观测窗的绑定天然不受影响，所以不必先筛出窗口类判据。
+    只看真正执行成功的干预：被门拦下或没跑的提案不写库，影响不到计数器。
+    """
+    start, end = binding.window_start, binding.window_end
+    if start is None or end is None:
+        return False
+    for attempt in getattr(st, "intervention_attempts", []) or []:
+        get = (attempt.get if isinstance(attempt, dict)
+               else lambda name, default=None: getattr(attempt, name, default))
+        if str(get("execution_status") or "") != "SUCCEEDED":
+            continue
+        began = float(get("created_at") or 0.0)
+        if not began:
+            continue
+        finished = began + float(get("execution_duration_s") or 0.0)
+        if began <= end and finished >= start:
+            return True
+    return False
+
+
 def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
     explanation = st.explanation_graph
     if explanation is None:
@@ -312,7 +350,7 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
             if not (confirms or refutes):
                 continue
             node_attempts.add(node_id)
-            if binding.is_trusted(now=current) and (
+            if binding.is_trusted(now=current) and not window_spans_own_write(st, binding) and (
                     (binding.predicate_result == PredicateResult.SUPPORTS.value and
                      confirms) or
                     (binding.predicate_result == PredicateResult.REFUTES.value and
@@ -335,7 +373,7 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
             if not (confirms or refutes):
                 continue
             edge_attempts.add(edge_id)
-            if binding.is_trusted(now=current) and (
+            if binding.is_trusted(now=current) and not window_spans_own_write(st, binding) and (
                     (binding.predicate_result == PredicateResult.SUPPORTS.value and
                      confirms) or
                     (binding.predicate_result == PredicateResult.REFUTES.value and
@@ -370,7 +408,7 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
         required_supported = all(any(
             binding.evidence_type == evidence_type and
             binding.predicate_result == PredicateResult.SUPPORTS.value and
-            binding.is_trusted(now=current)
+            binding.is_trusted(now=current) and not window_spans_own_write(st, binding)
             for binding_id in path.evidence_binding_ids
             if (binding := explanation.evidence_bindings.get(binding_id)) is not None)
             for evidence_type in path.required_evidence_types)

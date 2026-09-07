@@ -479,39 +479,6 @@ def _window_predicate_ids() -> set[str]:
     return ids - {""}
 
 
-def _window_spans_own_write(st: EpisodeState,
-                            binding: EvidenceBinding) -> bool:
-    """这条窗口证据的观测窗，是否跨越了本 episode 自己执行的写操作。
-
-    累计计数器分不清是谁写的。实测：agent 建了一个 1200 万行的索引
-    （CREATE INDEX CONCURRENTLY，56.7 秒），排序外溢 495.4 MB 临时文件，
-    而 temp_file_volume 读的是 pg_stat_database 的库级计数器 —— 于是
-    work_mem_spill 被确认。同一个 episode 里确认了两个根因，严格诊断的
-    F1 掉到 0.67。**agent 自己的修复动作，制造出了确认另一个根因的证据。**
-
-    这是"动作污染证据"，和 provenance 规则管的"根因污染证据"是两回事：
-    前者取决于本 episode 做过什么，后者取决于图的结构，所以单独判。
-
-    只看真正执行成功的干预：被门拦下、或根本没跑的提案不写库，也就影响
-    不到任何计数器。
-    """
-    start, end = binding.window_start, binding.window_end
-    if start is None or end is None:
-        return False
-    for attempt in getattr(st, "intervention_attempts", []) or []:
-        get = (attempt.get if isinstance(attempt, dict)
-               else lambda name, default=None: getattr(attempt, name, default))
-        if str(get("execution_status") or "") != "SUCCEEDED":
-            continue
-        began = float(get("created_at") or 0.0)
-        if not began:
-            continue
-        finished = began + float(get("execution_duration_s") or 0.0)
-        if began <= end and finished >= start:
-            return True
-    return False
-
-
 def _contaminated_by(binding: EvidenceBinding,
                      live_invalidators: set[str]) -> list[str]:
     """这条绑定的来源，是否正被一条尚未反证的候选路径怀疑失真。
@@ -556,7 +523,8 @@ def _binding_trust(st: EpisodeState, binding: EvidenceBinding, *,
         reasons.append("evidence is expired")
 
     if binding.predicate_id in window_predicates:
-        if _window_spans_own_write(st, binding):
+        from agent.explanation_runtime import window_spans_own_write
+        if window_spans_own_write(st, binding):
             reasons.append(
                 "observation window spans this episode's own write action")
         if (binding.window_start is None or binding.window_end is None or
