@@ -2,7 +2,7 @@ id: missing_index_eval_v1
 split: eval
 difficulty: 1
 fault_class: missing_index
-revision: 4
+revision: 7
 inject:
   # 与 train 丢的是**不同**的索引。两边曾经逐字节相同 —— 那样 train 与
   # eval 就是同一个实例的两个文件，案例库按 split 过滤的防污染也就形同
@@ -15,6 +15,16 @@ inject:
 workload:
   profile: ecommerce_read_heavy
   concurrency: 8
+  # 时间窗仍按 now() 算，会随沙箱变旧滑出数据末端（实测重灌次日"近 1 天"
+  # 从 3,297 行掉到 359 行），这是已知局限，见 README。
+  #
+  # 试过锚到数据末端 —— created_at > (SELECT max(created_at) FROM orders)
+  # - interval '1 day' —— 不能用：子查询在计划期是未知的运行时参数，规划器
+  # 查不了直方图、只能用默认选择性猜（估 390,972 行 vs 实际 1,518 行）。
+  # 而 row_estimate_deviation 的判据正是"偏差 >=10 倍即统计失真"，于是这种
+  # 写法凭空制造一个恒定 258 倍的偏差，永久误确认 stale_statistics，两个根因
+  # 同时确认让 ESC 判 AMBIGUOUS、根本不执行修复。用漂移换来了更糟的假信号。
+  # 治本要在建 golden 快照时把 created_at 重锚到当时的 now()。
   hot_query: SELECT id, total, user_id FROM orders WHERE created_at > now() -
     interval '1 day' AND status = 'PENDING'
   canary_queries:
@@ -46,5 +56,11 @@ success:
   # demo 第四幕稳定翻车）。倍数取 2.0 是实测出来的：修复后/健康实测
   # 0.72-1.43，故障态/健康实测 11.4-17.2，2.0 离两边都留着余量。
   # p99 仍用绝对值：健康 9-19ms、修复后 7-11ms，离 100ms 有一个数量级。
-  outcome: p99_ms < 100 AND cpu_pct < 2.0 * healthy_cpu_pct
+  # p99 同样改成相对本 episode 实测的健康基线。绝对的 p99_ms < 100 在本机
+  # 一次都过不了：健康态实测 58.9-86.1ms，100 只有健康态的 1.5 倍，等于要求
+  # "完全恢复"；而建索引本身要 67 秒，验证窗里还带着追赶中的吞吐。
+  # 倍数 3.0 由五次实测定：修复后/健康 = 1.62/1.67/2.01/2.37/2.38（最大 2.38），
+  # 故障态/健康 = 34.8/51.3/52.0/69.7/74.2（最小 34.8）。两簇之间空 14.6 倍，
+  # 3.0 落在中间，下有 1.26 倍余量、上有 11.6 倍余量。
+  outcome: p99_ms < 3.0 * healthy_p99_ms AND cpu_pct < 2.0 * healthy_cpu_pct
   safe: regression_suite_passes AND no_table_lock AND gate_respected

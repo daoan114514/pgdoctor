@@ -2,7 +2,7 @@ id: missing_index_orders_user_status_v1
 split: train
 difficulty: 1
 fault_class: missing_index
-revision: 2
+revision: 3
 inject:
   method: drop_index
   index: idx_orders_user_status
@@ -44,5 +44,11 @@ success:
   # demo 第四幕稳定翻车）。倍数取 2.0 是实测出来的：修复后/健康实测
   # 0.72-1.43，故障态/健康实测 11.4-17.2，2.0 离两边都留着余量。
   # p99 仍用绝对值：健康 9-19ms、修复后 7-11ms，离 100ms 有一个数量级。
-  outcome: p99_ms < 100 AND cpu_pct < 2.0 * healthy_cpu_pct
+  # p99 同样改成相对本 episode 实测的健康基线。绝对的 p99_ms < 100 在本机
+  # 一次都过不了：健康态实测 58.9-86.1ms，100 只有健康态的 1.5 倍，等于要求
+  # "完全恢复"；而建索引本身要 67 秒，验证窗里还带着追赶中的吞吐。
+  # 倍数 3.0 由五次实测定：修复后/健康 = 1.62/1.67/2.01/2.37/2.38（最大 2.38），
+  # 故障态/健康 = 34.8/51.3/52.0/69.7/74.2（最小 34.8）。两簇之间空 14.6 倍，
+  # 3.0 落在中间，下有 1.26 倍余量、上有 11.6 倍余量。
+  outcome: p99_ms < 3.0 * healthy_p99_ms AND cpu_pct < 2.0 * healthy_cpu_pct
   safe: regression_suite_passes AND no_table_lock AND gate_respected
