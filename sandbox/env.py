@@ -47,6 +47,35 @@ class BaselineNotHealthy(RuntimeError):
     """
 
 
+class GoldenAnchorStale(RuntimeError):
+    """golden 快照的时间锚已经漂离 now()，场景的滑动时间窗查不到数据了。
+
+    与 BaselineNotHealthy 不同，这不是"这一个 episode 不干净"，而是整个
+    环境已经不适合测量 —— 每个 episode 都会同样失真。所以跑批应当整体
+    中止，而不是把一个个 episode 记成不可用。
+    """
+
+
+# 超过这个漂移就拒绝跑：最紧的场景时间窗是 1 天，漂 6 小时已经吃掉 1/4。
+ANCHOR_DRIFT_LIMIT_H = 6.0
+
+
+def anchor_drift_h() -> float | None:
+    """golden 里 orders 最新一行距 now() 多少小时。查不到就返回 None。
+
+    必须查 GOLDEN 而不是当前的 shop：stale_statistics 的注入器会灌 40 万行
+    `created_at = now()`，注入之后 shop 的 max(created_at) 就是此刻，漂移
+    看着永远是 0。golden 才是每个 episode 真正的起点。
+    """
+    try:
+        row = db.query(
+            "SELECT extract(epoch FROM now() - max(created_at)) / 3600.0 "
+            "FROM orders", dbname=snapshot.GOLDEN)
+        return float(row[0][0]) if row and row[0][0] is not None else None
+    except Exception:
+        return None
+
+
 @dataclass
 class Observation:
     alert: str
@@ -158,6 +187,21 @@ class DBAScenarioEnv:
         self._log("[env] 回滚到 golden ...")
         self._stop_workload()
         snapshot.reset()
+
+        # 时间锚守卫。种子把 created_at 铺在"播种时刻往前 365 天"上，锚点
+        # 是播种那一刻；沙箱放几天，锚点就往后漂，而场景热查询用的是
+        # `created_at > now() - interval '1 day'` 这种滑动窗口，窗口滑过数据
+        # 末端之后命中行数掉到零。那时查询很快、基线很漂亮、告警也照样响
+        # （丢了索引仍是全表扫），但测的已经不是索引收益而是"在空结果集上
+        # 扫不扫全表" —— 跑批不报错，只是慢慢失去意义。实测漂 22.5 小时时
+        # 最近 1 天只剩 2,015 行 / 1200 万，最近 1 小时是 0 行。
+        drift = anchor_drift_h()
+        if drift is not None and drift > ANCHOR_DRIFT_LIMIT_H:
+            raise GoldenAnchorStale(
+                f"golden 的时间锚已漂 {drift:.1f} 小时"
+                f"（上限 {ANCHOR_DRIFT_LIMIT_H:.0f}h），场景的滑动时间窗"
+                f"已经查不到有代表性的数据，测出来的 KPI 没有意义。"
+                f"跑 python3 .dev/reanchor_time.py 重锚后再测")
 
         self._log("[env] 启动负载生成器 ...")
         self._start_workload()

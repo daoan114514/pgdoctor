@@ -18,8 +18,13 @@ workload:
 trigger:
   alert: errors > 2
 baseline:
-  healthy_p99_ms: 35
-  healthy_cpu_pct: 45
+  # 描述性字段，没有任何判据读它 —— 判分用的是每个 episode 现场
+  # 采的健康基线（env.reset 在注入之前测）。它只出现在
+  # BaselineNotHealthy 的报错文案里，给读日志的人一个参照。
+  # 原值是十个场景清一色的 35/45，从没标定过；下面是本机历史
+  # 61 个 episode 实测健康基线的中位数（p99 区间 2.4-52.1ms）。
+  healthy_p99_ms: 4.0
+  healthy_cpu_pct: 93
 ground_truth:
   root_cause: connection pool exhausted
   acceptable_fixes:

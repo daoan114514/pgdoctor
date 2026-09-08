@@ -334,6 +334,18 @@ def main() -> None:
     if learned_layers != {"l1", "l2", "l3", "l4"}:
         tag += "_layers_" + ("-".join(sorted(learned_layers)) or "off")
 
+    # 时间锚漂了就别开跑。这不是"某个 episode 不干净"，是整个环境失去
+    # 测量意义 —— 每个场景都会同样失真，而且不会报错，只会安静地测出
+    # 一堆没有意义的数。和额度墙一样，属于开跑前就该拦住的事。
+    from sandbox.env import ANCHOR_DRIFT_LIMIT_H, anchor_drift_h
+    _drift = anchor_drift_h()
+    if _drift is not None and _drift > ANCHOR_DRIFT_LIMIT_H:
+        print(f"golden 的时间锚已漂 {_drift:.1f} 小时"
+              f"（上限 {ANCHOR_DRIFT_LIMIT_H:.0f}h），场景的滑动时间窗查不到"
+              f"有代表性的数据，跑批中止 —— 先跑 "
+              f"python3 .dev/reanchor_time.py 重锚")
+        raise SystemExit(2)
+
     # 跑批前先探一次模型是否可用，避免烧掉几十分钟才发现额度没了
     if args.policy == "llm":
         if not _model_reachable():

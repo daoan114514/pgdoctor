@@ -8,11 +8,11 @@ connection_exhaustion_train_v1:
   fingerprint: 6d1ae79d99cf4ecc
   revision: 2
 lock_contention_eval_v1:
-  fingerprint: cd1731667d39caed
-  revision: 2
+  fingerprint: 98d5b7145aa84c93
+  revision: 3
 lock_contention_train_v1:
-  fingerprint: 6c774f4311a8ea4e
-  revision: 2
+  fingerprint: 6215174207d1f0ca
+  revision: 3
 misleading_idle_txn_eval_v1:
   fingerprint: af88d51ef16f2484
   revision: 1
@@ -26,8 +26,8 @@ missing_index_orders_user_status_v1:
   fingerprint: 56702bb837eab6ee
   revision: 3
 stale_statistics_eval_v1:
-  fingerprint: de4abdbd53559019
-  revision: 2
+  fingerprint: faa4f16264008c0e
+  revision: 3
 stale_statistics_train_v1:
-  fingerprint: 7587f73a7a773cbc
-  revision: 2
+  fingerprint: 8a9a33f39d53d011
+  revision: 3

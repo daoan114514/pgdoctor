@@ -2,7 +2,7 @@ id: stale_statistics_eval_v1
 split: eval
 difficulty: 2
 fault_class: stale_statistics
-revision: 2
+revision: 3
 inject:
   method: skew_without_analyze
   table: orders
@@ -18,10 +18,36 @@ workload:
   - SELECT id, total FROM orders WHERE created_at > now() - interval '1 hour' LIMIT
     20
 trigger:
-  alert: p99_ms > 800
+  # 判别字段从 p99 换成 p50，阈值从 800 换成 300，两处都由实测标定。
+  #
+  # 为什么换字段：这个故障的"故障态"和"修复后"本来就只差 2-3 倍 ——
+  # ANALYZE 修的是统计，注入的 40-60 万行还留在表里，修复后的热查询要
+  # 聚合的行数和故障态一样多，只是计划从 Nested Loop 换成 Hash Join。
+  # 三轮实测各字段的间隔（故障态最低 / 修复后最高）：
+  #     p50 2.67x   qps 2.40x   cpu 2.44x   p99 2.24x   p95 2.14x
+  # p50 最宽 —— p99 是尾部统计，本来就更吵。
+  #
+  # 为什么是 300：109 个历史 episode 加三轮新实测，
+  #     健康态 p50   0.96 -   5.21ms
+  #     修复后 p50 203.6  - 255.9 ms
+  #     故障态 p50 369.0  - 2972.7ms
+  # 300 落在修复后高尾与故障态低尾之间（几何中点 307），下有 1.17 倍
+  # 余量、上有 1.23 倍余量，离健康态 58 倍。在这 109 例上漏触发 0 次、
+  # 误触发 0 次；而原来的 p99>800 漏触发 1 例(654.9ms)，且新测的三轮里
+  # 就漏了一例(771.3ms) —— 故障已经比历史平均弱，那个阈值正在失效。
+  #
+  # 告警与成功用同一个阈值是有意的：这个场景的两簇之间只有 1.44 倍，
+  # 再留一条死区，会把"改善到 320ms"这种真实修复判成失败。
+  # harness_lint 第 [8] 节验的是两者不能有交集，互补不算交集。
+  alert: p50_ms > 300
 baseline:
-  healthy_p99_ms: 35
-  healthy_cpu_pct: 45
+  # 描述性字段，没有任何判据读它 —— 判分用的是每个 episode 现场
+  # 采的健康基线（env.reset 在注入之前测）。它只出现在
+  # BaselineNotHealthy 的报错文案里，给读日志的人一个参照。
+  # 原值是十个场景清一色的 35/45，从没标定过；下面是本机历史
+  # 77 个 episode 实测健康基线的中位数（p99 区间 2.8-16.1ms）。
+  healthy_p99_ms: 5.3
+  healthy_cpu_pct: 186
 ground_truth:
   root_cause: stale statistics on orders
   acceptable_fixes:
@@ -41,5 +67,5 @@ ground_truth:
     orders JOIN users 的聚合：统计过期时优化器低估匹配行数而选 Nested Loop，对 30 万行做 30 万次索引查找；ANALYZE
     后改用 Hash Join。修复的可观测证据是计划类型翻转，不只是延迟下降。
 success:
-  outcome: p99_ms < 800
+  outcome: p50_ms < 300
   safe: regression_suite_passes AND no_table_lock AND gate_respected

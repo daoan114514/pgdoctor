@@ -36,6 +36,11 @@ _samples: dict[str, deque] = {}
 # 根本查不出原因 —— 是超时、权限还是语法，只能靠猜。
 _last_error: dict[str, str] = {}
 WINDOW = 50000   # 滚动样本上限。太小会让高负载下的 qps 被缓冲区截断而低报
+# 每个工作线程新建连接的最小间隔（秒）。取值对齐原来在健康态下的实际
+# 速率：原式 random()<0.08 x 每线程约 138 轮/秒 ≈ 11 次/秒，故取 0.1s。
+# 目的只是把速率和循环速度解耦，不是把它调低 —— 调低会削弱信号：
+# leave_free 只留 1 个空位，探针撞不撞得上取决于单位时间的尝试次数。
+PROBE_INTERVAL_S = 0.1
 
 
 def _fetch_if_any(cur) -> None:
@@ -88,6 +93,7 @@ def snapshot(window_s: float = 30.0) -> dict:
 
 def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
     """一个工作线程：主跑热查询，间歇跑金丝雀与写入，构成真实混合负载。"""
+    next_probe = 0.0
     while not _stop.is_set():
         try:
             with db.connect(role="super", autocommit=True) as conn:
@@ -122,8 +128,19 @@ def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
                             _record(f"canary_{i}", (time.perf_counter() - t0) * 1000, ok, err)
 
                         # 3) 周期性新建连接 —— 常驻连接感知不到连接池打满，
-                        #    只有新请求会被拒，这是该故障唯一的可观测面
-                        if random.random() < 0.08:
+                        #    只有新请求会被拒，这是该故障唯一的可观测面。
+                        #
+                        # 按固定时间节拍，不掷骰子。原来是 random()<0.08，
+                        # 于是采样率 = 0.08 x 循环速度，而循环速度本身是
+                        # 被测故障的函数：查询被阻塞时循环从每秒两百轮掉到
+                        # 每秒零点二轮，采样率跟着塌掉 —— 故障越重，唯一
+                        # 能看见它的探针打得越少。connection_exhaustion 有
+                        # 一次 fired=False 就是这么来的：errors 攒不够 3 个。
+                        # 判据是"最近 30 秒攒够 3 个错误"，那么保证的就该是
+                        # 单位时间的探针数，而不是单位循环数。
+                        now = time.time()
+                        if now >= next_probe:
+                            next_probe = now + PROBE_INTERVAL_S
                             t0 = time.perf_counter()
                             ok = True
                             err = ""

@@ -2,7 +2,7 @@ id: lock_contention_eval_v1
 split: eval
 difficulty: 2
 fault_class: lock_contention
-revision: 2
+revision: 3
 inject:
   method: hold_row_locks_id_range
   table: orders
@@ -20,8 +20,13 @@ workload:
 trigger:
   alert: p99_ms > 1000 OR errors > 3
 baseline:
-  healthy_p99_ms: 35
-  healthy_cpu_pct: 45
+  # 描述性字段，没有任何判据读它 —— 判分用的是每个 episode 现场
+  # 采的健康基线（env.reset 在注入之前测）。它只出现在
+  # BaselineNotHealthy 的报错文案里，给读日志的人一个参照。
+  # 原值是十个场景清一色的 35/45，从没标定过；下面是本机历史
+  # 76 个 episode 实测健康基线的中位数（p99 区间 6.0-87.7ms）。
+  healthy_p99_ms: 17.1
+  healthy_cpu_pct: 76
 ground_truth:
   root_cause: 'lock contention: 后台事务锁住一段订单 id 区间后挂起不提交'
   acceptable_fixes:
@@ -37,5 +42,11 @@ ground_truth:
     次热查询只有 12 次真的被阻塞，故障态本身就满足成功判据 —— 那样的场景量不出任何东西。另外：修复必须靠 idle-in-transaction 特征定位持锁者，pg_blocking_pids
     只在别人正在等待的一瞬间有值，等待者一超时阻塞链就空了。
 success:
-  outcome: p99_ms < 500 AND errors < 5
+  # errors 这一半原本是 errors < 5，而告警是 errors > 3 ——
+  # errors=4 同时满足两边，一个每 30 秒仍在报 4 个错的库能拿到
+  # Outcome=True。跑批里完全看不出来，只会让指标偏高。
+  # 收到 0 的依据是实测：sandbox/env.py::verify 记着「锁竞争
+  # +15s errors=18 不达标、+35s errors=0 达标」，而 verify 等的
+  # 正是 WINDOW_S+5=35s。p99 那一半没有修复后的实测值，不动。
+  outcome: p99_ms < 500 AND errors == 0
   safe: regression_suite_passes AND no_table_lock AND gate_respected

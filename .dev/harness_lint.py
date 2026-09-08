@@ -10,6 +10,7 @@
 这里查的都是机械可判定、且一旦出错就会让结论失真的东西。
 """
 import ast
+import itertools
 import re
 import sys
 from pathlib import Path
@@ -250,6 +251,77 @@ else:
           if drifted else "")
     check("所有场景都在锁里", not unlocked,
           f"{unlocked} 不在锁里，跑 .dev/relock.py" if unlocked else "")
+
+# ══ 8. 告警与成功判据不能有交集 ═══════════════════════════
+# 存在一组读数同时满足两边，"成功"就不等于"故障没了" —— 同一瞬间既在
+# 报警又判为修好。实测 lock_contention 正是如此：告警 errors > 3、
+# 成功 errors < 5，errors=4 两边都成立，于是一个仍在报错的库可以拿到
+# Outcome=True。这类错判在跑批里完全看不出来，它只会让指标偏高。
+#
+# 判据全是"字段 比较 阈值"的布尔组合，真值只在阈值处翻转，所以把所有
+# 可能的阈值（字面量、以及字面量乘健康基线）两侧各取一点就足以穷举。
+print("\n[8] 同一组读数不能既在告警又算修好")
+
+
+def _cmp_fields(expr: str) -> set:
+    return {t for t in re.findall(r"\b([a-z_][a-z_0-9]*)\s*[<>=!]", expr)
+            if not t.startswith("healthy_")}
+
+
+def _literals(expr: str) -> set:
+    return {float(t) for t in re.findall(r"[0-9]+(?:\.[0-9]+)?", expr)}
+
+
+both_true = []
+for k, s in specs.items():
+    alert = (s.get("trigger", {}) or {}).get("alert", "")
+    outcome = (s.get("success", {}) or {}).get("outcome", "")
+    if not alert or not outcome:
+        continue
+    blk = s.get("baseline", {}) or {}
+    # 相对判据的阈值 = 倍数 x 健康基线，所以交集与否取决于基线取值。
+    # 场景声明的那个值只是个参照，实测健康基线在本机跨了一个数量级
+    # (p99 2.0-88.0ms)，只按声明值查会漏掉真实基线下才出现的交集。
+    # 扫一段区间：声明值的 1/4 到 4 倍，覆盖实测跨度。
+    bases = [metrics.KPI(
+        p50_ms=1.0, p95_ms=2.0,
+        p99_ms=float(blk.get("healthy_p99_ms", 10.0)) * f, qps=100.0,
+        errors=0, cpu_pct=float(blk.get("healthy_cpu_pct", 100.0)) * f,
+        samples=1000) for f in (0.25, 1.0, 4.0)]
+    fields = sorted(_cmp_fields(alert) | _cmp_fields(outcome))
+    if not fields:
+        continue
+    lits = _literals(alert) | _literals(outcome) | {0.0}
+    witness = None
+    for base in bases:
+        # 相对判据的实际阈值是"倍数 × 基线"，只看字面量会漏掉它
+        scaled = {m * v for m in lits
+                  for v in (base.p99_ms, base.cpu_pct, base.p50_ms,
+                            base.p95_ms)}
+        knots = sorted(lits | scaled)[:40]
+        axis = sorted({round(x + d, 4) for x in knots
+                       for d in (-0.5, 0.0, 0.5) if x + d >= 0})
+        for combo in itertools.product(axis, repeat=len(fields)):
+            kpi = metrics.KPI(p50_ms=1.0, p95_ms=2.0, p99_ms=3.0, qps=100.0,
+                              errors=0, cpu_pct=6.0, samples=1000)
+            for name, val in zip(fields, combo):
+                setattr(kpi, name, int(val) if name == "errors" else val)
+            try:
+                if (metrics.eval_expr(alert, kpi, baseline=base) and
+                        metrics.eval_expr(outcome, kpi, baseline=base)):
+                    witness = (dict(zip(fields, combo)),
+                               round(base.p99_ms, 1), round(base.cpu_pct))
+                    break
+            except Exception:
+                continue
+        if witness:
+            break
+    if witness is not None:
+        both_true.append(
+            f"{k}: {witness[0]} 在健康基线 p99={witness[1]} cpu={witness[2]} 下"
+            f"同时满足 [{alert}] 与 [{outcome}]")
+check("告警集与成功集不相交", not both_true, both_true[:3])
+
 
 print()
 print("=" * 66)
