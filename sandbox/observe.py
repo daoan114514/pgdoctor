@@ -20,6 +20,61 @@ from sandbox import db
 from sandbox.traces import TraceStore
 
 
+_PLACEHOLDER = re.compile(r"%\((\w+)\)s")
+
+
+def _readonly_proxy(sql: str) -> tuple[str, str]:
+    """UPDATE/DELETE → 同表同 WHERE 的 SELECT 1；其它语句原样返回。
+
+    返回 (sql, mode)。只读角色对 DML 连纯 EXPLAIN 都会 InsufficientPrivilege
+    （2026-09-22 实测：lock_contention 的热查询是 UPDATE，子 agent 三个 need 因此
+    不可得，ESC 直接 EXHAUSTED）。访问路径判别要的是扫描类型/索引/过滤行数，
+    这些由 FROM+WHERE 决定，SELECT 代理给出的和原语句一致。psycopg 的 %(name)s
+    占位符不是合法 SQL，先换成 $n 让 pglast 解析，输出时换回去。
+    解析失败一律原样返回：宁可让原语句去撞权限错误，也不猜。
+    """
+    names: list[str] = []
+
+    def _to_param(m):
+        names.append(m.group(1))
+        return f"${len(names)}"
+    parsable = _PLACEHOLDER.sub(_to_param, sql)
+    try:
+        from pglast import ast, parse_sql
+        from pglast.stream import RawStream
+        stmts = parse_sql(parsable)
+    except Exception:
+        return sql, "analyze"
+    if len(stmts) != 1:
+        return sql, "analyze"
+    node = stmts[0].stmt
+    if not isinstance(node, (ast.UpdateStmt, ast.DeleteStmt)):
+        return sql, "analyze"
+    try:
+        rel = RawStream()(node.relation)
+        where = RawStream()(node.whereClause) if node.whereClause is not None else ""
+    except Exception:
+        return sql, "analyze"
+    proxy = f"SELECT 1 FROM {rel}" + (f" WHERE {where}" if where else "")
+    for i, name in enumerate(names, 1):
+        proxy = proxy.replace(f"${i}", f"%({name})s")
+    return proxy, "select_proxy"
+
+
+def keep_session(state: str | None, duration_s: float, min_duration_s: float,
+                 include_idle: bool) -> bool:
+    """会话观测的过滤规则，抽成纯函数是为了让离线检查能钉住它。
+
+    idle 默认不要（不是异常）；短于 min_duration_s 的 active 也不要（正常查询）。
+    include_idle=True 时 idle 也要 —— 这是终止空闲会话这条修复唯一的 pid 来源。
+    """
+    if state == "idle":
+        return include_idle
+    if state == "active" and duration_s < min_duration_s:
+        return False
+    return True
+
+
 @dataclass
 class ExplainDigest:
     total_time_ms: float
@@ -30,6 +85,11 @@ class ExplainDigest:
     parallel_workers: int
     top_nodes: list[str]
     raw_ref: str = ""
+    # "analyze"：对原语句 EXPLAIN ANALYZE；"select_proxy"：原语句是 UPDATE/DELETE，
+    # 只读角色连纯 EXPLAIN 都会被拒（权限检查在 ExecutorStart，2026-09-22 实测），
+    # 改为对同表同 WHERE 的 SELECT 取访问路径 —— 扫描类型/索引/过滤行数与原语句一致，
+    # 但不含 ModifyTable 的写代价，消费方要按 limitation 对待。
+    mode: str = "analyze"
 
 
 @dataclass
@@ -122,8 +182,9 @@ class Observer:
         return self.last_raw_refs.get(tool, "")
 
     def explain_query(self, sql: str, params: dict | None = None) -> ExplainDigest:
+        run_sql, mode = _readonly_proxy(sql)
         with db.connect(role="ro") as conn, conn.cursor() as cur:
-            cur.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + sql, params or {})
+            cur.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + run_sql, params or {})
             plan_json = cur.fetchone()[0]
         acc = _acc()
         _walk_plan(plan_json[0]["Plan"], acc)
@@ -137,14 +198,26 @@ class Observer:
             parallel_workers=acc["workers"],
             top_nodes=[str(round(t, 1)) + "ms " + n for t, n in acc["nodes"][:3]],
         )
+        digest.mode = mode
         trace_digest = asdict(digest)
         trace_digest.pop("raw_ref", None)
         digest.raw_ref = self.trace.record(
-            "explain_query", {"sql": sql[:200]},
+            "explain_query", {"sql": sql[:200], "executed_sql": run_sql[:200], "mode": mode},
             json.dumps(plan_json, indent=2), trace_digest)
         return digest
 
-    def get_active_sessions(self, min_duration_s: float = 1.0) -> list[SessionDigest]:
+    def get_active_sessions(self, min_duration_s: float = 1.0,
+                            include_idle: bool = False,
+                            idle_limit: int = 15) -> list[SessionDigest]:
+        """异常会话；include_idle=True 时另外带上最久的 idle 客户端会话。
+
+        为什么要能带 idle：connection_exhaustion 的修复 terminate_idle_backend 的前置条件
+        要求 pid 来自**已观测到的 idle 行**（explanation_runtime 的 pid_is_client_backend_and_
+        state_idle），而这里默认把 idle 全过滤掉 —— 2026-09-22 实测主策略三次提交都被
+        "concrete_pid_bound" 拒掉，get_active_sessions 返回 []，get_connection_stats 只给计数，
+        模型拿不到任何 pid，12 轮全空转。默认仍不带 idle（连接打满时 idle 有几十个，
+        3500 字的工具输出会被截断），要终止空闲会话时显式开。
+        """
         rows = db.query(
             "SELECT pid, state, wait_event_type, wait_event,"
             " EXTRACT(EPOCH FROM (now() - query_start)), query,"
@@ -160,7 +233,9 @@ class Observer:
         for (pid, state, wtype, wevent, dur, q, role, xact_age,
              backend_type, backend_xmin) in rows:
             dur = float(dur or 0)
-            if state == "idle" or (state == "active" and dur < min_duration_s):
+            if not keep_session(state, dur, min_duration_s, include_idle):
+                continue
+            if state == "idle" and sum(1 for x in out if x.state == "idle") >= idle_limit:
                 continue
             we = (wtype + ":" + str(wevent)) if wtype else None
             system_or_diagnostic = (

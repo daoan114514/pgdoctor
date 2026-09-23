@@ -29,6 +29,7 @@ from claude_agent_sdk import (
 
 from agent.episode_state import EpisodeState
 from agent.explanation import EvidenceNeed
+from agent.failure_class import is_infra_failure
 from agent.hooks import make_phase_hook
 from agent.orchestrator import run_evidence_investigation
 from agent.permissions import Role, allowed_tools
@@ -53,10 +54,9 @@ class ModelUnavailable(RuntimeError):
 
 
 # 额度/限流的特征串。cost=$0 且立刻失败是最可靠的旁证。
-_UNAVAILABLE_HINTS = (
-    "error result: success", "usage limit", "rate limit",
-    "quota", "overloaded", "429", "exceeded",
-)
+# 判据本身搬去 agent/failure_class.py —— 它有好几个读取点（这里、跑批探针、
+# 取证子 agent 的失败记账），抄一份就漏一处。旧的 _UNAVAILABLE_HINTS 只长在
+# 这个文件里，而取证子 agent 的失败根本不路过这里，于是整条出口没通电。
 SERVER = "pgdoctor"
 V2_MODEL_FORBIDDEN = frozenset({"set_hypothesis", "declare_root_cause",
                                 "report_verdict"})
@@ -112,8 +112,8 @@ def _build_tools(tb: Toolbox) -> list:
         tool("get_top_queries", "按累计耗时排序的最慢查询", {"n": int})(
             wrap(lambda a: tb.get_top_queries(int(a.get("n", 5))))),
 
-        tool("get_active_sessions", "当前异常会话及其等待事件", {})(
-            wrap(lambda a: tb.get_active_sessions())),
+        tool("get_active_sessions", "异常会话及等待事件。默认不含 idle；要终止空闲会话（terminate_idle_backend 需要一个已观测到的 idle 客户端 pid）时传 include_idle=true，会附带最久的 idle 会话", {"include_idle": bool})(
+            wrap(lambda a: tb.get_active_sessions(bool(a.get("include_idle", False))))),
 
         tool("get_blocking_chain", "锁阻塞链：谁挡住了谁", {})(
             wrap(lambda a: tb.get_blocking_chain())),
@@ -249,9 +249,8 @@ class LLMPolicy(Policy):
                 text = []
                 return await self._drain(prompt, opts, phase, text)
             except Exception as exc2:
-                msg = f"{exc2}".lower()
                 self.unavailable_hits += 1
-                if any(h in msg for h in _UNAVAILABLE_HINTS):
+                if is_infra_failure(exc2):
                     # 连续两次都是这个特征 -> 判为模型不可用而非答错，
                     # 让跑批把该 episode 标成不可用
                     raise ModelUnavailable(
@@ -328,7 +327,14 @@ class LLMPolicy(Policy):
                                    "turns": result.turns,
                                    "usage": None})
                 for task_result in result.task_results:
-                    if task_result.error:
+                    if task_result.error and not is_infra_failure(
+                            text=task_result.error):
+                        # 停机的报错不进 scratchpad。st.note 默认 status=OBSERVED，
+                        # 而 scratchpad_view 会把它塞进下一个子 agent 的 prompt，
+                        # 14 条的窗口还会被它挤占 —— 这就是 CLAUDE.md 规则 6 说的
+                        # "动作/故障制造证据"：一次额度停机会以"已观测证据"的身份
+                        # 参与后面的推理。实测那个 episode 的 scratchpad 里有 10 条
+                        # 这样的 subagent_error，全文都是 session limit 的原话。
                         st.note("investigator", "subagent_error",
                                 task_result.error[:180])
                     for blocked in task_result.blocked:

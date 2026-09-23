@@ -27,6 +27,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ResultMessag
 
 from agent.hooks import make_phase_hook
 from agent.permissions import (INVESTIGATOR_DENIED, Role, allowed_tools)
+from agent.episode_state import EvidenceStatus
 from agent.state_machine import Phase
 from agent.toolbox import Toolbox
 from agent.explanation import EvidenceNeed, EvidenceReport
@@ -238,7 +239,7 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
 
     @tool("report_evidence",
           "v2 调查回传。只报告工具观测、raw_ref、采集状态和局限；"
-          "不得返回根因结论或支持/反证方向。",
+          "不得返回根因结论或支持/反证方向。" + COLLECTION_STATUS_HELP,
           {"need_id": str, "tool": str, "raw_refs": str,
            "observations": str, "collection_status": str,
            "limitations": str})
@@ -254,7 +255,8 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
                              str(args.get("raw_refs", "")).split(";")
                              if x.strip()],
                 "observations": observations,
-                "collection_status": args.get("collection_status", "ERROR"),
+                "collection_status": str(args.get("collection_status", "ERROR")
+                                         ).strip().upper(),
                 "limitations": [x.strip() for x in
                                 str(args.get("limitations", "")).split(";")
                                 if x.strip()],
@@ -281,8 +283,8 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
             wrap(lambda a: tb.get_physical_bloat(a.get("table", "orders")))),
         tool("get_top_queries", "最慢查询排行", {"n": int})(
             wrap(lambda a: tb.get_top_queries(int(a.get("n", 5))))),
-        tool("get_active_sessions", "异常会话及等待事件", {})(
-            wrap(lambda a: tb.get_active_sessions())),
+        tool("get_active_sessions", "异常会话及等待事件。默认不含 idle；要终止空闲会话（terminate_idle_backend 需要一个已观测到的 idle 客户端 pid）时传 include_idle=true，会附带最久的 idle 会话", {"include_idle": bool})(
+            wrap(lambda a: tb.get_active_sessions(bool(a.get("include_idle", False))))),
         tool("get_blocking_chain", "锁阻塞链", {})(
             wrap(lambda a: tb.get_blocking_chain())),
         tool("get_connection_stats",
@@ -394,6 +396,19 @@ async def investigate(hypothesis: str, brief: str, tb: Toolbox,
     return v
 
 
+# collection_status 的合法取值说明。三处（system prompt、任务 prompt、工具说明）都用这一份，
+# 直接从 EvidenceStatus 生成，不手抄 —— 手抄的枚举会和校验漂移（CLAUDE.md 硬规则 4）。
+# 2026-09-22 实测：这三处原来都没写取值，子 agent 猜了 45 种写法（COLLECTED/SUCCESS/COMPLETE…），
+# 655 次汇报 635 次被 `invalid collection status` 拒掉，然后把 12 轮预算全花在重试和翻仓库找枚举上；
+# 54 个子 agent 只有 8 个最终交上过一份报告。这就是"取证子 agent 80% 失败、每次 140 秒"的全部原因。
+COLLECTION_STATUS_HELP = (
+    "collection_status must be exactly one of: "
+    + ", ".join(status.value for status in EvidenceStatus)
+    + " (OBSERVED = the tool returned an interpretable value; UNKNOWN = the tool ran "
+    "but the value cannot be judged, e.g. no baseline yet; ERROR = the collection "
+    "itself failed). Any other word is rejected."
+)
+
 SUB_SYSTEM_V2 = """You investigate one causal path segment or branch.
 
 Rules:
@@ -403,6 +418,7 @@ Rules:
   predicate layer assigns causal direction after your report.
 - Call report_evidence once per assigned need.  It is your only valid output
   channel.
+- """ + COLLECTION_STATUS_HELP + """
 """
 
 
@@ -467,8 +483,9 @@ Available collection tools:
 Call each collection tool at most once.  A single observation may cover several
 needs.  Then call report_evidence once for every assigned need_id, reusing the
 same raw_refs where appropriate.  The exact output fields are need_id, tool,
-raw_refs, observations (JSON list), collection_status, and limitations.  Do not
-decide causal direction."""
+raw_refs, observations (JSON list), collection_status, and limitations.
+{COLLECTION_STATUS_HELP}
+Do not decide causal direction."""
 
     async def stream(text):
         yield {"type": "user", "message": {"role": "user", "content": text},

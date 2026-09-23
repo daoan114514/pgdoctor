@@ -195,10 +195,14 @@ class Toolbox:
         kind = "explain_seq_scan" if scan == "Seq Scan" else "explain_plan"
         structured_plan = asdict(d)
         structured_plan.pop("raw_ref", None)
+        # DML 走的是同表同 WHERE 的 SELECT 代理（只读角色连纯 EXPLAIN UPDATE 都被拒），
+        # 访问路径可信、写代价不在其中 —— 在摘要里说清楚，别让下游当成原语句的实测。
+        proxy_note = ("（原语句为 DML，以同 WHERE 的 SELECT 代理取访问路径，"
+                      "不含写路径代价）" if getattr(d, "mode", "analyze") == "select_proxy" else "")
         self._evidence(
             kind, d.raw_ref,
             f"{d.total_time_ms}ms, {scan}, Rows Removed by Filter="
-            f"{d.rows_removed_by_filter:,}, 用到索引={d.indexes_used or '无'}",
+            f"{d.rows_removed_by_filter:,}, 用到索引={d.indexes_used or '无'}{proxy_note}",
             bears_on=["missing_index", "stale_statistics"],
             structured_value=structured_plan)
 
@@ -346,12 +350,17 @@ class Toolbox:
                        structured_value=rows)
         return rows
 
-    def get_active_sessions(self) -> list[dict]:
-        self._enter("get_active_sessions")
-        rows = self.o.get_active_sessions()
+    def get_active_sessions(self, include_idle: bool = False) -> list[dict]:
+        self._enter("get_active_sessions", {"include_idle": include_idle})
+        # 只在要 idle 时才传关键字：观测器的最小契约仍是无参调用，.dev 里四个桩
+        # 观测器（e2e / planner / evolution / subagent_path_task）都只实现了无参版本。
+        rows = (self.o.get_active_sessions(include_idle=True) if include_idle
+                else self.o.get_active_sessions())
         waits = [r.wait_event for r in rows if r.wait_event]
+        idle_n = sum(1 for r in rows if r.state == "idle")
         self._evidence("session_wait_profile", "",
-                       f"{len(rows)} 个异常会话，等待事件={waits or '无'}",
+                       f"{len(rows) - idle_n} 个异常会话，等待事件={waits or '无'}"
+                       + (f"；另带 {idle_n} 个最久 idle 会话" if idle_n else ""),
                        bears_on=["lock_contention", "long_idle_transaction",
                                  "deadlock"],
                        structured_value=[asdict(r) for r in rows])

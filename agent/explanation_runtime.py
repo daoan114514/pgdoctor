@@ -857,8 +857,16 @@ def create_intervention_plan(st: EpisodeState, *, action_type: str, sql: str,
     unmet = [result["condition_id"] for result in precondition_results
              if result["required"] and not result["satisfied"]]
     if unmet:
+        # 光说哪条不满足不够：2026-09-22 实测模型对 concrete_pid_bound 连试三次都不知道
+        # pid 该从哪来（会话工具默认不带 idle）。把"怎么满足"一起告诉它。
+        hint = ""
+        if any(c in unmet for c in ("concrete_pid_bound",
+                                    "pid_is_client_backend_and_state_idle")):
+            hint = ("；pid 必须来自已观测到的会话行：先调用 "
+                    "get_active_sessions(include_idle=true) 拿到具体 idle 客户端 pid，"
+                    "再在 SQL 里写死那个 pid")
         raise ValueError(
-            f"intervention preconditions are not satisfied: {', '.join(unmet)}")
+            f"intervention preconditions are not satisfied: {', '.join(unmet)}{hint}")
     path = explanation.path_map()[option["path_id"]]
     evidence_refs = [binding.raw_ref for binding in _plan_bindings(
         st, path, target=option["target_node_id"], fix_id=option["fix"])]
