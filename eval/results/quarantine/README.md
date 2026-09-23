@@ -31,3 +31,11 @@ glob `eval/results/*.json`，放在这里就不会再被当成"已完成"。
 | 文件 | episode | 为什么隔离 |
 |---|---|---|
 | `guard_lock_contention_20260922_rev3_selfheal.json` | `ep_lock_contention_eval_v1_1790070226` | 干净（infra=0、子 agent 正常），但 `claimed=None`、零 SQL 却 `O=True`：场景 revision 3 的持锁 `duration_s=900` 在 19 分钟的 episode 里自动回滚，打分时补采的 KPI 已恢复。场景已改为 revision 4（`duration_s=7200`），`scoring.py` 也已规定"无干预不得 Outcome"，这份要在新定义下重跑 |
+
+## 2026-09-22 晚（修完 collection_status 之后、修 raw_refs 之前）—— 整批 5 场景
+
+| 文件 | 为什么隔离 |
+|---|---|
+| `guard_*_20260922_rawrefs.json`（5 个）+ `llm_eval_guarded_20260922_rawrefs.json` | 子 agent 把多条 `raw_refs` 写成 JSON 列表字符串，解析器只按分号切，合并层以 "raw_ref was not collected by this task" 整条拒掉：回扫会话记录，359 条 OBSERVED 报告里 242 条被静默丢弃。D 2/5、O 0/5、S 0/5 是在三分之二证据缺席下测的，不代表修好后的系统（828239b）。此外 b2694eb 之后安全门、评分口径、采集状态记账都变了，需在同一 harness 下重跑 |
+
+守护只认 `eval/results/guard_*.json`，搬到这里之后 5 个场景会全部重跑。

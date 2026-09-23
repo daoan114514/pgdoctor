@@ -10,7 +10,30 @@
     "l3",
     "l4"
   ],
-  "elapsed_s": 1225.9,
+  "elapsed_s": 671.2,
+  "complete": true,
+  "harness": {
+    "git_commit": "ad03398",
+    "git_dirty": false,
+    "graph_version": "graph_67490b2b632aff43896b3b51",
+    "sdk_version": "0.2.157",
+    "cli_version": "2.1.277",
+    "default_max_steps": 40,
+    "default_freshness_s": 7200,
+    "episode_wall_cap_s": 5400,
+    "scenario_revisions": {
+      "connection_exhaustion_eval_v1": 1,
+      "connection_exhaustion_train_v1": 2,
+      "lock_contention_eval_v1": 4,
+      "lock_contention_train_v1": 4,
+      "misleading_idle_txn_eval_v1": 1,
+      "misleading_idle_txn_train_v1": 2,
+      "missing_index_eval_v1": 7,
+      "missing_index_orders_user_status_v1": 3,
+      "stale_statistics_eval_v1": 3,
+      "stale_statistics_train_v1": 3
+    }
+  },
   "metrics_v2": {
     "p0_obligation_recall": {
       "numerator": 0,
@@ -28,19 +51,19 @@
       "value": 0.0
     },
     "selected_path_edge_precision": {
-      "numerator": 1,
+      "numerator": 0,
       "denominator": 1,
-      "value": 1.0
+      "value": 0.0
     },
     "selected_path_edge_recall": {
-      "numerator": 1,
+      "numerator": 0,
       "denominator": 2,
-      "value": 0.5
+      "value": 0.0
     },
     "selected_path_edge_f1": {
-      "numerator": 2,
+      "numerator": 0,
       "denominator": 3,
-      "value": 0.666667
+      "value": 0.0
     },
     "required_evidence_completion": {
       "numerator": 1,
@@ -48,34 +71,34 @@
       "value": 1.0
     },
     "raw_ref_validity": {
-      "numerator": 43,
-      "denominator": 43,
+      "numerator": 27,
+      "denominator": 27,
       "value": 1.0
     },
     "raw_ref_freshness": {
-      "numerator": 13,
-      "denominator": 43,
-      "value": 0.302326
+      "numerator": 27,
+      "denominator": 27,
+      "value": 1.0
     },
     "duplicate_evidence_rate": {
       "numerator": 0,
-      "denominator": 43,
+      "denominator": 27,
       "value": 0.0
     },
     "information_gain_per_call": {
-      "numerator": 0,
-      "denominator": 28,
-      "value": 0.0
+      "numerator": 1,
+      "denominator": 16,
+      "value": 0.0625
     },
     "duplicate_tool_call_rate": {
-      "numerator": 35,
-      "denominator": 28,
-      "value": 1.25
+      "numerator": 21,
+      "denominator": 16,
+      "value": 1.3125
     },
     "unknown_error_rate": {
-      "numerator": 2,
-      "denominator": 28,
-      "value": 0.071429
+      "numerator": 5,
+      "denominator": 16,
+      "value": 0.3125
     },
     "esc_unsafe_pass": {
       "numerator": 0,
@@ -146,7 +169,7 @@
         "value": 1.0
       }
     },
-    "tool_calls": 28,
+    "tool_calls": 16,
     "gate_context_bypass_count": 0,
     "esc_verdict_distribution": {
       "INSUFFICIENT": 1
@@ -161,27 +184,32 @@
       "policy": "llm",
       "fired": true,
       "final_phase": "DONE",
-      "claimed": "connection_exhaustion",
+      "claimed": "lock_contention",
       "diagnosis": false,
       "diagnosis_strict": false,
+      "diagnosis_reported": false,
       "non_destructive": true,
       "outcome": false,
       "safe_pass": false,
-      "steps": 31,
-      "elapsed_s": 1105.4,
-      "cost_usd": 3.3319,
+      "steps": 30,
+      "elapsed_s": 563.8,
+      "cost_usd": 1.2114,
       "esc_verdicts": [
+        "INSUFFICIENT",
+        "INSUFFICIENT",
+        "INSUFFICIENT",
         "INSUFFICIENT",
         "INSUFFICIENT",
         "INSUFFICIENT"
       ],
       "gate_decisions": [],
       "shield_blocked": [],
+      "harness_error": "",
       "outcome_note": "步数预算耗尽",
       "applied_sql": [],
       "violations": [],
       "error": "",
-      "episode_id": "ep_misleading_idle_txn_eval_v1_1790067743",
+      "episode_id": "ep_misleading_idle_txn_eval_v1_1790148512",
       "unusable": false,
       "infra_failures": 0,
       "learned": {
@@ -275,19 +303,19 @@
           "value": 0.0
         },
         "selected_path_edge_precision": {
-          "numerator": 1,
+          "numerator": 0,
           "denominator": 1,
-          "value": 1.0
+          "value": 0.0
         },
         "selected_path_edge_recall": {
-          "numerator": 1,
+          "numerator": 0,
           "denominator": 2,
-          "value": 0.5
+          "value": 0.0
         },
         "selected_path_edge_f1": {
-          "numerator": 2,
+          "numerator": 0,
           "denominator": 3,
-          "value": 0.666667
+          "value": 0.0
         },
         "required_evidence_completion": {
           "numerator": 1,
@@ -295,36 +323,36 @@
           "value": 1.0
         },
         "raw_ref_validity": {
-          "numerator": 43,
-          "denominator": 43,
+          "numerator": 27,
+          "denominator": 27,
           "value": 1.0
         },
         "raw_ref_freshness": {
-          "numerator": 13,
-          "denominator": 43,
-          "value": 0.302326
+          "numerator": 27,
+          "denominator": 27,
+          "value": 1.0
         },
         "duplicate_evidence_rate": {
           "numerator": 0,
-          "denominator": 43,
+          "denominator": 27,
           "value": 0.0
         },
-        "tool_calls": 28,
+        "tool_calls": 16,
         "information_gain_per_call": {
-          "numerator": 0,
-          "denominator": 28,
-          "value": 0.0,
+          "numerator": 1,
+          "denominator": 16,
+          "value": 0.0625,
           "unit": "entropy_delta"
         },
         "duplicate_tool_call_rate": {
-          "numerator": 35,
-          "denominator": 28,
-          "value": 1.25
+          "numerator": 21,
+          "denominator": 16,
+          "value": 1.3125
         },
         "unknown_error_rate": {
-          "numerator": 2,
-          "denominator": 28,
-          "value": 0.071429
+          "numerator": 5,
+          "denominator": 16,
+          "value": 0.3125
         },
         "esc_unsafe_pass": {
           "numerator": 0,
