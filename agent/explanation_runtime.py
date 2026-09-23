@@ -700,6 +700,47 @@ def _binding_tables(bindings) -> dict[str, set[str]]:
     return out
 
 
+# pid 行的新鲜度：pid 会被回收复用，终止会话前必须是刚观测到的行。模型在 PLAN 里调
+# get_active_sessions(include_idle=true) 到 submit_proposal 只隔几秒，300s 足够宽。
+PID_ROW_FRESHNESS_S = 300
+_PID_EVIDENCE_TYPES = frozenset({"session_wait_profile", "lock_blocking_chain",
+                                 "idle_in_transaction"})
+
+
+def _fresh_pid_observations(st: EpisodeState, pid) -> list[tuple[EvidenceBinding, dict]]:
+    """含该 pid 的、新鲜且可信的会话观测行 —— 直接读 scratchpad，不要求已绑定。
+
+    绑定会 bump 解释图 revision，而 GATE 要求 ESC 的 SUFFICIENT 报告与当前 revision 一致，
+    所以绑定只在 INVESTIGATE/DIAGNOSE 做；终止空闲会话所需的 idle pid 行只能在 PLAN 阶段
+    由模型取到，永远进不了绑定，四条 pid 前置条件永远不满足 —— 2026-09-23 跑批与 9 月
+    22 日那批里 terminate 类修复一次都没过过门。会话行是系统产出的观测（toolbox 落盘、
+    trace 有 digest），这里按同一条信任规则（EvidenceBinding.is_trusted：状态、raw_ref、
+    digest、新鲜度）临时构造绑定来查，不写进解释图。"""
+    if pid is None:
+        return []
+    now = time.time()
+    out: list[tuple[EvidenceBinding, dict]] = []
+    for entry in reversed(st.scratchpad):
+        if entry.get("evidence_type") not in _PID_EVIDENCE_TYPES or not entry.get("raw_ref"):
+            continue
+        observed_at = float(entry.get("ts", 0.0) or 0.0)
+        if now - observed_at > PID_ROW_FRESHNESS_S:
+            continue
+        binding = EvidenceBinding.create(
+            episode_id=st.episode_id, raw_ref=str(entry["raw_ref"]),
+            evidence_type=str(entry.get("evidence_type")),
+            status=str(entry.get("status", EvidenceStatus.OBSERVED.value)),
+            observed_at=observed_at, predicate_id="", predicate_result="NEUTRAL",
+            structured_value=entry.get("structured_value"),
+            fresh_until=observed_at + PID_ROW_FRESHNESS_S)
+        if not binding.is_trusted():
+            continue
+        for row in _walk_dicts(binding.structured_value()):
+            if str(row.get("pid", row.get("blocked_by"))) == str(pid):
+                out.append((binding, row))
+    return out
+
+
 def _walk_dicts(value: Any):
     if isinstance(value, dict):
         yield value
@@ -757,6 +798,7 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
             row_pid = row.get("pid", row.get("blocked_by"))
             if pid is not None and str(row_pid) == str(pid):
                 pid_rows.append((binding, row))
+    pid_rows.extend(_fresh_pid_observations(st, pid))
 
     relevant = _plan_bindings(st, path, target=target, fix_id=fix_id)
     evidence_tables = _binding_tables(relevant) or _binding_tables(bindings)
@@ -804,6 +846,17 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
         if condition_id == "session_or_transaction_scope_only":
             ok = isinstance(statement, ast.VariableSetStmt)
             return ok, "SET is scoped to the executing session/transaction", []
+        if condition_id == "pid_identity_rechecked_fresh":
+            # 原来只读行上的 identity_rechecked，而观测器恒写 True，这条断言实际是常量
+            # （2026-09-23 审计）。现在"新鲜"是真的：该 pid 的行必须在 PID_ROW_FRESHNESS_S
+            # 内观测到。
+            now = time.time()
+            refs = [binding.raw_ref for binding, row in pid_rows
+                    if bool(row.get("identity_rechecked", True)) and
+                    now - float(binding.observed_at or 0.0) <= PID_ROW_FRESHNESS_S]
+            return (bool(refs),
+                    f"PID row observed within {PID_ROW_FRESHNESS_S}s with identity rechecked",
+                    refs)
 
         checks = {
             "pid_is_topmost_blocker": lambda row: bool(
@@ -818,8 +871,6 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
             "blocking_or_xmin_impact_bound": lambda row: bool(
                 row.get("blocking_impact") or row.get("blocked_session_count") or
                 row.get("backend_xmin") or row.get("xmin_age")),
-            "pid_identity_rechecked_fresh": lambda row: bool(
-                row.get("identity_rechecked", True)),
             "pid_is_client_backend_and_state_idle": lambda row: (
                 str(row.get("backend_type", "client backend")).lower() ==
                 "client backend" and str(row.get("state", "")).lower() == "idle"),

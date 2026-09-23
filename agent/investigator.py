@@ -30,7 +30,7 @@ from agent.hooks import make_phase_hook
 from agent.permissions import (INVESTIGATOR_DENIED, Role, allowed_tools)
 from agent.episode_state import EvidenceBudgetExhausted, EvidenceStatus
 from agent.state_machine import Phase
-from agent.toolbox import Toolbox
+from agent.toolbox import Toolbox, tool_result_text
 from agent.explanation import EvidenceNeed, EvidenceReport
 from agent.tool_planner import (PlannedEvidenceTask, environment_availability,
                                 infer_target_context,
@@ -329,7 +329,8 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
                         "cite_in_report_evidence": "raw_refs must be taken from evidence_raw_refs above",
                         "reused": False,
                         "result_truncated": len(payload) > 3000,
-                        "result": payload[:3000],
+                        # 列表按条截，JSON 保持完整（与主 agent 共用 tool_result_text）
+                        "result": tool_result_text(r, 3000),
                     }, ensure_ascii=False)
                 else:
                     text = json.dumps(r, ensure_ascii=False, default=str)[:3500]

@@ -39,3 +39,9 @@ glob `eval/results/*.json`，放在这里就不会再被当成"已完成"。
 | `guard_*_20260922_rawrefs.json`（5 个）+ `llm_eval_guarded_20260922_rawrefs.json` | 子 agent 把多条 `raw_refs` 写成 JSON 列表字符串，解析器只按分号切，合并层以 "raw_ref was not collected by this task" 整条拒掉：回扫会话记录，359 条 OBSERVED 报告里 242 条被静默丢弃。D 2/5、O 0/5、S 0/5 是在三分之二证据缺席下测的，不代表修好后的系统（828239b）。此外 b2694eb 之后安全门、评分口径、采集状态记账都变了，需在同一 harness 下重跑 |
 
 守护只认 `eval/results/guard_*.json`，搬到这里之后 5 个场景会全部重跑。
+
+## 2026-09-23 下午（ad03398，pid 前置条件修复之前）
+
+| 文件 | 为什么隔离 |
+|---|---|
+| `guard_connection_exhaustion_20260923_prepidfix.json` | 诊断正确（D=True、ESC SUFFICIENT）但 O=False：模型在 PLAN 里正确调了 `get_active_sessions(include_idle=true)` 并提交 `pg_terminate_backend(<idle pid>)`，`create_intervention_plan` 却报四条 pid 前置条件不满足 —— PLAN 阶段的观测进不了绑定（绑定会 bump revision，与 GATE 的 ESC 同 revision 契约冲突），terminate 类修复历史上从未过门。修复后 5 个场景统一重跑 |

@@ -38,7 +38,7 @@ check("raw_refs=None" in src, "按任务绑定（bind_evidence 不再按引用�
 check("tool_raw_refs" in src, "接受工具级 raw_ref（EXPLAIN 记录本身）")
 check('"event": "evidence_merge"' in src, "合并结果（含被拒原因）落审计")
 isrc = inspect.getsource(investigator._tools_for)
-check(isrc.index('"evidence_raw_refs": refs') < isrc.index('"result": payload'),
+check(isrc.index('"evidence_raw_refs": refs') < isrc.index('"result": tool_result_text'),
       "工具返回里 evidence_raw_refs 排在 result 之前，截断不会吃掉它")
 check("tool_raw_refs" in inspect.getsource(investigator.investigate_task),
       "investigate_task 把工具级 raw_ref 交回任务结果")

@@ -176,7 +176,14 @@ check("claude-agent-sdk==" in req, "requirements 钉死 SDK 版本")
 ident = rs._harness_identity()
 check(bool(ident.get("sdk_version")) and bool(ident.get("cli_version")), "harness 身份记录 SDK/CLI 版本", ident)
 wrap_src = inspect.getsource(lp._build_tools)
-check('"result_truncated": True' in wrap_src, "主 agent 工具结果截断可见")
+check("tool_result_text(r, 4000)" in wrap_src, "主 agent 工具结果经 tool_result_text（截断可见、列表按条截）")
+from agent.toolbox import tool_result_text as _trt  # noqa: E402
+import json as _json  # noqa: E402
+_big = [{"pid": i, "state": "idle", "note": "x" * 120} for i in range(60)]
+_out = _json.loads(_trt(_big, 2000))
+check(_out.get("result_truncated") and isinstance(_out.get("result"), list) and _out["result"] and _out["total"] == 60 and _out["shown"] == len(_out["result"]),
+      "列表结果按条截断后仍是完整 JSON", str(_out)[:80])
+check(_trt({"a": 1}, 4000) == '{"a": 1}', "不超长时原样返回")
 
 print()
 if fails:

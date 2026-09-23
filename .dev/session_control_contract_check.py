@@ -68,6 +68,55 @@ diag = asdict(SessionDigest(
     identity_rechecked=True))
 check(not conds["role_is_not_system_or_diagnostic"](diag), "诊断连接自己的 idle 行不能被终止（规则 3）")
 
+print("[3] PLAN 阶段刚取到、尚未绑定的会话行能满足 pid 前置条件；过期行不能（2026-09-23）")
+import json  # noqa: E402
+import shutil  # noqa: E402
+import time  # noqa: E402
+from agent.episode_state import EpisodeState  # noqa: E402
+from agent.explanation import ExplanationScope  # noqa: E402
+from knowledge.causal_graph import graph as G  # noqa: E402
+from sandbox.traces import TRACE_DIR, TraceStore  # noqa: E402
+
+eid = "ep_session_control_contract_fixture"
+store = TraceStore(eid)
+paths = G.enumerate_causal_paths(["latency_p99_up"], use_learned=False)
+path = next(p for p in paths if p.node_ids == ["missing_index", "latency_p99_up"])
+explanation = G.merge_paths([path], episode_id=eid, observed_symptoms=["latency_p99_up"])
+explanation.select_paths([path.path_id], unexplained_symptoms=[], scope=ExplanationScope.FULL)
+st = EpisodeState(eid, "session_control_fixture")
+st.explanation_graph = explanation
+rows = [row, diag]
+ref = store.record("bind_structured_evidence", {"evidence_type": "session_wait_profile"},
+                   json.dumps(rows), rows)
+st.note("agent", "session_wait_profile", "PLAN 阶段 include_idle 观测", ref,
+        ["lock_contention"], status="OBSERVED", structured_value=rows)
+PID_CONDS = ["concrete_pid_bound", "pid_is_client_backend_and_state_idle",
+             "pid_is_not_current_diagnostic_connection", "role_is_not_system_or_diagnostic",
+             "pid_identity_rechecked_fresh"]
+option = {"path_id": path.path_id, "target_node_id": "missing_index", "fix": "create_covering_index",
+          "preconditions": [{"id": cid, "required": True} for cid in PID_CONDS]}
+
+
+def evaluate(sql):
+    return {r["condition_id"]: r for r in er._evaluate_preconditions(st, option=option, sql=sql)}
+
+
+res = evaluate("SELECT pg_terminate_backend(4242)")
+check(all(res[c]["satisfied"] for c in PID_CONDS), "未绑定的新鲜 idle 行满足全部 pid 前置条件: " + str({c: res[c]["satisfied"] for c in PID_CONDS}))
+check(all(ref in res[c]["evidence_refs"] for c in PID_CONDS if c != "concrete_pid_bound"), "前置条件引用了该观测的 raw_ref")
+res = evaluate("SELECT pg_terminate_backend(7)")
+check(not res["role_is_not_system_or_diagnostic"]["satisfied"], "诊断连接的 idle 行仍不能被终止")
+res = evaluate("SELECT pg_terminate_backend(9999)")
+check(not res["pid_is_client_backend_and_state_idle"]["satisfied"], "没观测过的 pid 不满足")
+st.scratchpad[-1]["ts"] = time.time() - er.PID_ROW_FRESHNESS_S - 60
+res = evaluate("SELECT pg_terminate_backend(4242)")
+check(not res["pid_identity_rechecked_fresh"]["satisfied"], "超过 PID_ROW_FRESHNESS_S 的行不再满足 identity 新鲜度")
+st.scratchpad[-1]["structured_value"] = [dict(row, pid=4242, state="active")]
+st.scratchpad[-1]["ts"] = time.time()
+res = evaluate("SELECT pg_terminate_backend(4242)")
+check(not res["pid_is_client_backend_and_state_idle"]["satisfied"], "篡改过的 scratchpad 值（digest 不符）不被信任")
+shutil.rmtree(TRACE_DIR / eid, ignore_errors=True)
+
 print()
 if fails:
     print(f"SESSION CONTROL CONTRACT: FAIL（{len(fails)}/{checks}）")

@@ -28,6 +28,29 @@ if TYPE_CHECKING:
 _TARGET_KEYS = frozenset({"hot_query", "table"})
 
 
+def tool_result_text(result, limit: int) -> str:
+    """工具结果给模型看的文本；超长时截断必须可见，而且列表按条截、保证 JSON 完整。
+
+    2026-09-23 跑批：get_active_sessions(include_idle=true) 的行列表被按字符截成半截
+    JSON，模型只能从残片里猜 pid。主 agent（llm_policy）与子 agent（investigator）都经这里。"""
+    payload = json.dumps(result, ensure_ascii=False, default=str)
+    if len(payload) <= limit:
+        return payload
+    hint = "用 fetch_raw(raw_ref) 回取完整原文"
+    if isinstance(result, list):
+        k = len(result)
+        while k > 0:
+            text = json.dumps({"result_truncated": True, "shown": k, "total": len(result),
+                               "hint": "列表按条截断，只展示前 shown 条完整记录",
+                               "result": result[:k]}, ensure_ascii=False, default=str)
+            if len(text) <= limit:
+                return text
+            k = k - 1 if k <= 8 else k // 2
+    raw_ref = result.get("raw_ref", "") if isinstance(result, dict) else ""
+    return json.dumps({"result_truncated": True, "raw_ref": raw_ref, "hint": hint,
+                       "result": payload[:limit]}, ensure_ascii=False)
+
+
 def _normal_sql(text: str) -> str:
     """目标对照用的归一化：压空白、去尾随分号与空白。两边都经这里。"""
     return " ".join(str(text or "").split()).rstrip(";").rstrip()

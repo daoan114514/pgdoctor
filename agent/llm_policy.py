@@ -36,7 +36,7 @@ from agent.permissions import Role, allowed_tools
 from agent.policy import Policy
 from agent.state_machine import Phase
 from agent.tool_planner import ToolPlanningConfig
-from agent.toolbox import Toolbox
+from agent.toolbox import Toolbox, tool_result_text
 
 MODEL = os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5")
 
@@ -157,16 +157,8 @@ def _build_tools(tb: Toolbox) -> list:
         async def run(args: dict[str, Any]) -> dict[str, Any]:
             try:
                 r = fn(args)
-                payload = json.dumps(r, ensure_ascii=False, default=str)
-                if len(payload) > 4000:
-                    # 截断必须可见（与子 agent 的封装同一条规则）：原来硬截到 4000 字
-                    # 不打标，模型拿到半截 JSON 只能猜缺了什么，还看不到末尾的 raw_ref。
-                    payload = json.dumps({
-                        "result_truncated": True,
-                        "raw_ref": (r.get("raw_ref", "") if isinstance(r, dict) else ""),
-                        "hint": "用 fetch_raw(raw_ref) 回取完整原文",
-                        "result": payload[:4000]}, ensure_ascii=False)
-                return {"content": [{"type": "text", "text": payload}]}
+                # 截断可见且列表按条截（与子 agent 共用 toolbox.tool_result_text）
+                return {"content": [{"type": "text", "text": tool_result_text(r, 4000)}]}
             except Exception as exc:
                 # 把拒绝原因如实返回，模型据此调整，而不是反复撞墙
                 return {"content": [{"type": "text",
