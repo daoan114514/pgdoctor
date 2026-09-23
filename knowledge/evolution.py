@@ -957,7 +957,8 @@ def _update_l3_v2(st, score) -> int:
     explanation = getattr(st, "explanation_graph", None)
     if explanation is None or not explanation.selected_path_ids:
         return 0
-    sufficient = any(report.get("verdict") == "SUFFICIENT"
+    from agent.esc import esc_is_genuinely_sufficient
+    sufficient = any(esc_is_genuinely_sufficient(report)
                      for report in getattr(st, "esc_reports", []))
     verified = any(
         attempt.learnable and attempt.outcome == "VERIFIED"

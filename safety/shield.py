@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from pglast import parse_sql
 from pglast.stream import RawStream
 
+from safety import undo_journal
+
 
 @dataclass
 class ShieldVerdict:
@@ -71,13 +73,95 @@ SIDE_EFFECT_FUNCS = {
 }
 
 
+# 只读探测（explain_query）里也不许出现的函数：不改数据，但会睡眠、占锁、读文件、
+# 改会话或掐别人的连接 —— 只读连接挡的是写权限，挡不住这些。
+READONLY_DENY_FUNCS = frozenset(SIDE_EFFECT_FUNCS) | frozenset({
+    "pg_sleep", "pg_sleep_for", "pg_sleep_until",
+    "pg_advisory_lock", "pg_advisory_lock_shared", "pg_advisory_xact_lock",
+    "pg_advisory_xact_lock_shared", "pg_try_advisory_lock",
+    "pg_try_advisory_lock_shared", "pg_try_advisory_xact_lock",
+    "pg_try_advisory_xact_lock_shared",
+    "set_config", "pg_notify", "nextval", "setval",
+    "lo_import", "lo_export", "lo_unlink", "dblink", "dblink_exec",
+    "pg_read_file", "pg_read_binary_file", "pg_ls_dir", "pg_stat_file",
+    "pg_backup_start", "pg_backup_stop", "pg_start_backup", "pg_stop_backup",
+})
+# 一条语句内部允许再嵌套的语句类型：只有子查询。数据修改 CTE
+# （WITH d AS (DELETE ...) SELECT ...）在 pglast 里是 SelectStmt 套 DeleteStmt，
+# 顶层类型看不出来 —— 2026-09-23 审计发现 vacuum_analyze 的回滚白名单曾因此放行
+# 一条会以 agent_rw 执行的 DELETE。
+NESTED_ALLOW = frozenset({"SelectStmt"})
+SESSION_CONTROL_FUNCS = frozenset({"pg_terminate_backend", "pg_cancel_backend"})
+READONLY_STMT = frozenset({"SelectStmt", "UpdateStmt", "DeleteStmt"})
+
+
+def _scan(node, kinds: list[str], funcs: list[str]) -> None:
+    """递归收集 AST 里全部语句节点类型与被调用的函数名（小写、去 schema）。"""
+    if node is None:
+        return
+    if isinstance(node, (list, tuple)):
+        for x in node:
+            _scan(x, kinds, funcs)
+        return
+    name = _node_name(node)
+    if name.endswith("Stmt"):
+        kinds.append(name)
+    if name == "FuncCall":
+        parts = [str(getattr(p, "sval", "") or "") for p in (node.funcname or ())]
+        if parts:
+            funcs.append(parts[-1].lower())
+    for attr in getattr(node, "__slots__", ()) or ():
+        try:
+            _scan(getattr(node, attr, None), kinds, funcs)
+        except Exception:
+            pass
+
+
+def called_functions(sql: str) -> list[str]:
+    try:
+        tree = parse_sql(sql)
+    except Exception:
+        return []
+    kinds: list[str] = []
+    funcs: list[str] = []
+    _scan([raw.stmt for raw in tree], kinds, funcs)
+    return funcs
+
+
 def _side_effect_func(sql: str) -> str | None:
-    """SQL 里是否调用了有副作用的函数；返回它对应的动作类型。"""
-    low = sql.lower()
-    for fn, kind in SIDE_EFFECT_FUNCS.items():
-        if re.search(r"\b" + re.escape(fn) + r"\s*\(", low):
-            return kind
+    """SQL 里是否调用了有副作用的函数；返回它对应的动作类型。
+
+    按 AST 的 FuncCall 判，不再用正则：`pg_terminate_backend /*x*/ (1)`、
+    `"pg_terminate_backend"(1)` 这类写法正则抓不到，会被当成只读 SELECT。"""
+    for fn in called_functions(sql):
+        if fn in SIDE_EFFECT_FUNCS:
+            return SIDE_EFFECT_FUNCS[fn]
     return None
+
+
+def _nested_problems(stmt, kind: str) -> list[str]:
+    """语句内部不许藏别的语句，SELECT 不许 INTO / FOR UPDATE。"""
+    out: list[str] = []
+    kinds: list[str] = []
+    funcs: list[str] = []
+    _scan(stmt, kinds, funcs)
+    for n in sorted(set(kinds)):
+        if n == kind:
+            if kind not in NESTED_ALLOW and kinds.count(kind) > 1:
+                out.append(f"{kind} 内又嵌套了 {kind}（CTE），不允许")
+            continue
+        if n in NESTED_ALLOW:
+            continue
+        if n in FORBIDDEN_STMT:
+            out.append(f"嵌套结构中发现灾难动作: {FORBIDDEN_STMT[n]}")
+        else:
+            out.append(f"{kind} 内嵌套了 {n}，不允许")
+    if kind == "SelectStmt":
+        if getattr(stmt, "intoClause", None) is not None:
+            out.append("SELECT INTO 会创建表，不允许")
+        if getattr(stmt, "lockingClause", None):
+            out.append("SELECT ... FOR UPDATE/SHARE 会锁行，不允许")
+    return out
 
 
 def _node_name(node) -> str:
@@ -145,13 +229,11 @@ def inspect_sql(sql: str) -> ShieldVerdict:
             v.allowed = False
             v.reasons.append(f"{kind} 缺少 WHERE 子句，将影响全表")
 
-        # 嵌套结构里藏的灾难动作
-        nested: list[str] = []
-        _walk(stmt, nested)
-        for n in set(nested):
-            if n != kind:
-                v.allowed = False
-                v.reasons.append(f"嵌套结构中发现灾难动作: {FORBIDDEN_STMT[n]}")
+        # 嵌套结构里藏的灾难动作 / 数据修改 CTE / SELECT INTO / FOR UPDATE
+        problems = _nested_problems(stmt, kind)
+        if problems:
+            v.allowed = False
+            v.reasons.extend(problems)
 
     # 多语句本身可疑：提案应当是单一动作，便于回滚与审计
     if len(tree) > 1:
@@ -188,8 +270,8 @@ def inspect_rollback(forward_sql: str, rollback_sql: str) -> ShieldVerdict:
       它们永远不会被执行。
       其它组合一律拒绝。
     """
-    rb = (rollback_sql or "").strip().rstrip(";")
-    if rb.upper() in ("IRREVERSIBLE", "NO_ROLLBACK_NEEDED"):
+    rb = undo_journal.normalize_rollback(rollback_sql)
+    if undo_journal.is_marker(rb):
         return ShieldVerdict(True, [], [rb.upper()], [rb.upper()])
     fwd = classify(forward_sql)
     try:
@@ -264,13 +346,15 @@ def inspect_rollback(forward_sql: str, rollback_sql: str) -> ShieldVerdict:
         return v if not v.allowed else ShieldVerdict(True, [], [kind], v.statements)
 
     if fwd == "vacuum_analyze":
-        # 自愈类动作本无需回滚，但允许模型给一条无害的语句（只读 SELECT 或再做一次
-        # VACUUM/ANALYZE）—— 它会以 rw 角色执行，所以只能是这两类且必须过护盾；
-        # 任何 DML/DDL 都不行，否则"回滚"就成了绕过分级的写入口。
-        rb_kind = classify(rb)
-        if rb_kind not in ("select", "vacuum_analyze"):
-            return deny(f"VACUUM/ANALYZE 的回滚只能是 NO_ROLLBACK_NEEDED、只读 SELECT "
-                        f"或再一次 VACUUM/ANALYZE，实际 {rb_kind}")
+        # 自愈类动作本无需回滚；允许的唯一 SQL 形态是再做一次 VACUUM/ANALYZE（不含 FULL）。
+        # 原来还放行"只读 SELECT"，但只读是靠顶层类型判的：数据修改 CTE、SELECT INTO 都是
+        # 顶层 SelectStmt，会以 agent_rw 真跑（2026-09-23 审计）。回滚 ANALYZE 用 SELECT
+        # 本来就没有意义，干脆不放行。
+        if kind != "VacuumStmt":
+            return deny("VACUUM/ANALYZE 的回滚只能是 NO_ROLLBACK_NEEDED 或再一次 "
+                        f"VACUUM/ANALYZE，实际 {kind}")
+        if vacuum_facts(rb)["full"]:
+            return deny("回滚不允许 VACUUM FULL")
         v = inspect_sql(rb)
         return v if not v.allowed else ShieldVerdict(True, [], [kind], v.statements)
     if fwd == "session_control":
@@ -310,3 +394,165 @@ def is_concurrent_index(sql: str) -> bool:
         return bool(getattr(stmt, "concurrent", False))
     except Exception:
         return False
+
+
+def vacuum_facts(sql: str) -> dict:
+    """VACUUM/ANALYZE 的 AST 事实。FULL 必须从 options 读：`VACUUM (FULL) t` 不含子串
+    "VACUUM FULL"，2026-09-23 审计发现 gate 只靠子串判 DENY，括号写法直接降成 CONFIRM。"""
+    out = {"is_vacuum_stmt": False, "is_vacuumcmd": False, "full": False,
+           "analyze": False, "tables": []}
+    try:
+        tree = parse_sql(sql)
+    except Exception:
+        return out
+    if len(tree) != 1 or _node_name(tree[0].stmt) != "VacuumStmt":
+        return out
+    stmt = tree[0].stmt
+    out["is_vacuum_stmt"] = True
+    out["is_vacuumcmd"] = bool(getattr(stmt, "is_vacuumcmd", False))
+    names = {str(getattr(d, "defname", "") or "").lower() for d in (stmt.options or ())}
+    out["full"] = "full" in names
+    out["analyze"] = (not out["is_vacuumcmd"]) or "analyze" in names
+    out["tables"] = [str(getattr(r.relation, "relname", "") or "")
+                     for r in (stmt.rels or ())]
+    return out
+
+
+def target_tables(sql: str) -> list[tuple[str, str]]:
+    """语句涉及的全部关系 (schema, name)，从 AST 的 RangeVar 取。
+
+    原来 gate 用正则 `ON (word)` 抓表名，`ON "orders"` 带引号就抓空，大表非并发建索引
+    从 DENY 降成 CONFIRM（2026-09-23 审计）。CTE 名也会被当成关系名 —— 它查不到规模，
+    gate 按 unknown 保守处理。"""
+    try:
+        tree = parse_sql(sql)
+    except Exception:
+        return []
+    found: list[tuple[str, str]] = []
+
+    def visit(node):
+        if node is None:
+            return
+        if isinstance(node, (list, tuple)):
+            for x in node:
+                visit(x)
+            return
+        if _node_name(node) == "RangeVar":
+            pair = (str(getattr(node, "schemaname", "") or ""),
+                    str(getattr(node, "relname", "") or ""))
+            if pair[1] and pair not in found:
+                found.append(pair)
+        for attr in getattr(node, "__slots__", ()) or ():
+            try:
+                visit(getattr(node, attr, None))
+            except Exception:
+                pass
+
+    visit([raw.stmt for raw in tree])
+    return found
+
+
+def index_facts(sql: str) -> dict:
+    """CREATE INDEX 的目标表与列（AST），给 gate 的预检查用。"""
+    out = {"table": "", "schema": "", "columns": [], "name": "", "concurrent": False}
+    try:
+        stmt = parse_sql(sql)[0].stmt
+    except Exception:
+        return out
+    if _node_name(stmt) != "IndexStmt":
+        return out
+    out["table"] = str(getattr(stmt.relation, "relname", "") or "")
+    out["schema"] = str(getattr(stmt.relation, "schemaname", "") or "")
+    out["columns"] = [RawStream()(item) for item in (stmt.indexParams or ())]
+    out["name"] = str(getattr(stmt, "idxname", "") or "")
+    out["concurrent"] = bool(getattr(stmt, "concurrent", False))
+    return out
+
+
+def inspect_session_control(sql: str) -> tuple[bool, list[str], int | None]:
+    """会话控制语句的肯定式形态：恰好 `SELECT pg_terminate_backend(<正整数常量>)`
+    （或 pg_cancel_backend），没有 WITH/FROM/WHERE/GROUP/ORDER/LIMIT/DISTINCT/INTO/
+    锁子句/集合运算，目标列表恰好一项。
+
+    原来的前置条件只验"某个字面量 pid 被观测过"：
+    `SELECT pg_terminate_backend(4242), pg_terminate_backend(pid) FROM pg_stat_activity`
+    第一项合规，第二项把整库会话掐掉（2026-09-23 审计）。gate.assess 与
+    explanation_runtime._sql_facts 都调这一个函数。"""
+    reasons: list[str] = []
+    try:
+        tree = parse_sql(sql)
+    except Exception as exc:
+        return False, [f"SQL 无法解析: {exc}"], None
+    if len(tree) != 1:
+        return False, [f"必须恰好一条语句，实际 {len(tree)} 条"], None
+    stmt = tree[0].stmt
+    if _node_name(stmt) != "SelectStmt":
+        return False, [f"会话控制必须是 SELECT，实际 {_node_name(stmt)}"], None
+    for attr, label in (("withClause", "WITH"), ("fromClause", "FROM"),
+                        ("whereClause", "WHERE"), ("groupClause", "GROUP BY"),
+                        ("havingClause", "HAVING"), ("windowClause", "WINDOW"),
+                        ("sortClause", "ORDER BY"), ("limitCount", "LIMIT"),
+                        ("limitOffset", "OFFSET"), ("distinctClause", "DISTINCT"),
+                        ("intoClause", "INTO"), ("lockingClause", "FOR UPDATE/SHARE"),
+                        ("valuesLists", "VALUES"), ("larg", "集合运算"),
+                        ("rarg", "集合运算")):
+        if getattr(stmt, attr, None):
+            reasons.append(f"会话控制语句不允许 {label}")
+    targets = list(stmt.targetList or ())
+    if len(targets) != 1:
+        reasons.append(f"目标列表必须恰好一项，实际 {len(targets)} 项")
+    pid = None
+    if targets:
+        call = getattr(targets[0], "val", None)
+        if _node_name(call) != "FuncCall":
+            reasons.append("目标必须是函数调用")
+        else:
+            name = ".".join(str(getattr(part, "sval", "") or "")
+                            for part in (call.funcname or ()))
+            if name.split(".")[-1].lower() not in SESSION_CONTROL_FUNCS:
+                reasons.append(f"函数 {name} 不是会话控制函数")
+            if (getattr(call, "agg_filter", None) or getattr(call, "over", None)
+                    or getattr(call, "agg_order", None)):
+                reasons.append("函数调用不允许 FILTER/OVER/ORDER")
+            args = list(call.args or ())
+            if len(args) != 1:
+                reasons.append(f"函数参数必须恰好一个，实际 {len(args)} 个")
+            else:
+                value = getattr(args[0], "val", None)
+                ival = getattr(value, "ival", None)
+                if (_node_name(args[0]) != "A_Const" or not isinstance(ival, int)
+                        or isinstance(ival, bool) or ival <= 0):
+                    reasons.append("pid 必须是正整数常量")
+                else:
+                    pid = ival
+    ok = not reasons
+    return ok, reasons, (pid if ok else None)
+
+
+def inspect_readonly(sql: str) -> ShieldVerdict:
+    """只读探测入口（explain_query）的 AST 白名单。
+
+    只读连接挡的是写权限，挡不住 pg_sleep、advisory lock、同角色 pg_terminate_backend、
+    数据修改 CTE 这些语义副作用，也挡不住无 WHERE 的大排序把 temp 计数器污染成
+    work_mem_spill 的证据（CLAUDE.md 规则 6）。"""
+    try:
+        tree = parse_sql(sql)
+    except Exception as exc:
+        return ShieldVerdict(False, [f"SQL 无法解析: {exc}"])
+    if len(tree) != 1:
+        return ShieldVerdict(False, [f"只读探测必须恰好一条语句，实际 {len(tree)} 条"])
+    stmt = tree[0].stmt
+    kind = _node_name(stmt)
+    v = ShieldVerdict(allowed=True, stmt_kinds=[kind])
+    if kind not in READONLY_STMT:
+        return ShieldVerdict(False, [f"只读探测只接受 SELECT/UPDATE/DELETE，实际 {kind}"],
+                             stmt_kinds=[kind])
+    v.reasons.extend(_nested_problems(stmt, kind))
+    kinds: list[str] = []
+    funcs: list[str] = []
+    _scan(stmt, kinds, funcs)
+    bad = sorted({f for f in funcs if f in READONLY_DENY_FUNCS})
+    if bad:
+        v.reasons.append(f"只读探测不允许调用 {', '.join(bad)}")
+    v.allowed = not v.reasons
+    return v

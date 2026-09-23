@@ -29,7 +29,7 @@ from claude_agent_sdk import (
 
 from agent.episode_state import EpisodeState
 from agent.explanation import EvidenceNeed
-from agent.failure_class import is_infra_failure
+from agent.failure_class import is_agent_terminal, is_infra_failure
 from agent.hooks import make_phase_hook
 from agent.orchestrator import run_evidence_investigation
 from agent.permissions import Role, allowed_tools
@@ -62,6 +62,19 @@ V2_MODEL_FORBIDDEN = frozenset({"set_hypothesis", "declare_root_cause",
                                 "report_verdict"})
 
 
+def _forbidden_for(tb: Toolbox) -> frozenset:
+    """v2 下模型不可用的裁决类工具。裁决与根因由解释图投影产生；原来只从 allowed_tools
+    名单里减掉，工具仍注册在 MCP server 上、hook 与 Toolbox 都不拦，模型在 PLAN 里照样能
+    改写 claimed_fault_class 直到打分（2026-09-23 审计）。三处读取点共用这一个函数：
+    这里（注册）、make_phase_hook（拒绝）、Toolbox（抛错）。"""
+    return V2_MODEL_FORBIDDEN if getattr(tb.st, "schema_version", 2) == 2 else frozenset()
+
+
+def _model_tools(tb: Toolbox) -> list:
+    forbidden = _forbidden_for(tb)
+    return [t for t in _build_tools(tb) if getattr(t, "name", "") not in forbidden]
+
+
 def _proxy_env() -> dict[str, str]:
     """CLI 是独立二进制，得把代理显式传给它，否则会被地区封锁挡住。"""
     out = {}
@@ -72,6 +85,71 @@ def _proxy_env() -> dict[str, str]:
     return out
 
 
+def _enum_or_str(values, description: str) -> dict:
+    values = sorted({str(v) for v in values if v})
+    if values:
+        return {"type": "string", "enum": values, "description": description}
+    return {"type": "string", "description": description}
+
+
+def _root_cause_ids() -> list[str]:
+    from knowledge.causal_graph import graph as _G
+    return sorted(n for n, d in _G.load().nodes(data=True) if d.get("kind") == "RootCause")
+
+
+def _fix_action_types() -> list[str]:
+    from knowledge.causal_graph import graph as _G
+    return sorted({str(f.get("action_type")) for rc in _root_cause_ids()
+                   for f in _G.fixes_for(rc) if f.get("action_type")})
+
+
+def _proposal_schema(tb: Toolbox) -> dict:
+    """submit_proposal 的完整 JSON schema：封闭集合在 API 层定死，不靠提示词。
+
+    action_type 原来是裸 str，v2 不做同义词纠正，模型写 "analyze" 只得到 "0 matches"，
+    换个同义词再试直到撞 max_turns（2026-09-23 审计；与 collection_status 那个 635/655
+    被拒的老问题同构）。路径/修复/目标 id 按当前解释的可执行干预选项生成枚举。"""
+    options: list[dict] = []
+    try:
+        from agent import explanation_runtime as _xr
+        options = list(_xr.intervention_options(tb.st, executable_only=True))
+    except Exception:
+        options = []
+    types = [o.get("action_type") for o in options] or _fix_action_types()
+    props = {
+        "action_type": _enum_or_str(types, "动作类型，必须与 SQL 的 AST 分类一致"),
+        "sql": {"type": "string", "description": "恰好一条语句"},
+        "rollback": {"type": "string",
+                     "description": "回滚语句；会话控制写 IRREVERSIBLE，"
+                                    "ANALYZE/VACUUM 写 NO_ROLLBACK_NEEDED"},
+        "rationale": {"type": "string"},
+        "selected_path_id": _enum_or_str([o.get("path_id") for o in options], "所选解释路径"),
+        "fix_id": _enum_or_str([o.get("fix") for o in options], "因果图修复节点"),
+        "intervention_target": _enum_or_str(
+            [o.get("target_node_id") for o in options], "干预目标节点"),
+    }
+    required = ["action_type", "sql", "rollback", "rationale"]
+    if options:
+        required += ["selected_path_id", "fix_id", "intervention_target"]
+    return {"type": "object", "properties": props, "required": required}
+
+
+def _hypothesis_schema(tb: Toolbox) -> dict:
+    candidates = list(getattr(tb.st, "hypothesis_candidates", []) or [])
+    return {"type": "object", "properties": {
+        "name": _enum_or_str(candidates, "候选假设"),
+        "verdict": {"type": "string", "enum": ["CONFIRMED", "REFUTED", "INCONCLUSIVE"]},
+        "note": {"type": "string", "description": "证据依据，确认/排除都必须给"},
+    }, "required": ["name", "verdict", "note"]}
+
+
+def _root_cause_schema() -> dict:
+    return {"type": "object", "properties": {
+        "fault_class": {"type": "string", "enum": _root_cause_ids()},
+        "root_cause": {"type": "string", "description": "为何它最能解释症状（>=20 字）"},
+    }, "required": ["fault_class", "root_cause"]}
+
+
 def _build_tools(tb: Toolbox) -> list:
     """把 Toolbox 包成 SDK 工具。阶段校验仍由 Toolbox 内部执行。"""
 
@@ -79,9 +157,16 @@ def _build_tools(tb: Toolbox) -> list:
         async def run(args: dict[str, Any]) -> dict[str, Any]:
             try:
                 r = fn(args)
-                return {"content": [{"type": "text",
-                                     "text": json.dumps(r, ensure_ascii=False,
-                                                        default=str)[:4000]}]}
+                payload = json.dumps(r, ensure_ascii=False, default=str)
+                if len(payload) > 4000:
+                    # 截断必须可见（与子 agent 的封装同一条规则）：原来硬截到 4000 字
+                    # 不打标，模型拿到半截 JSON 只能猜缺了什么，还看不到末尾的 raw_ref。
+                    payload = json.dumps({
+                        "result_truncated": True,
+                        "raw_ref": (r.get("raw_ref", "") if isinstance(r, dict) else ""),
+                        "hint": "用 fetch_raw(raw_ref) 回取完整原文",
+                        "result": payload[:4000]}, ensure_ascii=False)
+                return {"content": [{"type": "text", "text": payload}]}
             except Exception as exc:
                 # 把拒绝原因如实返回，模型据此调整，而不是反复撞墙
                 return {"content": [{"type": "text",
@@ -151,21 +236,19 @@ def _build_tools(tb: Toolbox) -> list:
 
         tool("set_hypothesis", "给某个假设下裁决。verdict 取 CONFIRMED / "
              "REFUTED / INCONCLUSIVE。必须给出依据。",
-             {"name": str, "verdict": str, "note": str})(
+             _hypothesis_schema(tb))(
             wrap(lambda a: tb.set_hypothesis(a["name"], a["verdict"],
                                              a.get("note", "")))),
 
         tool("declare_root_cause", "声明最终根因。fault_class 必须来自给定枚举。",
-             {"fault_class": str, "root_cause": str})(
+             _root_cause_schema())(
             wrap(lambda a: tb.declare_root_cause(a["fault_class"],
                                                  a["root_cause"]))),
 
         tool("submit_proposal",
              "提交修复提案给安全门。这里不会执行任何东西 —— 提案要经过"
              "AST 校验、风险分级与确认后才由系统执行。必须提供可回滚语句。",
-             {"action_type": str, "sql": str, "rollback": str,
-              "rationale": str, "selected_path_id": str,
-              "fix_id": str, "intervention_target": str})(
+             _proposal_schema(tb))(
             wrap(lambda a: tb.submit_proposal(
                 a["action_type"], a["sql"], a["rollback"],
                 a.get("rationale", ""),
@@ -225,7 +308,7 @@ class LLMPolicy(Policy):
 
     async def _ask(self, prompt: str, tb: Toolbox, phase: Phase) -> str:
         allowed = sorted(allowed_tools(phase, Role.MAIN) - V2_MODEL_FORBIDDEN)
-        srv = create_sdk_mcp_server(SERVER, "1.0.0", _build_tools(tb))
+        srv = create_sdk_mcp_server(SERVER, "1.0.0", _model_tools(tb))
         names = [f"mcp__{SERVER}__{t}" for t in allowed]
 
         opts = ClaudeAgentOptions(
@@ -233,7 +316,8 @@ class LLMPolicy(Policy):
             system_prompt=SYSTEM,
             mcp_servers={SERVER: srv},
             allowed_tools=names,
-            hooks=make_phase_hook(phase, self.blocked),
+            hooks=make_phase_hook(phase, self.blocked,
+                                  extra_denied=_forbidden_for(tb)),
             max_turns=self.max_turns,
             permission_mode="bypassPermissions",
             # 结构性移除内建工具（CLAUDE.md 硬规则 3）：allowed_tools 只是免确认名单，
@@ -242,7 +326,9 @@ class LLMPolicy(Policy):
             # ToolSearch（它负责加载延迟的 MCP 工具 schema，permissions.BUILTIN_ALLOW 也只放它）。
             # hook 保留为第二道防线并继续管 MCP 工具的阶段/角色。
             tools=["ToolSearch"],
-            setting_sources=None,      # 不加载用户/项目设置，保证可复现
+            # [] 才是 SDK 的隔离模式；None 是"全部加载"（含 ~/.claude/settings.json 的
+            # hooks/env/permissions），2026-09-23 审计发现注释写反了。
+            setting_sources=[],
             env=_proxy_env(),
             cwd=str(os.getcwd()),
         )
@@ -251,6 +337,17 @@ class LLMPolicy(Policy):
         try:
             return await self._drain(prompt, opts, phase, text)
         except Exception as exc:
+            if is_agent_terminal(exc):
+                # max_turns 是能力/预算结果，不是瞬时故障：不重试、不抛，把已收集的
+                # 文本交回阶段逻辑，让 PLAN→ESCALATE / INVESTIGATE→DIAGNOSE 的正常出口
+                # 接手（重跑会重复工具调用，第二次失败会把正确诊断随异常作废）。
+                self.usage.append({"phase": phase.value, "agent_terminal":
+                                   str(getattr(exc, "subtype", "") or
+                                       getattr(exc, "terminal_reason", ""))})
+                if self.verbose:
+                    print(f"      [{phase.value}] 阶段在 agent 侧终止（{str(exc)[:60]}），"
+                          "不重试，交回阶段逻辑")
+                return "\n".join(text)
             # 先重试一次：部分失败确实是瞬时的
             if self.verbose:
                 print(f"      [{phase.value}] 调用失败，重试一次: "
@@ -338,8 +435,9 @@ class LLMPolicy(Policy):
                                    "turns": result.turns,
                                    "usage": None})
                 for task_result in result.task_results:
-                    if task_result.error and not is_infra_failure(
-                            text=task_result.error):
+                    if task_result.error and not (
+                            getattr(task_result, "infra", False) or
+                            is_infra_failure(text=task_result.error)):
                         # 停机的报错不进 scratchpad。st.note 默认 status=OBSERVED，
                         # 而 scratchpad_view 会把它塞进下一个子 agent 的 prompt，
                         # 14 条的窗口还会被它挤占 —— 这就是 CLAUDE.md 规则 6 说的

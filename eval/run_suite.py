@@ -42,9 +42,8 @@ def _esc_verdict_of(report) -> str:
     AttributeError 覆盖掉 episode 真正的 error。三率因为在它之前赋值才
     幸存，所以跑批表面看起来是好的。
     """
-    if isinstance(report, dict):
-        return str(report.get("verdict") or "")
-    return str(getattr(report, "verdict", "") or "")
+    from agent.esc import esc_verdict_label
+    return esc_verdict_label(report)
 
 
 @dataclass
@@ -78,6 +77,9 @@ class EpisodeOutcome:
     # 库里），但必须报出来 —— 只报"没出事"不报"伸手几次"，等于拿护盾
     # 的功劳掩盖模型的鲁莽。
     shield_blocked: list = field(default_factory=list)
+    # 打分之后的后处理（metrics_v2 / 成本 / 学习结果）崩了记在这里，episode 仍计分。
+    # 原来任何 harness 异常都把已计分的 episode 标成 unusable 挪出分母（2026-09-23 审计）。
+    harness_error: str = ""
     outcome_note: str = ""
     applied_sql: list = field(default_factory=list)
     violations: list = field(default_factory=list)
@@ -139,7 +141,7 @@ def _model_reachable() -> bool:
         opts = ClaudeAgentOptions(
             model=os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5"),
             system_prompt="只回一个数字。", max_turns=1,
-            permission_mode="bypassPermissions", setting_sources=None,
+            permission_mode="bypassPermissions", setting_sources=[],
             tools=[],            # 探针不需要任何工具
             env=env)
         from agent.failure_class import is_infra_failure
@@ -212,6 +214,7 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
         from agent.llm_policy import LLMPolicy
         policy = LLMPolicy(verbose=False, use_subagents=True, batch_size=2)
 
+    scored = False
     try:
         with DBAScenarioEnv(str(scenario_path), warmup_s=15.0,
                             degrade_timeout_s=90.0, quiet=True) as env:
@@ -251,6 +254,7 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
             out.non_destructive = bool(score.get("non_destructive"))
             out.outcome = bool(score.get("outcome"))
             out.safe_pass = bool(score.get("safe_pass"))
+            scored = True   # 三率已锁定：此后的任何异常都不能撤销它们
             out.steps = res.steps
             out.elapsed_s = res.elapsed_s
             out.esc_verdicts = [_esc_verdict_of(r) for r in res.esc_reports]
@@ -300,6 +304,12 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
             out.shield_blocked = list(
                 (res.audit or {}).get("shield_blocked") or [])
     except Exception as exc:
+        if scored:
+            # unusable 的语义是"没测出东西"，而三率已经有了：后处理崩了只记 harness_error，
+            # episode 留在分母。停机的事后判定若没来得及跑，方向是保守的（留在分母）。
+            out.harness_error = f"{type(exc).__name__}: {exc}"
+            traceback.print_exc()
+            return out
         out.error = f"{type(exc).__name__}: {exc}"
         # 跑批代码自己崩了不是"模型没诊断出来"：标 HARNESS、不进分母，但要在汇总里
         # 喊出来（dead 列表会打印）。停机与脏基线在下面单独归类。
@@ -336,6 +346,15 @@ def _harness_identity() -> dict:
         out["graph_version"] = _g.graph_version()
     except Exception:
         out["graph_version"] = ""
+    # 停机词表认的是自带 CLI 的文案，SDK/CLI 一升级文案就漂；不记版本三率漂了无从归因。
+    try:
+        import claude_agent_sdk as _sdk
+        from claude_agent_sdk._cli_version import __cli_version__ as _cli
+        out["sdk_version"] = str(getattr(_sdk, "__version__", "") or "")
+        out["cli_version"] = str(_cli or "")
+    except Exception:
+        out.setdefault("sdk_version", "")
+        out.setdefault("cli_version", "")
     try:
         from agent.episode_state import DEFAULT_MAX_STEPS
         from agent.explanation import DEFAULT_FRESHNESS_S
@@ -514,6 +533,12 @@ def main() -> None:
     usable = [r for r in results if r.fired and not r.unusable]
     dead = [r for r in results if r.unusable]
     n = max(len(usable), 1)
+    from eval.metrics_v2 import aggregate_episode_metrics
+    aggregate_v2 = aggregate_episode_metrics([asdict(r) for r in usable])
+    harness_errors = [r for r in usable if getattr(r, "harness_error", "")]
+    if harness_errors:
+        print(f"!! {len(harness_errors)} 个 episode 打分后的后处理出错（仍计分）："
+              f"{[(r.fault_class, r.harness_error[:60]) for r in harness_errors]}")
     print(f"\n=== {tag} ===")
     print(f"可用 episode: {len(usable)}/{len(results)}")
     if dead:

@@ -150,6 +150,37 @@ def _report_id(report) -> str:
     })
 
 
+def _need_facts_from_scratchpad(st: EpisodeState, task, needs_by_id: dict
+                                ) -> dict[str, tuple[str | None, list[dict]]]:
+    """每个 need 的采集状态与条目，从 scratchpad 推导，不读子 agent 自报的 collection_status。
+
+    条目由 toolbox 落盘、status 经 EpisodeState.note 枚举校验；报告只是触发器。原来四个
+    读取点（不可得记账、L2/L4 观测、停机判定、KPI）都读模型自报值：模型报 UNKNOWN 就把
+    已绑定的证据记成不可得，报 OBSERVED 就把被合并层拒掉的报告记成工具成功
+    （2026-09-23 审计）。状态：None = 工具没产出任何条目；某 need 的证据类型没有条目
+    但工具有别的条目 = UNKNOWN（如无估计偏差时就没有 row_estimate_deviation）。
+    """
+    entries = [e for e in st.scratchpad
+               if e.get("evidence_task_id") == task.task_id and e.get("raw_ref")]
+    out: dict[str, tuple[str | None, list[dict]]] = {}
+    for need_id in task.need_ids:
+        need = needs_by_id.get(need_id)
+        etype = str(getattr(need, "evidence_type", "") or "")
+        mine = [e for e in entries if not etype or e.get("evidence_type") == etype]
+        statuses = {str(e.get("status") or "") for e in mine}
+        if not entries:
+            out[need_id] = (None, [])
+        elif EvidenceStatus.OBSERVED.value in statuses:
+            out[need_id] = (EvidenceStatus.OBSERVED.value, mine)
+        elif EvidenceStatus.UNKNOWN.value in statuses:
+            out[need_id] = (EvidenceStatus.UNKNOWN.value, mine)
+        elif mine:
+            out[need_id] = (EvidenceStatus.ERROR.value, mine)
+        else:
+            out[need_id] = (EvidenceStatus.UNKNOWN.value, [])
+    return out
+
+
 def merge_evidence_task_results(
         st: EpisodeState, plan: ToolPlan,
         results: list[EvidenceTaskResult]) -> EvidenceMergeResult:
@@ -261,7 +292,10 @@ def _mark_unavailable(st: EpisodeState, plan: ToolPlan,
     if explanation is None:
         return
     by_id = {need.need_id: need for need in needs}
-    unavailable = dict(plan.unavailable_needs)
+    task_map = {task.task_id: task for task in plan.tasks}
+    unavailable: dict[str, dict] = {
+        need_id: {"reason": str(reason), "source": "planner"}
+        for need_id, reason in plan.unavailable_needs.items()}
     for result in results:
         if getattr(result, "budget_exhausted", False):
             # harness 预算到了不是证据不可得（硬规则 6）；单独记一条审计即可。
@@ -270,16 +304,34 @@ def _mark_unavailable(st: EpisodeState, plan: ToolPlan,
                 "task_id": result.task_id, "need_ids": list(result.need_ids),
                 "at": time.time()})
             continue
-        if result.error and not result.reports:
-            for need_id in result.need_ids:
-                unavailable.setdefault(need_id, result.error)
-        for report in result.reports:
-            if report.collection_status != EvidenceStatus.OBSERVED.value:
-                unavailable.setdefault(
-                    report.need_id,
-                    f"collection status {report.collection_status}: " +
-                    "; ".join(report.limitations))
-    for need_id, reason in unavailable.items():
+        task = task_map.get(result.task_id)
+        facts = (_need_facts_from_scratchpad(st, task, by_id) if task is not None
+                 else {need_id: (None, []) for need_id in result.need_ids})
+        reported = {report.need_id: report for report in result.reports}
+        for need_id in result.need_ids:
+            status, entries = facts.get(need_id, (None, []))
+            if status == EvidenceStatus.OBSERVED.value:
+                continue
+            if status is None:
+                row = {"reason": ("tool produced no observation" +
+                                  (f": {result.error}" if result.error else "")),
+                       "source": "task_error" if result.error else "collection_status"}
+            else:
+                summary = "; ".join(
+                    str(e.get("observation") or e.get("summary") or "")[:120]
+                    for e in entries) or f"no {getattr(by_id.get(need_id), 'evidence_type', '')} entry"
+                row = {"reason": f"collection status {status}: {summary}",
+                       "source": "collection_status"}
+            if row["source"] == "task_error":
+                row["infra"] = bool(getattr(result, "infra", False))
+                row["error_kind"] = str(getattr(result, "error_kind", "") or "")
+            report = reported.get(need_id)
+            if report is not None:
+                # 模型自报的状态与局限只进审计，不进 reason、不进任何判据。
+                row["reported_status"] = report.collection_status
+                row["reported_limitations"] = list(report.limitations)[:5]
+            unavailable.setdefault(need_id, row)
+    for need_id, row in unavailable.items():
         need = by_id.get(need_id)
         if (need is not None and
                 need.target_kind == EvidenceTargetKind.P0.value):
@@ -287,10 +339,10 @@ def _mark_unavailable(st: EpisodeState, plan: ToolPlan,
                 if cause_id in explanation.p0_obligations:
                     explanation.resolve_p0(
                         cause_id, ObligationStatus.UNAVAILABLE,
-                        reason=f"required evidence unavailable: {reason}")
+                        reason=f"required evidence unavailable: {row['reason']}")
         st.evidence_task_audit.append({
             "event": "evidence_need_unavailable", "need_id": need_id,
-            "reason": reason, "at": time.time(),
+            "at": time.time(), **row,
         })
 
 
@@ -343,18 +395,22 @@ def _record_tool_learning_observations(
                       if report.need_id == need_id]
             for need_id in task.need_ids
         }
+        facts = _need_facts_from_scratchpad(st, task, need_map)
+        accepted_ids = set(merged.accepted_report_ids)
         for need_id in task.need_ids:
             need = need_map.get(need_id)
             if need is None:
                 continue
             reports = reports_by_need.get(need_id, [])
-            statuses = [report.collection_status for report in reports]
-            if EvidenceStatus.OBSERVED.value in statuses:
-                collection_status = EvidenceStatus.OBSERVED.value
-            elif EvidenceStatus.ERROR.value in statuses or result.error:
-                collection_status = EvidenceStatus.ERROR.value
+            # 采集状态取系统事实（scratchpad 条目），模型自报值另存 reported_status
+            status, _entries = facts.get(need_id, (None, []))
+            if status is None:
+                collection_status = (EvidenceStatus.ERROR.value if result.error
+                                     else EvidenceStatus.UNKNOWN.value)
             else:
-                collection_status = EvidenceStatus.UNKNOWN.value
+                collection_status = status
+            reported_status = next(
+                (report.collection_status for report in reports), "")
             bindings = [binding for binding in
                         explanation.evidence_bindings.values()
                         if binding.evidence_type == need.evidence_type and
@@ -368,8 +424,11 @@ def _record_tool_learning_observations(
             target_still_frontier = any(
                 (need.target_kind, target_id) in current_targets
                 for target_id in need.target_ids)
-            accepted = not any(
-                _report_id(report) in late_reports for report in reports)
+            # "接受"= 至少一份报告真的被合并层接受（被拒/迟到的都不算）；原来只排除迟到
+            # 的，被 raw_ref 校验拒掉的报告仍记成 accepted + OBSERVED 喂给 L4。
+            accepted = bool(reports) and any(
+                _report_id(report) in accepted_ids for report in reports
+            ) and not any(_report_id(report) in late_reports for report in reports)
             observation_id = stable_id("tool_observation", {
                 "episode_id": st.episode_id,
                 "task_id": task.task_id,
@@ -396,6 +455,7 @@ def _record_tool_learning_observations(
                 "tool": task.selected_tools[0],
                 "learning_context": learning_context,
                 "collection_status": collection_status,
+                "reported_status": reported_status,
                 "accepted_for_causal_update": accepted,
                 "changed_statuses": changed if accepted else 0,
                 "pruned_paths": pruned if accepted else 0,

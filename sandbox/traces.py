@@ -47,8 +47,14 @@ class TraceStore:
 
     def fetch_raw(self, ref: str) -> str:
         """按需回取原文。99% 的情况下用不到，但 ESC 核验证据取值时需要。"""
-        step = ref.rsplit("/", 1)[-1]
-        p = self.dir / f"{step}.json"
+        # ref 必须是本 episode 的 trace://<episode_id>/step_NNN。原来只取最后一段，
+        # 跨 episode 的历史 ref、案例库里抄来的 ref、随手拼的 step_003 都会静默命中
+        # 本 episode 同序号的文件（2026-09-23 审计）。
+        prefix = f"trace://{self.episode_id}/step_"
+        step_no = ref[len(prefix):] if ref.startswith(prefix) else ""
+        if not (step_no.isdigit() and len(step_no) == 3):
+            raise KeyError(f"非法或非本 episode 的 raw_ref: {ref}")
+        p = self.dir / f"step_{step_no}.json"
         if not p.exists():
             raise KeyError(ref)
         return json.loads(p.read_text(encoding="utf-8"))["raw"]

@@ -541,8 +541,9 @@ def render_prior_v2(hits: list[dict], budget_chars: int = 700) -> str:
 
 
 def _latest_sufficient_esc(st) -> dict:
+    from agent.esc import esc_is_genuinely_sufficient
     for report in reversed(getattr(st, "esc_reports", []) or []):
-        if report.get("verdict") == "SUFFICIENT":
+        if esc_is_genuinely_sufficient(report):
             return report
     return {}
 

@@ -667,20 +667,37 @@ def _sql_facts(sql: str) -> dict[str, Any]:
     elif isinstance(statement, ast.VariableSetStmt):
         facts["parameter"] = str(statement.name or "")
     elif isinstance(statement, ast.SelectStmt):
-        for target in statement.targetList or ():
-            call = getattr(target, "val", None)
-            if not isinstance(call, ast.FuncCall):
-                continue
-            function = ".".join(
-                str(getattr(part, "sval", "") or "")
-                for part in call.funcname or ())
-            if function != "pg_terminate_backend" or not call.args:
-                continue
-            value = getattr(call.args[0], "val", None)
-            pid = getattr(value, "ival", None)
-            if isinstance(pid, int) and pid > 0:
-                facts["pid"] = pid
+        # pid 只在语句形态合规时才算绑定：恰好一条 SELECT pg_terminate_backend(<常量>)。
+        # 原来只要目标列表里有一个字面量 pid 就算，
+        # `..., pg_terminate_backend(pid) FROM pg_stat_activity` 的第二项会掐掉整库会话
+        # （2026-09-23 审计）。判定与 gate.assess 共用 shield 的同一个函数。
+        from safety import shield
+        shape_ok, _reasons, pid = shield.inspect_session_control(sql)
+        if shape_ok and pid:
+            facts["pid"] = pid
     return facts
+
+
+_TABLE_KEYS = ("table", "relname", "relation", "table_name", "tablename")
+
+
+def _binding_tables(bindings) -> dict[str, set[str]]:
+    """每条可信绑定的结构化值里出现过的表名（小写、去 schema）。
+    执行计划的 scan_types 形如 "Seq Scan on orders"，也算。"""
+    out: dict[str, set[str]] = {}
+    for binding in bindings:
+        names: set[str] = set()
+        for row in _walk_dicts(binding.structured_value()):
+            for key in _TABLE_KEYS:
+                value = row.get(key)
+                if isinstance(value, str) and value.strip():
+                    names.add(value.strip().split(".")[-1].lower())
+            for item in row.get("scan_types") or []:
+                if isinstance(item, str) and " on " in item:
+                    names.add(item.rsplit(" on ", 1)[-1].strip().lower())
+        if names:
+            out[binding.raw_ref] = names
+    return out
 
 
 def _walk_dicts(value: Any):
@@ -741,6 +758,24 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
             if pid is not None and str(row_pid) == str(pid):
                 pid_rows.append((binding, row))
 
+    relevant = _plan_bindings(st, path, target=target, fix_id=fix_id)
+    evidence_tables = _binding_tables(relevant) or _binding_tables(bindings)
+
+    def table_matches_evidence(table: str, why: str) -> tuple[bool, str, list[str]]:
+        # 目标表必须是证据里出现过的表。原来只要求"绑了某张表"，`ANALYZE customers`
+        # 也能在 orders 的统计过期证据上过门（2026-09-23 审计）。证据里没有任何表名
+        # （库级证据）时退回只查 AST 绑定，并把这一点写进 reason。
+        if not table:
+            return False, "SQL AST binds no concrete table", []
+        if not evidence_tables:
+            return True, f"{why} (evidence exposes no table name; AST-bound only)", []
+        wanted = table.split(".")[-1].lower()
+        refs = [ref for ref, names in evidence_tables.items() if wanted in names]
+        if refs:
+            return True, f"{why}; table {table} appears in trusted evidence", refs
+        known = sorted(set().union(*evidence_tables.values()))
+        return False, f"table {table} is not among evidence tables {known}", []
+
     def structural(condition_id: str) -> tuple[bool, str, list[str]]:
         statement = facts["statement"]
         if condition_id == "concrete_index_definition_bound":
@@ -756,12 +791,14 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
                     "proposed index table/columns match the counterfactual trace",
                     matching_refs)
         if condition_id == "concrete_table_bound":
-            ok = bool(facts["table"])
-            return ok, "SQL AST binds one concrete table", []
+            return table_matches_evidence(facts["table"],
+                                          "SQL AST binds one concrete table")
         if condition_id in {"table_is_vacuumable",
                             "target_database_or_table_is_vacuumable"}:
-            ok = isinstance(statement, ast.VacuumStmt) and bool(facts["table"])
-            return ok, "VACUUM AST binds a concrete relation", []
+            if not isinstance(statement, ast.VacuumStmt):
+                return False, "statement is not VACUUM/ANALYZE", []
+            return table_matches_evidence(facts["table"],
+                                          "VACUUM AST binds a concrete relation")
         if condition_id == "concrete_pid_bound":
             return pid is not None, "SQL AST binds one positive backend PID", []
         if condition_id == "session_or_transaction_scope_only":

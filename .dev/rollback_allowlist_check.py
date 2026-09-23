@@ -72,8 +72,15 @@ check(not inspect_rollback(ALT, "ALTER TABLE orders DROP COLUMN status").allowed
 
 print("[5] 标记与不配对的类别")
 check(inspect_rollback(VAC, "NO_ROLLBACK_NEEDED").allowed, "自愈类 + NO_ROLLBACK_NEEDED 放行（由 gate 按类别校验）")
-check(inspect_rollback(VAC, "SELECT 1").allowed, "自愈类 + 只读 SELECT 允许（无害，gate_check 的用例）")
+# 2026-09-23 审计：只读 SELECT 也不再放行 —— "只读"原来靠顶层类型判，数据修改 CTE、
+# SELECT INTO 都是顶层 SelectStmt，会以 agent_rw 真跑。回滚 ANALYZE 用 SELECT 本无意义。
+check(not inspect_rollback(VAC, "SELECT 1").allowed, "自愈类 + 只读 SELECT 拒绝（不再有 SELECT 形态）")
+check(not inspect_rollback(VAC, "WITH d AS (DELETE FROM orders WHERE status = 'P' RETURNING 1) SELECT count(*) FROM d").allowed,
+      "自愈类 + 数据修改 CTE 拒绝（原来按顶层 SelectStmt 放行）")
+check(not inspect_rollback(VAC, "SELECT * INTO orders_bak FROM orders").allowed, "自愈类 + SELECT INTO 拒绝")
 check(inspect_rollback(VAC, "VACUUM orders").allowed, "自愈类 + 再一次 VACUUM 允许")
+check(not inspect_rollback(VAC, "VACUUM (FULL) orders").allowed, "自愈类 + VACUUM (FULL) 拒绝")
+check(inspect_rollback(VAC, "NO_ROLLBACK_NEEDED;").allowed, "带分号的标记按标记认（归一化只有一份）")
 check(not inspect_rollback(VAC, "UPDATE orders SET status = 'X' WHERE id = 1").allowed, "自愈类 + DML 拒绝（回滚不能成为写入口）")
 check(not inspect_rollback(VAC, "SELECT pg_terminate_backend(1)").allowed, "自愈类 + 带副作用函数的 SELECT 拒绝")
 check(inspect_rollback(KILL, "IRREVERSIBLE").allowed, "会话控制 + IRREVERSIBLE 放行")

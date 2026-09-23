@@ -123,6 +123,19 @@ def is_infra_failure(exc: BaseException | None = None, text: str = "") -> bool:
     return any(marker in low for marker in _INFRA_MARKERS)
 
 
+def is_agent_terminal(exc: BaseException | None) -> bool:
+    """agent 侧的确定性终止（max_turns / aborted_*）。
+
+    这不是瞬时故障：重跑一次等于把阶段里的工具调用（含 simulate_index、submit_proposal）
+    再执行一遍（规则 6），第二次失败再把异常抛到顶，之前已确定的根因随 episode 一起作废
+    （实测 ep_connection_exhaustion_eval_v1_1790069129：诊断正确、PLAN 两次撞 max_turns、
+    D=None）。llm_policy._ask 对它不重试、不抛，把已收集的文本交回阶段逻辑。"""
+    if exc is None:
+        return False
+    return (getattr(exc, "subtype", None) in _AGENT_SUBTYPES or
+            getattr(exc, "terminal_reason", None) in _AGENT_TERMINAL)
+
+
 def observed_subagent_count(audit) -> int:
     """子 agent 渠道真正取到证据的条数。
 
@@ -159,6 +172,17 @@ def infra_rows_of(audit) -> list[dict]:
     out = []
     for item in audit or []:
         if item.get("event") != "evidence_need_unavailable":
+            continue
+        # 新审计行带类型化标记：infra 在 investigator 捕获异常、类型化字段还在手里的那一刻
+        # 算出（规则 4），source 说明这行来自任务异常 / 采集状态 / 规划器。子 agent 自述的
+        # limitations 原来被拼进 reason 再做子串匹配，一句 "server overloaded" 就能把
+        # episode 从分母里删掉（2026-09-23 审计）。文本匹配只留给没有标记的旧 trace。
+        if "infra" in item:
+            if item["infra"]:
+                out.append(item)
+            continue
+        source = item.get("source")
+        if source and source != "task_error":
             continue
         if is_infra_failure(text=str(item.get("reason") or "")):
             out.append(item)

@@ -89,6 +89,9 @@ responses = [
 ]
 
 st = EpisodeState(episode_id="cumulative_unit", scenario_id="x")
+# 这段夹具走 v1 的 declare_root_cause 路径（D1-lite 必需证据检查）；v2 下模型不能直接声明根因
+# （2026-09-23 模型边界审计），所以显式用 v1。
+st.schema_version = 1
 st.budget["max_steps"] = 30
 tb = Toolbox(FakeObserver(responses), st, StateMachine(st))
 

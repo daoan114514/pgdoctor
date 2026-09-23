@@ -24,14 +24,38 @@ if TYPE_CHECKING:
     from sandbox.observe import Observer
 
 
+# _enter 里要与目标上下文对照的参数键；raw_ref 由 traces 层校验，include_idle 不是目标。
+_TARGET_KEYS = frozenset({"hot_query", "table"})
+
+
+def _normal_sql(text: str) -> str:
+    """目标对照用的归一化：压空白、去尾随分号与空白。两边都经这里。"""
+    return " ".join(str(text or "").split()).rstrip(";").rstrip()
+
+
+def _explain_failure_is_database_side(exc: BaseException) -> bool:
+    """EXPLAIN 失败里只有"数据库给不出计划"的那些才算观测（explain_unavailable）：
+    权限不足、语句超时、拿不到锁、连接层故障。"""
+    import psycopg
+    return isinstance(exc, (psycopg.errors.InsufficientPrivilege,
+                            psycopg.errors.QueryCanceled,
+                            psycopg.errors.LockNotAvailable,
+                            psycopg.OperationalError))
+
+
 class Toolbox:
     def __init__(self, observer: Observer, state: EpisodeState, sm: StateMachine,
                  *, role: Role = Role.MAIN, task_context: Any = None,
                  environment_tools: set[str] | None = None,
                  hypothesis: str | None = None,
                  calls: list[str] | None = None,
-                 evidence_ref_cache: dict[tuple[str, str], str] | None = None):
+                 evidence_ref_cache: dict[tuple[str, str], str] | None = None,
+                 target_context: dict | None = None):
         self.o = observer
+        # MAIN 角色的目标上下文（热查询 / 表）。子 agent 由 task_context 带；主 agent
+        # 原来没有，PLAN 阶段自由 SQL 产出的观测会以"关于热查询"的身份被绑定并参与判据
+        # （2026-09-23 审计）。由 loop 注入；不传（离线夹具）则不做对照。
+        self.target_context = dict(target_context) if target_context else None
         self.st = state
         self.sm = sm
         self.role = role
@@ -49,7 +73,8 @@ class Toolbox:
         return Toolbox(
             self.o, self.st, self.sm, role=role, task_context=task_context,
             environment_tools=environment_tools, hypothesis=hypothesis,
-            calls=self.calls, evidence_ref_cache=self._evidence_ref_cache)
+            calls=self.calls, evidence_ref_cache=self._evidence_ref_cache,
+            target_context=self.target_context)
 
     def _enter(self, tool: str,
                call_target: dict[str, str] | None = None) -> None:
@@ -61,25 +86,38 @@ class Toolbox:
             raise PhaseViolation(
                 f"{self.role.value} 角色在 {self.sm.phase.value} 阶段不允许调用 "
                 f"{tool}；有效工具集: {sorted(allowed) or '(无)'}")
-        if self.task_context is not None and call_target:
-            target_context = (self.task_context.get("target_context", {})
-                              if isinstance(self.task_context, dict) else
-                              getattr(self.task_context, "target_context", {}))
+        target_context = self._target_context()
+        if call_target and target_context is not None:
             for key, actual in call_target.items():
+                if key not in _TARGET_KEYS:
+                    continue
                 expected = str(target_context.get(key) or "")
                 if not expected:
-                    continue
-                normal_expected = " ".join(expected.split()).rstrip(";")
-                normal_actual = " ".join(str(actual).split()).rstrip(";")
+                    # 目标未知时拒绝而不是跳过：跳过等于把对照关掉，模型可以随便指定
+                    # 表/SQL，产出的观测会以"关于目标"的身份被绑定（2026-09-23 审计）。
+                    raise PhaseViolation(
+                        f"{tool} 的目标 {key} 在 target_context 里未知"
+                        "（热查询解析失败？），拒绝调用")
+                normal_expected = _normal_sql(expected)
+                normal_actual = _normal_sql(str(actual))
                 if normal_actual != normal_expected:
                     raise PhaseViolation(
                         f"{tool} target {key} does not match the assigned "
-                        "EvidenceNeed target")
+                        f"target (expected {normal_expected[:160]!r})")
         self.calls.append(tool)
         if not self.st.spend():
             if self.role is Role.INVESTIGATOR:
                 raise EvidenceBudgetExhausted("取证预算耗尽：停止调用工具，直接汇报已有观测")
             raise RuntimeError("预算耗尽")
+
+    def _target_context(self) -> dict | None:
+        """对照用的目标上下文：子 agent 取任务的，主 agent 取 loop 注入的。"""
+        if self.task_context is not None:
+            tc = (self.task_context.get("target_context", {})
+                  if isinstance(self.task_context, dict) else
+                  getattr(self.task_context, "target_context", {}))
+            return dict(tc or {})
+        return self.target_context
 
     def _evidence(self, kind: str, raw_ref: str, summary: str,
                   bears_on: list[str] | None = None,
@@ -179,6 +217,11 @@ class Toolbox:
         try:
             d = self.o.explain_query(sql, params)
         except Exception as exc:
+            if not _explain_failure_is_database_side(exc):
+                # 语法错、表不存在、占位符缺参、被只读白名单拒 —— 是模型把参数写错了，
+                # 不是观测；落盘成 explain_unavailable 就是规则 6 的"动作制造证据"。
+                # 原样抛出，wrap 会以 is_error 回给模型改。
+                raise
             # 只读连接 EXPLAIN 不了写操作。这不是 bug 而是权限隔离的
             # 必然结果 —— 把原因如实返回，让 agent 换用 pg_locks 之类
             # 的取证手段，而不是让 episode 崩掉。
@@ -603,8 +646,19 @@ class Toolbox:
         self.st.note("agent", kind, observation, "", bears_on or [])
         return "recorded"
 
+    def _model_verdicts_allowed(self, tool: str) -> None:
+        """v2 下裁决与根因由解释图投影产生，模型不能直接声明。与 llm_policy._forbidden_for、
+        make_phase_hook 是同一条规则的三个读取点，这里是最底层的那个（规则 4）。"""
+        if getattr(self.st, "schema_version", 2) == 2:
+            raise PhaseViolation(
+                f"{tool} 在 v2 下不可用：裁决与根因由解释图投影产生，模型不能直接声明")
+
     def set_hypothesis(self, name: str, verdict: str, note: str = "") -> str:
         self._enter("set_hypothesis")
+        self._model_verdicts_allowed("set_hypothesis")
+        candidates = list(self.st.hypothesis_candidates or [])
+        if candidates and name not in candidates:
+            raise ValueError(f"{name} 不在候选假设集合 {sorted(candidates)} 内")
         v = Verdict(verdict)
         if v is Verdict.REFUTED_BY_REMEDIATION:
             raise ValueError("该裁决只能由修复失败产生，不能由 agent 直接声明")
@@ -626,6 +680,16 @@ class Toolbox:
 
     def declare_root_cause(self, fault_class: str, root_cause: str) -> str:
         self._enter("declare_root_cause")
+        self._model_verdicts_allowed("declare_root_cause")
+        # fault_class 必须是图上的根因节点：未知串（"MISSING_INDEX"、"missing-index"）原来
+        # 反而更容易通过 —— required_evidence 对不在图上的节点返回 []，D1-lite 无缺可查，
+        # 然后以一个不存在的根因进打分与案例库（2026-09-23 审计）。
+        from knowledge.causal_graph import graph as _G
+        node = _G.load().nodes.get(fault_class)
+        if not node or node.get("kind") != "RootCause":
+            roots = sorted(n for n, d in _G.load().nodes(data=True)
+                           if d.get("kind") == "RootCause")
+            raise ValueError(f"{fault_class} 不是因果图上的根因；合法值: {roots}")
         if self.st.already_failed(fault_class):
             raise ValueError(
                 f"{fault_class} 此前修复失败并已被反证；除非有新证据，否则不能重提")
@@ -633,7 +697,6 @@ class Toolbox:
         # 声明根因比设置假设更重，门槛只能更高不能更低。
         # 必需证据必须已经在轨迹里 —— 这是 ESC 的 D1 会查的东西，
         # 在声明时就查一遍能让模型立刻拿到反馈，而不是等到 ESC 才被打回。
-        from knowledge.causal_graph import graph as _G
         required = _G.required_evidence(fault_class)
         got = {e["evidence_type"] for e in self.st.scratchpad
                if evidence_is_observed(e)}

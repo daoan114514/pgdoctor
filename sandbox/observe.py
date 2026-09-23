@@ -182,6 +182,13 @@ class Observer:
         return self.last_raw_refs.get(tool, "")
 
     def explain_query(self, sql: str, params: dict | None = None) -> ExplainDigest:
+        # 只读连接挡写权限，挡不住 pg_sleep / advisory lock / 数据修改 CTE / 无 WHERE
+        # 大排序污染 temp 计数器（CLAUDE.md 规则 6）。语句先过 AST 白名单，不合规直接拒，
+        # 由调用方回给模型，不落盘为证据。
+        from safety import shield
+        verdict = shield.inspect_readonly(sql)
+        if not verdict.allowed:
+            raise ValueError("拒绝 EXPLAIN: " + "; ".join(verdict.reasons))
         run_sql, mode = _readonly_proxy(sql)
         with db.connect(role="ro") as conn, conn.cursor() as cur:
             cur.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + run_sql, params or {})
@@ -509,6 +516,15 @@ class Observer:
         return out
 
     def get_indexes(self, table: str) -> list[dict]:
+        # 表不存在与"表上没索引"原来都是 []，而 [] 会被当成 missing_index 的必需证据
+        # index_existence 已满足（2026-09-23 审计）。先按 to_regclass 解析成规范名，
+        # 解析不到就像 get_table_stats 一样 KeyError；"Orders" / public.orders 归一到 orders。
+        resolved = db.query(
+            "SELECT c.relname FROM pg_class c WHERE c.oid = to_regclass(%s)",
+            (table,), role="ro")
+        if not resolved:
+            raise KeyError(table)
+        table = str(resolved[0][0])
         rows = db.query(
             "SELECT i.indexname, i.indexdef,"
             " pg_size_pretty(pg_relation_size(i.indexname::regclass)), s.idx_scan"

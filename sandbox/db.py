@@ -34,9 +34,18 @@ def dsn(role: str = "super", dbname: str | None = None) -> str:
     )
 
 
+# 只读探测连接的语句上限。agent 给的 SQL 会真跑 EXPLAIN ANALYZE，没有上限时一条
+# pg_sleep 或无 WHERE 的大排序能把整个 episode 挂到墙钟上限（2026-09-23 审计）。
+# 用连接选项而不是 SET：SET 在被回滚的事务里会跟着失效。
+RO_STATEMENT_TIMEOUT_MS = 120_000
+
+
 @contextmanager
 def connect(role: str = "super", dbname: str | None = None, autocommit: bool = True):
-    conn = psycopg.connect(dsn(role, dbname), autocommit=autocommit)
+    kwargs = {}
+    if role == "ro":
+        kwargs["options"] = f"-c statement_timeout={RO_STATEMENT_TIMEOUT_MS}"
+    conn = psycopg.connect(dsn(role, dbname), autocommit=autocommit, **kwargs)
     try:
         yield conn
     finally:

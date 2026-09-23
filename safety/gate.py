@@ -174,27 +174,32 @@ def _graph_context(p: RemediationProposal) -> tuple[dict, dict, GateDecision | N
     return fix, risk, None
 
 
-def _table_rows(table: str) -> int:
+def _table_rows(table: str, schema: str = "") -> int:
     """返回估算行数；-1 表示查不到（按保守处理）。"""
-    if table in _SIZE_CACHE:
-        return _SIZE_CACHE[table]
+    key = f"{schema}.{table}" if schema else table
+    if key in _SIZE_CACHE:
+        return _SIZE_CACHE[key]
     try:
-        r = db.query("SELECT reltuples::bigint FROM pg_class WHERE relname = %s",
-                     (table,), role="ro")
+        r = db.query(
+            "SELECT c.reltuples::bigint FROM pg_class c"
+            " JOIN pg_namespace n ON n.oid = c.relnamespace"
+            " WHERE c.relname = %s AND (%s = '' OR n.nspname = %s)"
+            " AND c.relkind IN ('r', 'p', 'm') ORDER BY 1 DESC LIMIT 1",
+            (table, schema, schema), role="ro")
         n = int(r[0][0]) if r else -1
     except Exception:
         n = -1
-    _SIZE_CACHE[table] = n
+    _SIZE_CACHE[key] = n
     return n
 
 
 def _blast_radius(sql: str) -> str:
-    tables = set(re.findall(r"\bON\s+(\w+)|\bFROM\s+(\w+)|\bTABLE\s+(\w+)",
-                            sql, flags=re.I))
-    flat = {t for tup in tables for t in tup if t}
-    if not flat:
+    # 表名从 AST 的 RangeVar 取。原来是正则 `ON (word)`：`ON "orders"` 带引号抓空，
+    # radius 变成 "session"，大表非并发建索引从 DENY 降到 CONFIRM（2026-09-23 审计）。
+    tables = shield.target_tables(sql)
+    if not tables:
         return "session"
-    sizes = [_table_rows(t) for t in flat]
+    sizes = [_table_rows(name, schema) for schema, name in tables]
     if any(s < 0 for s in sizes):
         return "unknown"          # 查不到规模就按大表对待
     if any(s >= LARGE_TABLE_ROWS for s in sizes):
@@ -240,16 +245,25 @@ def assess(p: RemediationProposal) -> GateDecision:
                  f"NO_ROLLBACK_NEEDED 以示知情"])
         return denial("ROLLBACK_INVALID", RetryPhase.PLAN, ["缺少回滚语句"])
 
-    if p.rollback.strip().upper() == "NO_ROLLBACK_NEEDED":
+    # 标记识别只有一份：undo_journal.normalize_rollback。原来这里、is_marker 与
+    # inspect_rollback 各归一化一次且不一致，`IRREVERSIBLE;` 能让 create_index 跳过回滚配对。
+    if undo_journal.is_no_rollback_needed(p.rollback):
         if actual not in SELF_CORRECTING:
             return denial(
                 "ROLLBACK_INVALID", RetryPhase.PLAN,
                 [f"{actual} 会改变数据或结构，不能声明无需回滚"])
 
-    if p.rollback.strip().upper() == "IRREVERSIBLE":
+    if undo_journal.is_irreversible(p.rollback):
         if actual != "session_control":
             return denial("ROLLBACK_INVALID", RetryPhase.PLAN,
                           [f"{actual} 不允许标记为不可逆"])
+        # 会话控制的肯定式形态：恰好一条 SELECT pg_terminate_backend(<常量>)。
+        # 分类只说明"含有该函数"，`..., pg_terminate_backend(pid) FROM pg_stat_activity`
+        # 也会被分类成 session_control（2026-09-23 审计）。
+        shape_ok, shape_reasons, _pid = shield.inspect_session_control(p.sql)
+        if not shape_ok:
+            return denial("SQL_INVALID", RetryPhase.PLAN,
+                          ["会话控制语句形态不合规"] + shape_reasons, risk=graph_risk)
         return GateDecision(Tier.CONFIRM.value, True,
                             ["终止会话不可撤销，已显式声明并需人工确认"],
                             {**graph_risk,
@@ -297,10 +311,12 @@ def assess(p: RemediationProposal) -> GateDecision:
         else:
             reasons.append("小表上并发建索引，可自动执行")
     elif actual == "vacuum_analyze":
-        if "VACUUM FULL" in p.sql.upper():
+        # FULL 从 AST 的 options 读：`VACUUM (FULL) t` 不含子串 "VACUUM FULL"。
+        vf = shield.vacuum_facts(p.sql)
+        if vf["full"]:
             tier = Tier.DENY
             reasons.append("VACUUM FULL 会重写整表并持排他锁")
-        elif p.sql.strip().upper().startswith("ANALYZE"):
+        elif not vf["is_vacuumcmd"]:
             reasons.append("ANALYZE 只更新统计信息，可自动执行")
         else:
             tier = Tier.CONFIRM
@@ -364,9 +380,9 @@ def assess(p: RemediationProposal) -> GateDecision:
 def _preflight(p: RemediationProposal) -> tuple[bool, str]:
     """执行前检查：批准不等于立刻执行。"""
     if shield.classify(p.sql) == "create_index":
-        m = re.search(r"\bON\s+(\w+)\s*\(([^)]+)\)", p.sql, flags=re.I)
-        if m:
-            table, cols = m.group(1), m.group(2)
+        facts = shield.index_facts(p.sql)
+        if facts["table"]:
+            table, cols = facts["table"], ", ".join(facts["columns"])
             # 磁盘余量：建索引需要额外空间
             try:
                 free = db.query(

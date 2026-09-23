@@ -25,6 +25,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ResultMessag
                               ToolUseBlock, create_sdk_mcp_server, query,
                               tool)
 
+from agent.failure_class import is_agent_terminal, is_infra_failure
 from agent.hooks import make_phase_hook
 from agent.permissions import (INVESTIGATOR_DENIED, Role, allowed_tools)
 from agent.episode_state import EvidenceBudgetExhausted, EvidenceStatus
@@ -153,6 +154,11 @@ class EvidenceTaskResult:
     budget_exhausted: bool = False
     # "subagent"：起了 SDK 会话；"deterministic"：编排器进程内直接调工具生成报告。
     executor: str = "subagent"
+    # 任务异常的类型化分类，在 except 里异常对象还在手里时算出（规则 4）：下游读取点
+    # （不可得审计、停机判定、学习层）只读这个标记，不再对 error 字符串做子串匹配。
+    infra: bool = False
+    error_kind: str = ""
+    agent_terminal: bool = False
 
 
 
@@ -280,7 +286,20 @@ def _ref_list_arg(value) -> list[str]:
 
 
 def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
-               call_cache: dict | None = None) -> list:
+               call_cache: dict | None = None, task=None) -> list:
+    # need_id / tool 是封闭集合（本任务指派的），按任务写进 schema 的 enum；handler 再校验
+    # 一次并即时返回 is_error 让模型当轮改正。原来事后在第一条坏报告处 raise，其后的
+    # 合法报告一起丢，三个 need 各记一条不可得（2026-09-23 审计）。
+    assigned_needs = list(getattr(task, "need_ids", []) or []) if task is not None else []
+    assigned_tools = list(getattr(task, "selected_tools", []) or []) if task is not None else []
+    report_schema = REPORT_EVIDENCE_SCHEMA
+    if assigned_needs or assigned_tools:
+        report_schema = json.loads(json.dumps(REPORT_EVIDENCE_SCHEMA))
+        if assigned_needs:
+            report_schema["properties"]["need_id"]["enum"] = assigned_needs
+        if assigned_tools:
+            report_schema["properties"]["tool"]["enum"] = assigned_tools
+
     def wrap(fn):
         async def run(args: dict[str, Any]) -> dict[str, Any]:
             try:
@@ -349,7 +368,7 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
           "不得返回根因结论或支持/反证方向。"
           "raw_refs 是数组，只能填工具结果 evidence_raw_refs 里的值。"
           + COLLECTION_STATUS_HELP,
-          REPORT_EVIDENCE_SCHEMA)
+          report_schema)
     async def report_evidence(args):
         try:
             observations = args.get("observations", [])
@@ -370,6 +389,19 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
             return {"content": [{"type": "text",
                                  "text": f"EvidenceReport 无效: {exc}"}],
                     "is_error": True}
+        def reject(msg: str):
+            return {"content": [{"type": "text", "text": msg}], "is_error": True}
+        if assigned_needs and report.need_id not in assigned_needs:
+            return reject(f"need_id {report.need_id} 不在本任务指派内，合法值: {assigned_needs}")
+        if assigned_tools and report.tool not in assigned_tools:
+            return reject(f"tool {report.tool} 不是本任务指派的工具，合法值: {assigned_tools}")
+        existing = sink.get("evidence_reports", {}).get(report.need_id)
+        if (existing and existing.get("collection_status") == EvidenceStatus.OBSERVED.value
+                and report.collection_status != EvidenceStatus.OBSERVED.value):
+            # 后写覆盖先写会让一份合格的 OBSERVED 报告被随后的 UNKNOWN/ERROR 顶掉，
+            # 合并层永远看不到它；反方向（先 ERROR 后 OBSERVED）是正常纠错，保留。
+            return reject(f"{report.need_id} 已有 OBSERVED 报告，不能用 "
+                          f"{report.collection_status} 覆盖；如需修正请给出新的 OBSERVED 报告")
         sink.setdefault("evidence_reports", {})[report.need_id] = report.to_dict()
         sink["evidence_report"] = report.to_dict()  # single-need compatibility
         return {"content": [{"type": "text", "text": "已记录证据回传"}]}
@@ -457,7 +489,7 @@ async def investigate(hypothesis: str, brief: str, tb: Toolbox,
         # ToolSearch（它负责加载延迟的 MCP 工具 schema，permissions.BUILTIN_ALLOW 也只放它）。
         # hook 保留为第二道防线并继续管 MCP 工具的阶段/角色。
         tools=["ToolSearch"],
-        setting_sources=None,
+        setting_sources=[],        # [] 才是隔离模式；None 会加载 ~/.claude 的设置
         env=_proxy_env(),
     )
 
@@ -558,7 +590,7 @@ async def investigate_task(task: PlannedEvidenceTask, needs: list[EvidenceNeed],
         environment_tools=environment_tools)
     call_cache: dict = {}
     tools = [item for item in _tools_for(
-        scoped_tb, sink, include_evidence_refs=True, call_cache=call_cache)
+        scoped_tb, sink, include_evidence_refs=True, call_cache=call_cache, task=task)
         if getattr(item, "name", "") in wanted]
     srv = create_sdk_mcp_server(SERVER, "1.0.0", tools)
     names = [f"mcp__{SERVER}__{tool_name}" for tool_name in sorted(wanted)]
@@ -578,7 +610,7 @@ async def investigate_task(task: PlannedEvidenceTask, needs: list[EvidenceNeed],
         # ToolSearch（它负责加载延迟的 MCP 工具 schema，permissions.BUILTIN_ALLOW 也只放它）。
         # hook 保留为第二道防线并继续管 MCP 工具的阶段/角色。
         tools=["ToolSearch"],
-        setting_sources=None,
+        setting_sources=[],        # [] 才是隔离模式；None 会加载 ~/.claude 的设置
         env=_proxy_env(),
     )
     prompt = f"""Hot query:
@@ -631,6 +663,9 @@ Do not decide causal direction."""
                 result.cost_usd = getattr(msg, "total_cost_usd", 0.0) or 0.0
     except Exception as exc:
         result.error = f"{type(exc).__name__}: {exc}"
+        result.error_kind = type(exc).__name__
+        result.infra = is_infra_failure(exc)
+        result.agent_terminal = is_agent_terminal(exc)
 
     payloads = sink.get("evidence_reports", {})
     if payloads:

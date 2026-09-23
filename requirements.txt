@@ -1,5 +1,5 @@
 # ── MVP (W1–W4) ──
-claude-agent-sdk>=0.1.16     # 需要 Python 3.10+
+claude-agent-sdk==0.2.157    # 钉死：停机词表与工具面依赖自带 CLI（2.1.277）的行为与文案，升级要重标定 .dev/infra_failure_check.py
 psycopg[binary]>=3.1         # PostgreSQL 驱动
 pglast>=5.0                  # Postgres 原生 SQL 解析器 → 护盾的 AST 黑名单与防伪校验
 networkx>=3.0                # 故障因果图

@@ -85,6 +85,7 @@ r = call("COMPLETE")
 txt = r["content"][0]["text"]
 check(bool(r.get("is_error")) and "invalid collection status" in txt,
       "COMPLETE 仍被拒（不做同义词映射，只告诉它合法值）")
+rep, sink = _make_tool()   # 新 sink：同一 need 已有 OBSERVED 时，UNKNOWN 会被"不降级"规则拒掉
 r = call("UNKNOWN")
 check(not r.get("is_error"), "UNKNOWN 被接受")
 
@@ -137,6 +138,41 @@ got = sink.get("evidence_reports", {}).get("need_x") or {}
 check(not r.get("is_error") and got.get("raw_refs") == two and
       got.get("observations") == [{"k": 1}, {"k": 2}] and got.get("limitations") == [],
       "按 schema 传真数组时原样入账")
+
+print("[7] need_id / tool 按任务生成枚举，坏值即时拒绝，OBSERVED 不被降级覆盖")
+from types import SimpleNamespace  # noqa: E402
+
+
+def _make_task_tool():
+    class _TB:
+        def __getattr__(self, name):
+            raise AssertionError(f"不该调用 toolbox.{name}")
+    sink: dict = {}
+    task = SimpleNamespace(need_ids=["need_x", "need_y"], selected_tools=["explain_query"])
+    tools = inv._tools_for(_TB(), sink, include_evidence_refs=False, call_cache={}, task=task)
+    rep = [t for t in tools if getattr(t, "name", "") == "report_evidence"][0]
+    return rep, sink
+
+
+rep, sink = _make_task_tool()
+props = rep.input_schema["properties"]
+check(props["need_id"].get("enum") == ["need_x", "need_y"], "need_id 的 enum 是本任务指派的 need")
+check(props["tool"].get("enum") == ["explain_query"], "tool 的 enum 是本任务指派的工具")
+check("enum" not in inv.REPORT_EVIDENCE_SCHEMA["properties"]["need_id"], "模块级 schema 没被按任务的副本改动")
+r = asyncio.run(rep.handler(dict(base, need_id="need_z", collection_status="OBSERVED")))
+check(bool(r.get("is_error")) and "need_z" in r["content"][0]["text"], "不在指派内的 need_id 即时拒绝")
+r = asyncio.run(rep.handler(dict(base, tool="get_indexes", collection_status="OBSERVED")))
+check(bool(r.get("is_error")), "不在指派内的 tool 即时拒绝")
+r = asyncio.run(rep.handler(dict(base, collection_status="OBSERVED")))
+check(not r.get("is_error") and sink["evidence_reports"]["need_x"]["collection_status"] == "OBSERVED", "合法 OBSERVED 报告入账")
+r = asyncio.run(rep.handler(dict(base, collection_status="UNKNOWN", raw_refs="")))
+check(bool(r.get("is_error")) and sink["evidence_reports"]["need_x"]["collection_status"] == "OBSERVED", "随后的 UNKNOWN 不能覆盖 OBSERVED")
+rep, sink = _make_task_tool()
+asyncio.run(rep.handler(dict(base, collection_status="ERROR", raw_refs="")))
+r = asyncio.run(rep.handler(dict(base, collection_status="OBSERVED")))
+check(not r.get("is_error") and sink["evidence_reports"]["need_x"]["collection_status"] == "OBSERVED", "先 ERROR 后 OBSERVED 是纠错，允许")
+src_task = inspect.getsource(inv.investigate_task)
+check("call_cache=call_cache, task=task)" in src_task, "investigate_task 把任务传给 _tools_for")
 
 print()
 if fails:

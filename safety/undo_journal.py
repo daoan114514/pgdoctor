@@ -59,12 +59,27 @@ IRREVERSIBLE = "IRREVERSIBLE"
 NO_ROLLBACK_NEEDED = "NO_ROLLBACK_NEEDED"
 
 
+def normalize_rollback(text: str) -> str:
+    """回滚字段的唯一归一化：去首尾空白、去尾随分号。
+
+    标记识别原来有三份（gate.assess 只 strip().upper()、is_marker 同样、
+    inspect_rollback 会先 rstrip(";")），`IRREVERSIBLE;` 在前两处不算标记、
+    在第三处算，于是 create_index 也能靠一个分号跳过回滚配对（2026-09-23 审计）。
+    现在所有读取点都经这里。不去注释：带注释的标记不算标记，会落到 AST 配对那里
+    因解析失败被拒 —— 那是保守方向。
+    """
+    s = (text or "").strip()
+    while s.endswith(";"):
+        s = s[:-1].rstrip()
+    return s
+
+
 def is_irreversible(undo_sql: str) -> bool:
-    return (undo_sql or "").strip().upper() == IRREVERSIBLE
+    return normalize_rollback(undo_sql).upper() == IRREVERSIBLE
 
 
 def is_no_rollback_needed(undo_sql: str) -> bool:
-    return (undo_sql or "").strip().upper() == NO_ROLLBACK_NEEDED
+    return normalize_rollback(undo_sql).upper() == NO_ROLLBACK_NEEDED
 
 
 def is_marker(undo_sql: str) -> bool:
@@ -85,7 +100,7 @@ def make_idempotent(undo_sql: str) -> str:
         DROP INDEX IF EXISTS CONCURRENTLY x      语法错误
     最初用 split 拼接就踩了这个顺序，导致回滚语句本身非法、撤销失败。
     """
-    s = undo_sql.strip().rstrip(";")
+    s = normalize_rollback(undo_sql)
     if is_marker(s):
         return s.upper()             # 标记原样保留，执行层会跳过
     if "IF EXISTS" in s.upper():

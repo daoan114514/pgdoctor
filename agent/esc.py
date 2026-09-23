@@ -89,6 +89,29 @@ DEFAULT_EXPLANATION_ESC = ExplanationESCConfig()
 
 # 证据取值是否真的支持该根因。
 # 只查"跑过没跑过"还不够 —— 跑了但结果指向反面同样不能算数。
+def esc_is_genuinely_sufficient(report) -> bool:
+    """"最后一次 ESC 是 SUFFICIENT" 的唯一判据。
+
+    --no-esc 的旁路报告把 verdict 改写成 SUFFICIENT 并标 bypassed=True；L1/L3 原来只读
+    verdict，把证据不足的解释固化进案例库（2026-09-23 审计）。case_store、evolution、
+    loop 的 esc_last_verdict、run_suite 的 esc_verdicts 都经这里或 esc_verdict_label。"""
+    if isinstance(report, dict):
+        return report.get("verdict") == "SUFFICIENT" and not report.get("bypassed")
+    return (getattr(report, "verdict", "") == "SUFFICIENT" and
+            not getattr(report, "bypassed", False))
+
+
+def esc_verdict_label(report) -> str:
+    """结果文件与报告口径用的裁决标签：旁路报告显示 BYPASSED，不冒充 SUFFICIENT。"""
+    if isinstance(report, dict):
+        if report.get("bypassed"):
+            return "BYPASSED"
+        return str(report.get("verdict") or "")
+    if getattr(report, "bypassed", False):
+        return "BYPASSED"
+    return str(getattr(report, "verdict", "") or "")
+
+
 def _supports(evidence_type: str, observation: str, root_cause: str) -> bool:
     node = G.load().nodes.get(evidence_type, {})
     predicate_id = str(node.get("predicate_id", ""))

@@ -107,8 +107,7 @@ def _post_episode_learning(env, st: EpisodeState, res: RunResult, *,
     res.audit.setdefault("final_phase", res.final_phase)
     res.audit.setdefault("escalated", any("ESCALATE" in str(t) for t in res.transitions))
     res.audit.setdefault("esc_last_verdict", next(
-        (str(r.get("verdict") if isinstance(r, dict) else getattr(r, "verdict", ""))
-         for r in reversed(res.esc_reports)), ""))
+        (esc_mod.esc_verdict_label(r) for r in reversed(res.esc_reports)), ""))
     res.audit.setdefault("esc_used", bool(res.esc_reports))
     res.effective_sql = effective_applied_sql(res.applied_sql, st.intervention_attempts)
     try:
@@ -369,7 +368,11 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
     st.save()
 
     sm = StateMachine(st, allow_repair=allow_repair)
-    tb = Toolbox(env.observe(), st, sm)
+    from agent.tool_planner import infer_target_context
+    # 主 agent 的取证入参（explain_query 的 sql、simulate_index 的 test_sql、get_*
+    # 的 table）也钉在告警的热查询上，与子 agent 同一条对照规则（toolbox._enter）。
+    tb = Toolbox(env.observe(), st, sm, target_context=infer_target_context(
+        " ".join(env.spec["workload"]["hot_query"].split()), table="orders"))
     # 候选根因由故障因果图多跳遍历给出，而不是谁凭印象列举 ——
     # 这样覆盖率有保证，级联故障里离症状好几跳的真根因也不会被漏掉。
     from knowledge import case_store as _cs
@@ -1005,6 +1008,11 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
     st.save()
 
     res.final_phase = st.phase
+    if st.schema_version == 2 and st.explanation_graph is not None:
+        # 打分前重算投影：claimed_fault_class 必须是解释图的投影，不是最后一次写入。
+        # 原来 PLAN 之后不再重算，PLAN 阶段写进去的值会一路进打分与案例库（2026-09-23 审计）。
+        xr.sync_v1_projection(st)
+        st.save()
     res.claimed_fault_class = st.claimed_fault_class
     res.claimed_root_cause = st.claimed_root_cause
     res.steps = st.budget["steps"]

@@ -40,8 +40,11 @@ cases = [
     ("核心表锁表建索引", P("create_index",
         "CREATE INDEX idx_bad ON orders(user_id, status)",
         "DROP INDEX idx_bad"), "DENY"),
-    ("ANALYZE", P("vacuum_analyze", "ANALYZE orders", "SELECT 1"), "AUTO"),
-    ("VACUUM FULL", P("vacuum_analyze", "VACUUM FULL orders", "SELECT 1"), "DENY"),
+    # 自愈类动作的回滚只认 NO_ROLLBACK_NEEDED 或再一次 VACUUM/ANALYZE（2026-09-23：
+    # "只读 SELECT" 曾放行数据修改 CTE）；VACUUM FULL 由 AST 的 options 判，括号写法同样 DENY。
+    ("ANALYZE", P("vacuum_analyze", "ANALYZE orders", "NO_ROLLBACK_NEEDED"), "AUTO"),
+    ("VACUUM FULL", P("vacuum_analyze", "VACUUM FULL orders", "NO_ROLLBACK_NEEDED"), "DENY"),
+    ("VACUUM (FULL)", P("vacuum_analyze", "VACUUM (FULL, ANALYZE) orders", "NO_ROLLBACK_NEEDED"), "DENY"),
     ("参数变更", P("set_parameter", "SET work_mem = '64MB'",
                    "SET work_mem = '8MB'"), "CONFIRM"),
 ]
