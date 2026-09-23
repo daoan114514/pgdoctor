@@ -263,8 +263,8 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 st, spec, gate_decisions=res.gate_decisions)
             # run_episode 会把异常吞进 res.error，所以要在这里判，
             # 否则额度耗尽的 episode 会被当成"模型没诊断出来"计入分母
-            from agent.failure_class import (infra_rows_of, is_infra_failure,
-                                             observed_subagent_count)
+            from agent.failure_class import (episode_unusable_by_infra,
+                                             infra_rows_of, is_infra_failure)
             if is_infra_failure(text=res.error or ""):
                 out.unusable = True
 
@@ -285,7 +285,7 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
             audit = getattr(st, "evidence_task_audit", [])
             infra_rows = infra_rows_of(audit)
             out.infra_failures = len(infra_rows)
-            if infra_rows and observed_subagent_count(audit) == 0:
+            if episode_unusable_by_infra(audit):
                 out.unusable = True
                 out.error = (out.error or
                              f"基础设施失败，取证全军覆没（{len(infra_rows)} 条）: "
@@ -318,7 +318,61 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
     return out
 
 
-def _write_results(path: Path, tag: str, args, learned_layers, results, t0) -> None:
+def _harness_identity() -> dict:
+    """这份结果是哪个 harness 跑出来的：没有这一块，跨提交的三率没法比（架构评审第 10 条）。"""
+    import subprocess
+    out: dict = {}
+    try:
+        out["git_commit"] = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=str(ROOT),
+            capture_output=True, text=True, timeout=10).stdout.strip()
+        out["git_dirty"] = bool(subprocess.run(
+            ["git", "status", "--porcelain", "--", "agent", "sandbox", "knowledge", "eval/*.py", "safety"],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=10).stdout.strip())
+    except Exception:
+        out["git_commit"] = ""
+    try:
+        from knowledge.causal_graph import graph as _g
+        out["graph_version"] = _g.graph_version()
+    except Exception:
+        out["graph_version"] = ""
+    try:
+        from agent.episode_state import DEFAULT_MAX_STEPS
+        from agent.explanation import DEFAULT_FRESHNESS_S
+        from sandbox.env import EPISODE_WALL_CAP_S
+        out.update(default_max_steps=DEFAULT_MAX_STEPS,
+                   default_freshness_s=DEFAULT_FRESHNESS_S,
+                   episode_wall_cap_s=EPISODE_WALL_CAP_S)
+    except Exception:
+        pass
+    try:
+        lock = yaml.safe_load((ROOT / "sandbox/scenarios/.instances.lock").read_text(encoding="utf-8")) or {}
+        out["scenario_revisions"] = {k: v.get("revision") for k, v in lock.items() if isinstance(v, dict)}
+    except Exception:
+        out["scenario_revisions"] = {}
+    return out
+
+
+def _sweep_orphan_workloads() -> None:
+    """开跑前清掉上一轮被 kill -9 留下的 sandbox.workload 孤儿（2026-09-22 实测活了 5 小时，
+    下午所有 episode 和活库检查都在它的负载之上量）。只在类 Unix 上做。"""
+    import subprocess
+    import sys as _sys
+    if _sys.platform.startswith("win"):
+        return
+    try:
+        found = subprocess.run(["pgrep", "-f", "sandbox[.]workload"],
+                               capture_output=True, text=True, timeout=10).stdout.split()
+        if found:
+            print(f"!! 清掉 {len(found)} 个孤儿负载生成器: {found}", flush=True)
+            subprocess.run(["pkill", "-9", "-f", "sandbox[.]workload"],
+                           capture_output=True, timeout=10)
+    except Exception:
+        pass
+
+
+def _write_results(path: Path, tag: str, args, learned_layers, results, t0,
+                   complete: bool = False) -> None:
     """结果落盘。每个 episode 结束都调一次：原来只在整批结束写，守护看门狗一杀
     整批白跑，而被杀的那个 episode 从不出现在任何分母里（幸存者偏差）。"""
     RESULTS.mkdir(parents=True, exist_ok=True)
@@ -332,7 +386,8 @@ def _write_results(path: Path, tag: str, args, learned_layers, results, t0) -> N
          "use_esc": not args.no_esc, "use_cases": not args.no_cases,
          "learned_layers": sorted(learned_layers),
          "elapsed_s": round(time.time() - t0, 1),
-         "complete": False,
+         "complete": complete,
+         "harness": _harness_identity(),
          "metrics_v2": aggregate_v2,
          "episodes": serialized},
         ensure_ascii=False, indent=2), encoding="utf-8")
@@ -425,6 +480,7 @@ def main() -> None:
                   "现在跑只会产出一堆作废的 episode")
             raise SystemExit(2)
 
+    _sweep_orphan_workloads()
     print(f"跑批 {tag}: {len(picks)} 个场景 "
           f"(ESC={'off' if args.no_esc else 'on'}, "
           f"cases={'off' if args.no_cases else 'on'})")
@@ -453,7 +509,7 @@ def main() -> None:
             break
 
     path = RESULTS / f"{tag}.json"
-    _write_results(path, tag, args, learned_layers, results, t0)
+    _write_results(path, tag, args, learned_layers, results, t0, complete=True)
 
     usable = [r for r in results if r.fired and not r.unusable]
     dead = [r for r in results if r.unusable]

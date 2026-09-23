@@ -28,6 +28,7 @@ from sandbox import db
 ROOT = Path(__file__).resolve().parent.parent
 METRICS_PATH = ROOT / "traces" / "workload_metrics.json"
 
+_OWNER: dict = {}
 _stop = threading.Event()
 _lock = threading.Lock()
 # 每类查询各自一个滚动窗口：hot 是受故障影响的，canary 用于回归检查
@@ -88,7 +89,11 @@ def snapshot(window_s: float = 30.0) -> dict:
                 "errors": errs,
                 "last_error": _last_error.get(kind, ""),
             }
-    return {"ts": now, "window_s": window_s, "by_query": out}
+    return {"ts": now, "window_s": window_s, "by_query": out,
+            # 归属戳：读者据此判断这份 KPI 是不是自己这个 episode 的负载写的。
+            # 2026-09-22 实测被 kill -9 的 run_suite 留下的孤儿负载持续写同一个文件，
+            # 后面所有 episode 与活库检查都在别人的负载之上量。
+            "episode_id": _OWNER.get("episode_id", ""), "owner_pid": os.getpid()}
 
 
 def _worker(hot_sql: str, canaries: list[str], n_users: int) -> None:
@@ -190,7 +195,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scenario", required=True)
     ap.add_argument("--duration", type=float, default=0.0, help="0 = 一直跑")
+    ap.add_argument("--episode-id", default="", help="归属戳，env 启动时传入")
     args = ap.parse_args()
+    _OWNER["episode_id"] = args.episode_id
 
     spec = yaml.safe_load(Path(args.scenario).read_text(encoding="utf-8"))
     wl = spec["workload"]

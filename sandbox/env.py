@@ -116,10 +116,15 @@ class DBAScenarioEnv:
     # ── 负载生成器 ────────────────────────────────────────────
     def _start_workload(self) -> None:
         self._stop_workload()
+        # 独立进程组：run_suite 被 kill -9 时 close() 不会执行，负载会变孤儿继续打库
+        # （2026-09-22 实测活了 5 小时）。有了进程组，_stop_workload 能整组杀，跑批
+        # 启动时的清扫也能按名字找到它。--episode-id 是 KPI 文件的归属戳。
         self._wl = subprocess.Popen(
             [sys.executable, "-m", "sandbox.workload",
-             "--scenario", str(self.scenario_path)],
+             "--scenario", str(self.scenario_path),
+             "--episode-id", str(self.episode_id)],
             cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
 
     def _warm_until_stable(self, tolerance: float = 0.3) -> list[str]:
@@ -154,7 +159,7 @@ class DBAScenarioEnv:
         step = max(5.0, metrics.WINDOW_S / 2)
         previous: metrics.KPI | None = None
         while time.time() < deadline:
-            current = metrics.collect()
+            current = metrics.collect(expected_episode_id=self.episode_id)
             # p99 和 CPU 都要稳。只看 p99 会漏掉"延迟已经下来、但后台还在
             # 回填缓存/做检查点"的那一段 —— 实测那时 cpu 仍有 323%，而
             # 告警判据是 p99 与 cpu 的合取，采到就直接把 episode 判废。
@@ -173,11 +178,19 @@ class DBAScenarioEnv:
 
     def _stop_workload(self) -> None:
         if self._wl and self._wl.poll() is None:
-            self._wl.terminate()
+            import os as _os
+            import signal as _signal
+            try:
+                _os.killpg(_os.getpgid(self._wl.pid), _signal.SIGTERM)
+            except Exception:
+                self._wl.terminate()
             try:
                 self._wl.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                self._wl.kill()
+                try:
+                    _os.killpg(_os.getpgid(self._wl.pid), _signal.SIGKILL)
+                except Exception:
+                    self._wl.kill()
         self._wl = None
 
     def _log(self, msg: str) -> None:
@@ -214,7 +227,7 @@ class DBAScenarioEnv:
 
         self._log("[env] 采集健康基线（必须在注入之前）...")
         self.suite.capture_baseline()
-        self.healthy_kpi = metrics.collect()
+        self.healthy_kpi = metrics.collect(expected_episode_id=self.episode_id)
         if self.healthy_kpi.stale:
             notes.append("警告：负载指标过期，健康基线可能不可靠")
         # 硬闸：已经满足告警条件的读数不是健康基线。
@@ -283,7 +296,7 @@ class DBAScenarioEnv:
             if settle > 0:
                 self._log(f"[env] 等待 {settle:.0f}s 让指标窗口填满故障期样本 ...")
                 time.sleep(settle)
-            cur = metrics.collect()
+            cur = metrics.collect(expected_episode_id=self.episode_id)
 
         self._log(f"[env] 告警({alert_expr}) 触发={fired} "
                   f"p99={cur.p99_ms}ms errors={cur.errors} cpu={cur.cpu_pct}%")
@@ -296,9 +309,9 @@ class DBAScenarioEnv:
 
     def _wait_for_alert(self, expr: str) -> tuple[bool, metrics.KPI]:
         deadline = time.time() + self.degrade_timeout_s
-        cur = metrics.collect()
+        cur = metrics.collect(expected_episode_id=self.episode_id)
         while time.time() < deadline:
-            cur = metrics.collect()
+            cur = metrics.collect(expected_episode_id=self.episode_id)
             if not cur.stale and metrics.eval_expr(
                     expr, cur, baseline=self.healthy_kpi):
                 return True, cur
@@ -331,7 +344,7 @@ class DBAScenarioEnv:
         """
         # 传进来的值只能加码不能减码：调用方想多等可以，想少等不行。
         time.sleep(max(settle_s, metrics.WINDOW_S + 5.0))
-        kpi = metrics.collect()
+        kpi = metrics.collect(expected_episode_id=self.episode_id)
         reg = self.suite.check()
         return kpi, reg
 

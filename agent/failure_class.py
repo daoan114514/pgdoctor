@@ -139,6 +139,16 @@ def observed_subagent_count(audit) -> int:
         and item.get("collection_status") == "OBSERVED")
 
 
+def episode_unusable_by_infra(audit) -> bool:
+    """有停机 **且** 子 agent 一条证据都没取到 -> 这个 episode 作废。
+
+    run_suite 的分母、loop 的学习写回都读这一条（硬规则 4：同一条规则只写一份）。
+    方向单向：少认一次停机只让三率偏低，多认一次会把真失败从分母删掉、还会拿
+    停机造出的观测去教 L2/L4。
+    """
+    return bool(infra_rows_of(audit)) and observed_subagent_count(audit) == 0
+
+
 def infra_rows_of(audit) -> list[dict]:
     """从 episode 的 evidence_task_audit 里挑出由基础设施失败造成的条目。
 

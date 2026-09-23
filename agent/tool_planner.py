@@ -31,6 +31,10 @@ class ToolPlanningConfig:
     use_learned: bool = True
     use_l2: bool = True
     use_l4: bool = True
+    # 无参工具（连接数/vacuum 视界/库级统计/阻塞链）由编排器在进程内确定性执行，
+    # 不再各起一个 12 轮 SDK 会话。子 agent 在这些任务上只是"调一次工具、抄观测"，
+    # 判定本来就在 predicate 层（架构评审第 9 条）。
+    deterministic_argless: bool = True
 
 
 DEFAULT_TOOL_PLANNING = ToolPlanningConfig()

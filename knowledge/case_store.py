@@ -579,6 +579,13 @@ def write_case_v2(st, score, spec: dict,
     """Persist one path-level case after deterministic trust checks."""
     split = str(spec.get("split", "train"))
     okay, _reason = should_persist_v2(st, score, split)
+    # 可召回条件原来只看 spec 里有没有 source_refs —— 沙箱场景一个都没有，于是每个
+    # 活跑批写进去的案例都是 quarantined、永远不会被 search_v2 召回（两天 72 个案例
+    # reuse_count 全 0）。should_persist_v2 已经算出"SUFFICIENT ESC + VERIFIED 尝试"
+    # 这份信任证据，以它为准，来源指向这条 trace。
+    _eligible = bool(spec.get("source_refs")) or _reason == "verified positive explanation"
+    _source_refs = list(spec.get("source_refs") or []) or (
+        [f"trace://{st.episode_id}/episode_state"] if _eligible else [])
     if not okay:
         return None
     if provenance not in {"sandbox", "production", "human_labeled"}:
@@ -647,15 +654,15 @@ def write_case_v2(st, score, spec: dict,
                                   for a in st.intervention_attempts)
                  else "SCOPED_FAILURE"),
         negative_examples=negatives,
-        source_refs=list(spec.get("source_refs") or []),
+        source_refs=_source_refs,
         trace_ref=f"trace://{st.episode_id}",
         evidence_quality=("episode_verified" if any(
             attempt.outcome == "VERIFIED" and attempt.learnable
             for attempt in st.intervention_attempts) else
             "episode_scoped_negative"),
-        review_status=("automated_trust_gate" if spec.get("source_refs")
+        review_status=("automated_trust_gate" if _eligible
                        else "quarantined_missing_source"),
-        training_eligible=bool(spec.get("source_refs")),
+        training_eligible=_eligible,
     )
     cases = {item.case_id: item for item in load_cases_v2()}
     cases[case.case_id] = case

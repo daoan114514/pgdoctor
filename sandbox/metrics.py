@@ -82,8 +82,13 @@ def container_cpu_pct(container: str = CONTAINER) -> float:
         return -1.0
 
 
-def read_workload(max_age_s: float = 15.0, kind: str = "hot") -> dict:
-    """读负载生成器落盘的滚动指标。"""
+def read_workload(max_age_s: float = 15.0, kind: str = "hot",
+                  expected_episode_id: str | None = None) -> dict:
+    """读负载生成器落盘的滚动指标。
+
+    expected_episode_id 给了就校验归属：文件是别的 episode 的负载写的（孤儿进程），
+    一律按过期处理 —— 别人的负载量出来的 KPI 对本 episode 没有意义。
+    """
     if not METRICS_PATH.exists():
         return {}
     try:
@@ -92,7 +97,11 @@ def read_workload(max_age_s: float = 15.0, kind: str = "hot") -> dict:
         return {}
     age = time.time() - float(d.get("ts", 0))
     q = d.get("by_query", {}).get(kind, {})
-    q["_stale"] = age > max_age_s
+    owner = str(d.get("episode_id") or "")
+    foreign = bool(expected_episode_id) and bool(owner) and owner != expected_episode_id
+    q["_stale"] = age > max_age_s or foreign
+    if foreign:
+        q["_foreign_owner"] = owner
     return q
 
 
@@ -100,8 +109,9 @@ def read_workload(max_age_s: float = 15.0, kind: str = "hot") -> dict:
 WINDOW_S = 30.0
 
 
-def collect(kind: str = "hot", include_all_errors: bool = True) -> KPI:
-    w = read_workload(kind=kind)
+def collect(kind: str = "hot", include_all_errors: bool = True,
+            expected_episode_id: str | None = None) -> KPI:
+    w = read_workload(kind=kind, expected_episode_id=expected_episode_id)
     # 错误要跨查询类型聚合：连接池打满时热查询走的是常驻连接、完全正常，
     # 错误全部出在新建连接探针上。只看一类就会漏掉整类故障。
     err = int(w.get("errors", 0))

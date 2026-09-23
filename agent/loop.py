@@ -87,6 +87,15 @@ def _post_episode_learning(env, st: EpisodeState, res: RunResult, *,
         res.learning_result = dict(result)
         return
 
+    from agent.failure_class import episode_unusable_by_infra
+    if episode_unusable_by_infra(getattr(st, "evidence_task_audit", [])):
+        # 停机打死的 episode：观测全是 ERROR、路径全 INCONCLUSIVE，拿去学只会教坏
+        # L2/L4（"这个工具没用"）和 L1（零证据下的错误声称）。与 run_suite 同一判据。
+        result["reason"] = "episode unusable (infrastructure failure), learning skipped"
+        result["score_status"] = "SKIPPED_INFRA"
+        st.learning_result = result
+        res.learning_result = dict(result)
+        return
     scorer = getattr(env, "score", None)
     if not callable(scorer):
         result["reason"] = "environment has no score() contract"

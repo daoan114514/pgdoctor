@@ -22,6 +22,65 @@ from agent.investigator import (EvidenceTaskResult, HypothesisVerdict,
 from agent.tool_planner import (ToolPlan, ToolPlanningConfig,
                                 infer_target_context, plan_evidence_tasks)
 from agent.toolbox import Toolbox
+from agent.episode_state import EvidenceBudgetExhausted
+from agent.explanation import EvidenceReport
+from agent.investigator import task_environment_tools
+from agent.permissions import Role
+
+# 编排器进程内确定性执行的无参工具：子 agent 对它们做的事只有"调一次、把结构化观测
+# 原样抄进 report_evidence"，而判定在 predicate 层。每个任务省一整个 SDK 会话
+# （实测 50-140s、约 $0.1-0.3），且没有"猜枚举值"之类的合同风险。
+DETERMINISTIC_TOOLS = frozenset({"get_connection_stats", "get_vacuum_horizon",
+                                 "get_database_stats", "get_blocking_chain"})
+
+
+def _run_task_deterministic(st: EpisodeState, tb: Toolbox, task) -> EvidenceTaskResult:
+    tool = task.selected_tools[0]
+    result = EvidenceTaskResult(
+        need_id=task.need_ids[0] if task.need_ids else "", task_id=task.task_id,
+        need_ids=list(task.need_ids), explanation_id=task.explanation_id,
+        explanation_revision=task.explanation_revision, executor="deterministic")
+    scoped = tb.scoped(role=Role.INVESTIGATOR, task_context=task,
+                       environment_tools=task_environment_tools(task))
+    before = len(st.scratchpad)
+    started = time.monotonic()
+    try:
+        getattr(scoped, tool)()
+    except EvidenceBudgetExhausted:
+        result.budget_exhausted = True
+        return result
+    except Exception as exc:                       # noqa: BLE001
+        result.error = f"{type(exc).__name__}: {exc}"
+        result.duration_s = time.monotonic() - started
+        return result
+    entries = [e for e in st.scratchpad[before:] if e.get("raw_ref")]
+    refs = list(dict.fromkeys(str(e["raw_ref"]) for e in entries))
+    statuses = {str(e.get("status") or "") for e in entries}
+    if EvidenceStatus.OBSERVED.value in statuses:
+        status = EvidenceStatus.OBSERVED.value
+    elif EvidenceStatus.UNKNOWN.value in statuses:
+        status = EvidenceStatus.UNKNOWN.value
+    else:
+        status = EvidenceStatus.ERROR.value
+    observations = []
+    for e in entries:
+        v = e.get("structured_value")
+        observations.append(v if isinstance(v, dict) else {"value": v, "evidence_type": e.get("evidence_type")})
+    limitations = ["deterministic in-process execution: observations copied verbatim, no narrative"]
+    if status != EvidenceStatus.OBSERVED.value:
+        limitations.append("; ".join(str(e.get("observation") or e.get("summary") or "")[:120] for e in entries) or f"collection status {status}")
+    for need_id in task.need_ids:
+        try:
+            result.reports.append(EvidenceReport(
+                need_id=need_id, tool=tool, raw_refs=list(refs),
+                observations=list(observations), collection_status=status,
+                limitations=list(limitations)))
+        except (TypeError, ValueError) as exc:
+            result.error = f"invalid EvidenceReport: {exc}"
+    result.report = result.reports[0] if len(result.reports) == 1 else None
+    result.tools_used = [tool]
+    result.duration_s = time.monotonic() - started
+    return result
 
 # 每个假设一句话说明它该看什么。W6 起改由故障因果图给出
 # （必需证据类型直接挂在图的边上），现在先手写。
@@ -346,6 +405,7 @@ def _record_tool_learning_observations(
                     changed / max(total_statuses, 1) if accepted else 0.0, 6),
                 "changed_next_decision": bool(
                     accepted and changed and not target_still_frontier),
+                "executor": getattr(result, "executor", "subagent"),
                 "latency_s": round(float(result.duration_s), 6),
                 "cost": round(float(result.cost_usd) /
                               max(len(task.need_ids), 1), 6),
@@ -379,6 +439,10 @@ async def run_evidence_investigation(
     by_id = {need.need_id: need for need in needs}
 
     async def run_task(task):
+        if (planning_config.deterministic_argless and
+                len(task.selected_tools) == 1 and
+                task.selected_tools[0] in DETERMINISTIC_TOOLS):
+            return _run_task_deterministic(st, tb, task)
         async with semaphore:
             started = time.monotonic()
             result = await investigate_task(

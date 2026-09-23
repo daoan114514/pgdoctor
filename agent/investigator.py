@@ -151,6 +151,8 @@ class EvidenceTaskResult:
     tool_raw_refs: list[str] = field(default_factory=list)
     # 任务中途撞到 episode 的工具调用预算。编排器对这种结果不记不可得、不记观测。
     budget_exhausted: bool = False
+    # "subagent"：起了 SDK 会话；"deterministic"：编排器进程内直接调工具生成报告。
+    executor: str = "subagent"
 
 
 

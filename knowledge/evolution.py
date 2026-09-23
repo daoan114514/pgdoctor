@@ -1082,10 +1082,11 @@ def learn_v2(st, score, *, split: str = "train",
         raise ValueError("unsupported v2 learning provenance")
     explanation = getattr(st, "explanation_graph", None)
     if explanation is not None:
+        # 只按图版本与工具 schema 版本标失效。原来还传本次场景的 revision：L2/L4 记录
+        # 不带 fault_class，于是每跑一个 episode 就把**其它故障类**的记录全标 stale
+        # （架构评审第 8 条）。场景 revision 的失效由读取时的 _is_stale 按根因逐个判。
         mark_v2_stale(
             graph_version=explanation.graph_version,
-            scenario_revision=int((getattr(st, "incident_window", {}) or {}).get(
-                "scenario_revision", 1)),
             tool_schema_version=V2_TOOL_SCHEMA_VERSION)
     observations = [item for item in getattr(st, "evidence_task_audit", [])
                     if item.get("event") == "tool_learning_observation"]
