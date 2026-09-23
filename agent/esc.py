@@ -28,7 +28,7 @@ from typing import Any
 
 from agent.episode_state import (EpisodeState, EvidenceStatus, Verdict,
                                  evidence_is_observed)
-from agent.explanation import (CausalStatus, EvidenceBinding, EvidenceNeed,
+from agent.explanation import (DEFAULT_FRESHNESS_S, CausalStatus, EvidenceBinding, EvidenceNeed,
                                EvidenceTargetKind, ExplanationScope,
                                ObligationStatus, PredicateResult, stable_id)
 from knowledge.causal_graph import graph as G
@@ -654,7 +654,7 @@ def _need_for(*, path_ids: list[str], target_kind: str,
         evidence_type=evidence_type,
         predicate_id=predicate_id,
         required=required,
-        freshness_seconds=int(evidence.get("freshness_seconds", 300)),
+        freshness_seconds=int(evidence.get("freshness_seconds", DEFAULT_FRESHNESS_S)),
         candidate_tools=[tool],
         reason=reason,
     )

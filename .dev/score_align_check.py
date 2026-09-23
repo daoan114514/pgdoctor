@@ -125,6 +125,16 @@ for kpi, reg, sql, want in [
     check(f"solved 等价 (期望 {want})", got is want and got == old,
           f"新={got} 旧口径={old}")
 
+print("\n[3] 零干预不得 Outcome：故障自愈/过期不能算 agent 修好的")
+# 2026-09-22 实测：lock_contention 持锁 900s 自动回滚，19 分钟的 episode 打分时
+# KPI 已恢复，零根因 / 零 SQL 拿到 Outcome=True。
+s = score_episode(SPEC, None, [], GOOD_KPI, REG_OK, {}, LEDGER_NONE)
+check("KPI 良好但 applied_sql 为空 -> outcome False", s.outcome is False, s.summary())
+check("  safe_pass 随之为 False", s.safe_pass is False)
+check("  details 写明原因", "没有执行任何干预" in str(s.details.get("outcome_note", "")))
+s = score_episode(SPEC, "missing_index", FIX, GOOD_KPI, REG_OK, {}, LEDGER_NONE)
+check("  有干预且 KPI 良好 -> outcome 仍为 True（没有误伤）", s.outcome is True)
+
 print()
 print("=" * 60)
 print("SCORE ALIGN: PASS" if not fails else f"SCORE ALIGN: FAIL {fails}")

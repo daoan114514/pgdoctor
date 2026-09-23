@@ -110,6 +110,21 @@ def _unique(values: list[str] | tuple[str, ...] | None,
     return sorted(result) if sort else result
 
 
+# 证据绑定的默认新鲜窗（秒）。三处构造 EvidenceNeed 的地方（esc.py / policy.py /
+# knowledge/causal_graph/graph.py）都从这里取默认值，nodes.yaml 里的证据节点可以用
+# freshness_seconds 单独覆盖。
+#
+# 为什么是 2 小时而不是原来的 300 秒：2026-09-22 的 eval 跑批里 episode 实测跑 13-28 分钟
+# （修子 agent 之前到 50 分钟），而 300 秒的窗让绑定在结束时只剩 0/26、14/43、2/53、2/24
+# 仍然新鲜；过期绑定不参与路径判定（is_trusted 要求 is_fresh），于是 37 条路径全
+# INCONCLUSIVE → ESC INSUFFICIENT → 再取证再过期 → 步数用尽（CLAUDE.md 硬规则 5：阈值要按
+# 实测标定）。"证据是否还反映当前状态"由另外两条规则负责：agent 自己的写操作用
+# window_spans_own_write（硬规则 6），故障中途自愈由 harness_lint [9] 从源头禁止 —— 所以在一个
+# episode 之内，墙钟本身不是失效理由。取值必须不小于 sandbox.env.EPISODE_WALL_CAP_S，
+# harness_lint [10] 钉住。
+DEFAULT_FRESHNESS_S = 2 * 60 * 60
+
+
 @dataclass
 class EvidenceBinding:
     binding_id: str = ""

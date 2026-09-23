@@ -14,7 +14,7 @@ from __future__ import annotations
 import abc
 
 from agent.episode_state import EpisodeState
-from agent.explanation import EvidenceNeed, EvidenceTargetKind
+from agent.explanation import EvidenceNeed, EvidenceTargetKind, DEFAULT_FRESHNESS_S
 from agent.explanation_runtime import bind_evidence, intervention_options
 from agent.state_machine import Phase
 from agent.toolbox import Toolbox
@@ -233,7 +233,7 @@ class ScriptedPolicy(Policy):
                 evidence_type="counterfactual_index",
                 predicate_id=str(evidence["predicate_id"]),
                 required=True,
-                freshness_seconds=int(evidence.get("freshness_seconds", 300)),
+                freshness_seconds=int(evidence.get("freshness_seconds", DEFAULT_FRESHNESS_S)),
                 candidate_tools=[str(evidence["obtained_by"])],
                 reason="validate the concrete intervention definition",
             )

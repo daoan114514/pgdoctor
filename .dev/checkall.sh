@@ -33,10 +33,20 @@ for f in .dev/harness_lint.py .dev/graph_lint.py .dev/graph_expand_check.py .dev
          .dev/automatic_learning_writeback_check.py \
          .dev/authoritative_case_check.py \
          .dev/structure_v2_check.py .dev/eval_metrics_v2_check.py \
-         .dev/e2e_explanation_check.py; do
+         .dev/e2e_explanation_check.py \
+         .dev/infra_failure_check.py .dev/subagent_contract_check.py \
+         .dev/evidence_freshness_check.py \
+         .dev/session_control_contract_check.py \
+         .dev/explain_dml_proxy_check.py; do
   [ -f "$f" ] || continue
   printf '%-32s ' "$f"
-  out="$(timeout 180 "$python_bin" "$f" 2>&1)"
+  # 单脚本上限。原来是 180s，2026-09-22 实测 evo_check.py 单跑要 213s（要连活库，
+  # 还要经 eval.replay 扫 680 个 trace 目录，/mnt/c 上很慢），在这里被 SIGTERM 杀掉。
+  # 被杀时 python 往管道写的块缓冲一行都没刷出来，日志里该脚本只剩一个空行、
+  # 计数 +1、没有任何报错 —— 看起来像代码回归，其实是超时。放宽到 360s；
+  # 真死锁会多等 3 分钟才发现，但不会再把慢而对的检查判成失败。
+  # traces/ 继续增长这个数还会涨，涨到再超时先看 eval.replay 的 glob 而不是加数。
+  out="$(timeout 360 "$python_bin" "$f" 2>&1)"
   code=$?
   echo "$out" | tail -1 | cut -c1-90
   if [ "$code" -ne 0 ]; then

@@ -323,6 +323,38 @@ for k, s in specs.items():
 check("告警集与成功集不相交", not both_true, both_true[:3])
 
 
+print("\n[9] 有持续时间的故障必须撑过整个 episode")
+# 故障中途自愈，后半段取的是"故障不在"的证据，打分时 env.score() 补采的 KPI 也是
+# 恢复后的样子 —— 零干预的 episode 拿到 Outcome=True。2026-09-22 实测 lock_contention
+# duration_s=900 对 19 分钟的 episode 正是如此（09-21 那份也一样）。scoring.py 已兜底
+# "无干预不得 Outcome"，这里从源头钉住：持续时间不得短于 episode 墙钟上限。
+from sandbox.env import EPISODE_WALL_CAP_S  # noqa: E402
+short = []
+for k, s_ in specs.items():
+    inj = s_.get("inject", {}) or {}
+    if "duration_s" in inj and float(inj["duration_s"]) < EPISODE_WALL_CAP_S:
+        short.append(f"{k}: duration_s={inj['duration_s']} < {EPISODE_WALL_CAP_S}")
+check("inject.duration_s 不短于 EPISODE_WALL_CAP_S", not short, short)
+
+print("\n[10] 证据新鲜窗必须撑过整个 episode，且默认值只有一份")
+# 2026-09-22 实测：默认 300s 抄在三处，episode 跑 13-28 分钟，结束时仍新鲜的绑定
+# 0/26、14/43、2/53、2/24，路径全 INCONCLUSIVE。默认值现在只在 agent/explanation.py
+# 一处；这里钉住取值不小于 episode 墙钟上限，并且源码里不再出现字面量默认值。
+from agent.explanation import DEFAULT_FRESHNESS_S  # noqa: E402
+check("DEFAULT_FRESHNESS_S >= EPISODE_WALL_CAP_S",
+      DEFAULT_FRESHNESS_S >= EPISODE_WALL_CAP_S,
+      f"{DEFAULT_FRESHNESS_S} < {EPISODE_WALL_CAP_S}")
+_lit = []
+for _f in (ROOT / "agent").glob("*.py"):
+    for _i, _l in enumerate(_f.read_text(encoding="utf-8").splitlines(), 1):
+        if re.search(r'freshness_seconds"\s*,\s*[0-9]', _l):
+            _lit.append(f"{_f.name}:{_i}")
+for _f in (ROOT / "knowledge").rglob("*.py"):
+    for _i, _l in enumerate(_f.read_text(encoding="utf-8").splitlines(), 1):
+        if re.search(r'freshness_seconds"\s*,\s*[0-9]', _l):
+            _lit.append(f"{_f.name}:{_i}")
+check("源码里没有字面量的 freshness 默认值（只能引用 DEFAULT_FRESHNESS_S）", not _lit, _lit)
+
 print()
 print("=" * 66)
 if fails:

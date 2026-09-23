@@ -113,7 +113,8 @@ class LockContentionInjector(Injector):
                 # 因此只向上抖 —— 锁得更多只会更严重。
                 "lock_id_max": int(base_max * rng.uniform(1.0, 1.4))
                 if base_max else 0,
-                "duration_s": float(inj.get("duration_s", 600))}
+                # 默认值也要撑过 episode 上限；场景 yaml 没写时不能退回到 10 分钟。
+                "duration_s": float(inj.get("duration_s", 7200))}
 
     def _hold(self, params: dict) -> None:
         try:

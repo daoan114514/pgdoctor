@@ -2,12 +2,15 @@ id: lock_contention_train_v1
 split: train
 difficulty: 2
 fault_class: lock_contention
-revision: 3
+revision: 4
 inject:
   method: hold_row_locks_id_range
   table: orders
   hold_rows: 5000
-  duration_s: 900
+  # 持锁时长必须撑过整个 episode（守护上限 90 分钟，见 sandbox/env.py EPISODE_WALL_CAP_S）。
+  # 原来是 900s：episode 跑 19 分钟，锁 15 分钟就自己回滚了，打分时故障已经不在，
+  # 零干预的 episode 也能拿 Outcome=True（2026-09-22 与 09-21 各一次）。harness_lint [9] 钉住。
+  duration_s: 7200
   lock_id_max: 100000
 workload:
   profile: ecommerce_read_heavy

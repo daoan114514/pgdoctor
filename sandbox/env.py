@@ -59,6 +59,11 @@ class GoldenAnchorStale(RuntimeError):
 # 超过这个漂移就拒绝跑：最紧的场景时间窗是 1 天，漂 6 小时已经吃掉 1/4。
 ANCHOR_DRIFT_LIMIT_H = 6.0
 
+# 单个 episode 的墙钟上限（跑批守护据此杀掉跑不完的 episode）。有持续时间的故障注入
+# 必须撑过它：故障在 episode 中途自愈，后半段取的证据是"故障不在"的证据，打分时更是
+# 直接把恢复算到 agent 头上。harness_lint [9] 用它检查每个场景的 inject.duration_s。
+EPISODE_WALL_CAP_S = 90 * 60
+
 
 def anchor_drift_h() -> float | None:
     """golden 里 orders 最新一行距 now() 多少小时。查不到就返回 None。

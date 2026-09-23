@@ -82,6 +82,10 @@ class EpisodeOutcome:
     episode_id: str = ""
     # 模型调不通导致的作废，与"没诊断出来"必须分开统计
     unusable: bool = False
+    # 本 episode 里由基础设施失败（额度/限流/认证/网络）造成的取证失败条数。
+    # 非零但没到作废的那一档，说明这次的三率是在部分停机下测出来的 ——
+    # 不该和干净 episode 混在一起比。
+    infra_failures: int = 0
     learned: dict = field(default_factory=dict)
     learned_layers: list[str] = field(default_factory=list)
     metrics_v2: dict = field(default_factory=dict)
@@ -107,10 +111,11 @@ def _already_valid(policy: str) -> set[str]:
             continue
         if d.get("policy") != policy:
             continue
+        from agent.failure_class import is_infra_failure
         for e in d.get("episodes", []):
-            low = (e.get("error") or "").lower()
-            dead = ("modelunavailable" in low
-                    or "error result: success" in low
+            dead = (e.get("unusable")
+                    or int(e.get("infra_failures") or 0) > 0
+                    or is_infra_failure(text=e.get("error") or "")
                     or not e.get("fired"))
             if not dead:
                 done.add(e["scenario"])
@@ -133,7 +138,7 @@ def _model_reachable() -> bool:
             system_prompt="只回一个数字。", max_turns=1,
             permission_mode="bypassPermissions", setting_sources=None,
             env=env)
-        from agent.llm_policy import _UNAVAILABLE_HINTS
+        from agent.failure_class import is_infra_failure
         try:
             async for m in query(prompt="回复 1", options=opts):
                 if isinstance(m, ResultMessage):
@@ -141,9 +146,11 @@ def _model_reachable() -> bool:
                     # 返回的正是一条 ResultMessage，is_error=True、内容是
                     # "error result: success"。探针必须和跑批用同一套判据，
                     # 否则它防不住它本该防的东西。
+                    # （旧写法拿未转小写的 blob 去比小写词表，"usage limit"
+                    #  这类词实际上永远匹配不上；is_infra_failure 内部统一转小写。）
                     blob = f"{getattr(m, 'subtype', '')} {getattr(m, 'result', '')}"
                     if getattr(m, "is_error", False) or \
-                            any(h in blob for h in _UNAVAILABLE_HINTS):
+                            is_infra_failure(text=blob):
                         print(f"  探针拿到错误结果: {blob[:120]}")
                         return False
                     return True
@@ -242,9 +249,33 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 st, spec, gate_decisions=res.gate_decisions)
             # run_episode 会把异常吞进 res.error，所以要在这里判，
             # 否则额度耗尽的 episode 会被当成"模型没诊断出来"计入分母
-            low = (res.error or "").lower()
-            if "modelunavailable" in low or "error result: success" in low:
+            from agent.failure_class import (infra_rows_of, is_infra_failure,
+                                             observed_subagent_count)
+            if is_infra_failure(text=res.error or ""):
                 out.unusable = True
+
+            # 但 res.error 这条路只覆盖"异常一路抛到顶"的情况。取证子 agent 的
+            # 失败被 investigator 吞进 EvidenceTaskResult.error、由 orchestrator
+            # 记成 evidence_need_unavailable 审计事件，res.error 始终是空串 ——
+            # 2026-09-21 那轮两个 episode 就是这么以 unusable=False 入账的。
+            # 所以在 episode 结束后再扫一遍审计事件。
+            #
+            # 只在"有停机 **且** 子 agent 一条证据都没取到"时才作废，方向是单向的：
+            # 少认一次停机，代价是三率偏低（可复测）；多认一次，代价是把真实的
+            # 诊断失败从分母里删掉、三率凭空变好（不可见）。后者严重得多。
+            # 跑到一半才断的 episode 仍然计分，但 infra_failures 会记下来，
+            # 守护和 _already_valid 认这个字段为"没完成"，不至于让污染隐形。
+            # 语料上：misleading_idle_txn 29 停机/0 OBSERVED -> 作废；
+            # connection_exhaustion 18 停机/23 OBSERVED -> 计分但标 18；
+            # lock_contention 0 停机/8 OBSERVED -> 干净。
+            audit = getattr(st, "evidence_task_audit", [])
+            infra_rows = infra_rows_of(audit)
+            out.infra_failures = len(infra_rows)
+            if infra_rows and observed_subagent_count(audit) == 0:
+                out.unusable = True
+                out.error = (out.error or
+                             f"基础设施失败，取证全军覆没（{len(infra_rows)} 条）: "
+                             f"{str(infra_rows[0].get('reason'))[:160]}")
             out.cost_usd = round(
                 sum((u.get("cost_usd") or 0.0)
                     for u in getattr(policy, "usage", [])), 4)

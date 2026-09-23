@@ -8,11 +8,11 @@ connection_exhaustion_train_v1:
   fingerprint: 6d1ae79d99cf4ecc
   revision: 2
 lock_contention_eval_v1:
-  fingerprint: 98d5b7145aa84c93
-  revision: 3
+  fingerprint: cffcd37d1f084c82
+  revision: 4
 lock_contention_train_v1:
-  fingerprint: 6215174207d1f0ca
-  revision: 3
+  fingerprint: 2f307130504fe19a
+  revision: 4
 misleading_idle_txn_eval_v1:
   fingerprint: af88d51ef16f2484
   revision: 1

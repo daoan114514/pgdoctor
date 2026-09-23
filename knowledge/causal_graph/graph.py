@@ -16,7 +16,7 @@ from pathlib import Path
 import networkx as nx
 import yaml
 
-from agent.explanation import (CausalPath, CausalStatus, EvidenceNeed,
+from agent.explanation import (DEFAULT_FRESHNESS_S, CausalPath, CausalStatus, EvidenceNeed,
                                EvidenceTargetKind, ExplanationGraph,
                                ObligationStatus, P0Obligation,
                                PredicateResult, stable_id)
@@ -784,7 +784,7 @@ def evidence_needs(explanation: ExplanationGraph) -> list[EvidenceNeed]:
             "target_ids": target_ids, "evidence_type": evidence_type,
             "predicate_id": predicate_id, "required": required,
             "freshness_seconds": int(g.nodes[evidence_type].get(
-                "freshness_seconds", 300)),
+                "freshness_seconds", DEFAULT_FRESHNESS_S)),
             "candidate_tools": [], "reasons": [],
         })
         entry["path_ids"].extend(path_ids)
