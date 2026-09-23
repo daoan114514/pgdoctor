@@ -117,6 +117,11 @@ def merge_evidence_task_results(
             if entry.get("evidence_task_id") == task.task_id and
             entry.get("raw_ref")
         }
+        # 子 agent 引用工具自己的 trace 记录（EXPLAIN 原文）也算"本任务采集过"：
+        # 2026-09-23 实测 explain_query 的报告 0 次引用 evidence_raw_refs，全被这里
+        # 以 "raw_ref was not collected" 拒掉，stale_statistics 的唯一必需证据因此
+        # 永远绑不上。
+        collected_refs |= {str(r) for r in (result.tool_raw_refs or []) if r}
         for report in result.reports:
             report_id = _report_id(report)
             if report_id in st.evidence_reports:
@@ -166,11 +171,27 @@ def merge_evidence_task_results(
 
     if pending_report_ids:
         from agent.explanation_runtime import bind_evidence
+        # 按任务绑定，不按子 agent 引用的 ref 绑定：一次工具调用会落多条 scratchpad
+        # 条目（explain_plan 之外还有派生的 row_estimate_deviation），子 agent 只引用
+        # 其中一条；条目本身是 toolbox 产出、有 digest 校验的观测，报告只是触发器。
+        # 原来 raw_refs=accepted_raw_refs 让派生条目永远绑不上（架构评审第 1 条）。
         outcome.binding_ids = bind_evidence(
             st, evidence_task_ids=accepted_task_ids,
-            raw_refs=accepted_raw_refs,
+            raw_refs=None,
             base_revision=plan.explanation_revision)
         outcome.accepted_report_ids.extend(pending_report_ids)
+    # 合并结果落审计：被拒的报告原来只留在返回值里，trace 上看不到，今天这个
+    # 问题就是因此隐形的。
+    st.evidence_task_audit.append({
+        "event": "evidence_merge",
+        "plan_revision": plan.explanation_revision,
+        "accepted": list(outcome.accepted_report_ids),
+        "late": list(outcome.late_report_ids),
+        "duplicate": list(outcome.duplicate_report_ids),
+        "rejected": list(outcome.rejected_reports)[:50],
+        "bindings": len(outcome.binding_ids),
+        "at": time.time(),
+    })
     return outcome
 
 
@@ -183,6 +204,13 @@ def _mark_unavailable(st: EpisodeState, plan: ToolPlan,
     by_id = {need.need_id: need for need in needs}
     unavailable = dict(plan.unavailable_needs)
     for result in results:
+        if getattr(result, "budget_exhausted", False):
+            # harness 预算到了不是证据不可得（硬规则 6）；单独记一条审计即可。
+            st.evidence_task_audit.append({
+                "event": "evidence_task_budget_exhausted",
+                "task_id": result.task_id, "need_ids": list(result.need_ids),
+                "at": time.time()})
+            continue
         if result.error and not result.reports:
             for need_id in result.need_ids:
                 unavailable.setdefault(need_id, result.error)
@@ -228,6 +256,8 @@ def _record_tool_learning_observations(
         result = result_map.get(task.task_id)
         if result is None:
             continue
+        if getattr(result, "budget_exhausted", False):
+            continue      # 预算耗尽不是"这个工具没用"，不能喂给 L2/L4
         before_paths = {item["path_id"]: item
                         for item in task.local_subgraph.get("paths", [])}
         before_viable = sum(item.get("status") != "REFUTED"
@@ -335,9 +365,16 @@ async def run_evidence_investigation(
     if explanation is None:
         raise ValueError("v2 evidence investigation requires an explanation graph")
     context = target_context or infer_target_context(hot_query)
+    remaining = max(0, int(st.budget.get("max_steps", 0)) - int(st.budget.get("steps", 0)))
     plan = plan_evidence_tasks(
         explanation, needs, tb, target_context=context,
-        incident_window=st.incident_window, config=planning_config)
+        incident_window=st.incident_window, config=planning_config,
+        remaining_calls=remaining)
+    if plan.deferred_need_ids:
+        st.evidence_task_audit.append({
+            "event": "evidence_plan_truncated_by_budget",
+            "remaining_calls": remaining, "planned_tasks": len(plan.tasks),
+            "deferred_need_ids": list(plan.deferred_need_ids), "at": time.time()})
     semaphore = asyncio.Semaphore(max(1, max_concurrency))
     by_id = {need.need_id: need for need in needs}
 

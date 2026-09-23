@@ -315,7 +315,9 @@ def main() -> None:
         help="comma-separated online learning layers; each of l1,l2,l3,l4 "
              "can be ablated independently")
     ap.add_argument("--no-repair", action="store_true")
-    ap.add_argument("--max-steps", type=int, default=60)
+    from agent.episode_state import DEFAULT_MAX_STEPS
+    ap.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS,
+                    help="episode 的工具调用预算（主策略与取证子 agent 共用）")
     ap.add_argument("--tag", default="")
     ap.add_argument("--order", default="name",
                     choices=["name", "reverse", "pending"],

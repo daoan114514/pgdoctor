@@ -27,7 +27,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ResultMessag
 
 from agent.hooks import make_phase_hook
 from agent.permissions import (INVESTIGATOR_DENIED, Role, allowed_tools)
-from agent.episode_state import EvidenceStatus
+from agent.episode_state import EvidenceBudgetExhausted, EvidenceStatus
 from agent.state_machine import Phase
 from agent.toolbox import Toolbox
 from agent.explanation import EvidenceNeed, EvidenceReport
@@ -143,6 +143,11 @@ class EvidenceTaskResult:
     cost_usd: float = 0.0
     duration_s: float = 0.0
     error: str = ""
+    # 本任务内工具自己的 trace raw_ref（如 EXPLAIN 记录）。合并时与 scratchpad 的
+    # evidence raw_ref 一起构成"本任务采集过的 ref"，子 agent 引用任一都算数。
+    tool_raw_refs: list[str] = field(default_factory=list)
+    # 任务中途撞到 episode 的工具调用预算。编排器对这种结果不记不可得、不记观测。
+    budget_exhausted: bool = False
 
 
 
@@ -206,15 +211,34 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
                         entry.get("raw_ref", "")
                         for entry in tb.st.scratchpad[before:]
                         if entry.get("raw_ref")))
-                    r = {"result": r, "evidence_raw_refs": refs,
-                         "reused": False}
-                response = {"content": [{"type": "text",
-                                          "text": json.dumps(
-                                              r, ensure_ascii=False,
-                                              default=str)[:3500]}]}
+                    # 工具自己的 trace 记录（如 EXPLAIN 原文）的 raw_ref 也记下来：
+                    # 子 agent 常引用它而不是 evidence_raw_refs，合并时两者都认。
+                    tool_ref = r.get("raw_ref") if isinstance(r, dict) else None
+                    if tool_ref:
+                        sink.setdefault("tool_raw_refs", []).append(str(tool_ref))
+                    # evidence_raw_refs 必须排在 result 前面并各自截断：原来整体截到
+                    # 3500 字，refs 在末尾，结果一大就被截掉，子 agent 根本看不到该引用
+                    # 什么（2026-09-23 实测 explain_query 的报告 0 次引用过 evidence_raw_refs）。
+                    payload = json.dumps(r, ensure_ascii=False, default=str)
+                    text = json.dumps({
+                        "evidence_raw_refs": refs,
+                        "cite_in_report_evidence": "raw_refs must be taken from evidence_raw_refs above",
+                        "reused": False,
+                        "result_truncated": len(payload) > 3000,
+                        "result": payload[:3000],
+                    }, ensure_ascii=False)
+                else:
+                    text = json.dumps(r, ensure_ascii=False, default=str)[:3500]
+                response = {"content": [{"type": "text", "text": text}]}
                 if call_cache is not None:
                     call_cache[cache_key] = response
                 return response
+            except EvidenceBudgetExhausted as exc:
+                # 不是取证失败，是 harness 的预算到了：让子 agent 别再调工具、把已有
+                # 观测汇报掉；结果上打标，编排器据此不制造"不可得"。
+                sink["budget_exhausted"] = True
+                return {"content": [{"type": "text", "text": f"BUDGET: {exc}"}],
+                        "is_error": True}
             except Exception as exc:
                 return {"content": [{"type": "text",
                                      "text": f"ERROR: {type(exc).__name__}: {exc}"}],
@@ -482,7 +506,9 @@ Available collection tools:
 
 Call each collection tool at most once.  A single observation may cover several
 needs.  Then call report_evidence once for every assigned need_id, reusing the
-same raw_refs where appropriate.  The exact output fields are need_id, tool,
+same raw_refs where appropriate.  raw_refs MUST be copied from the tool
+result's evidence_raw_refs list (the trace refs of the observations the tool
+persisted); a report citing refs the task did not collect is rejected.  The exact output fields are need_id, tool,
 raw_refs, observations (JSON list), collection_status, and limitations.
 {COLLECTION_STATUS_HELP}
 Do not decide causal direction."""
@@ -533,6 +559,8 @@ Do not decide causal direction."""
         result.error = "subagent did not call report_evidence"
     result.tools_used = used
     result.blocked = blocked
+    result.tool_raw_refs = list(dict.fromkeys(sink.get("tool_raw_refs", [])))
+    result.budget_exhausted = bool(sink.get("budget_exhausted"))
     return result
 
 

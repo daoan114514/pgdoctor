@@ -34,6 +34,22 @@ class Verdict(str, Enum):
     REFUTED_BY_REMEDIATION = "REFUTED_BY_REMEDIATION"
 
 
+# 一个 episode 的工具调用预算（主策略与取证子 agent 共用，唯一扣账点是 Toolbox._enter）。
+# 原来在 loop.run_episode(45) / run_diagnosis(40) / run_suite(60) / 这里(40) 各写一份。
+DEFAULT_MAX_STEPS = 40
+
+
+class EvidenceBudgetExhausted(RuntimeError):
+    """取证子 agent 撞到了 episode 的工具调用预算。
+
+    与"证据不可得"是两回事：这是 harness 自己的预算，不是数据库给不出证据。
+    2026-09-23 架构评审：原来它以普通 RuntimeError 抛进子 agent，被当成 ERROR 汇报，
+    编排器再记成 evidence_need_unavailable 和 ERROR 观测 —— ESC 据此 EXHAUSTED，
+    L2/L4 据此学到"这个工具不行"。这正是 CLAUDE.md 硬规则 6 说的自己的动作制造证据。
+    规划器现在按余量裁剪任务，这个异常只是 backstop；编排器对它不记不可得、不记观测。
+    """
+
+
 class EvidenceStatus(str, Enum):
     """一次观测能否作为事实进入诊断。
 
@@ -216,7 +232,7 @@ class EpisodeState:
     # 症状，很可能还有第二个故障。此时修复失败不该反证当前根因。
     partial_fix_suspected: bool = False
     max_repair_attempts: int = 2
-    budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": 40})
+    budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": DEFAULT_MAX_STEPS})
     started_at: float = field(default_factory=time.time)
     finished: bool = False
     outcome_note: str = ""

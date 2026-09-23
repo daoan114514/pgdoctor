@@ -14,7 +14,7 @@ import time
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from agent.episode_state import (EpisodeState, EvidenceRef, EvidenceStatus,
+from agent.episode_state import (EvidenceBudgetExhausted, EpisodeState, EvidenceRef, EvidenceStatus,
                                  Verdict, evidence_is_observed)
 from agent.explanation import canonical_json
 from agent.permissions import Role, allowed_tools
@@ -77,6 +77,8 @@ class Toolbox:
                         "EvidenceNeed target")
         self.calls.append(tool)
         if not self.st.spend():
+            if self.role is Role.INVESTIGATOR:
+                raise EvidenceBudgetExhausted("取证预算耗尽：停止调用工具，直接汇报已有观测")
             raise RuntimeError("预算耗尽")
 
     def _evidence(self, kind: str, raw_ref: str, summary: str,

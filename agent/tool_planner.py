@@ -99,6 +99,9 @@ class ToolPlan:
     tasks: list[PlannedEvidenceTask] = field(default_factory=list)
     skipped_fresh_need_ids: list[str] = field(default_factory=list)
     unavailable_needs: dict[str, str] = field(default_factory=dict)
+    # 因工具调用预算不够而**延后**的 need：不是不可得，下一轮还能派。与
+    # unavailable_needs 严格分开 —— 混在一起就是"预算耗尽"被记成"证据不可得"。
+    deferred_need_ids: list[str] = field(default_factory=list)
     availability: dict[str, ToolAvailability] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -108,6 +111,7 @@ class ToolPlan:
             "tasks": [task.to_dict() for task in self.tasks],
             "skipped_fresh_need_ids": list(self.skipped_fresh_need_ids),
             "unavailable_needs": dict(self.unavailable_needs),
+            "deferred_need_ids": list(self.deferred_need_ids),
             "availability": {key: value.to_dict() for key, value in
                              self.availability.items()},
         }
@@ -366,8 +370,14 @@ def plan_evidence_tasks(
         toolbox: "Toolbox", *, target_context: dict | None = None,
         incident_window: dict | None = None,
         config: ToolPlanningConfig = DEFAULT_TOOL_PLANNING,
-        now: float | None = None) -> ToolPlan:
-    """Choose legal tools and merge all needs served by the same call."""
+        now: float | None = None,
+        remaining_calls: int | None = None) -> ToolPlan:
+    """Choose legal tools and merge all needs served by the same call.
+
+    remaining_calls：episode 还剩多少次工具调用预算。给了就按它裁剪任务（每个任务
+    按 selected_tools 数计），裁掉的 need 进 plan.deferred_need_ids。原来不看余量，
+    最后一轮必然超支，超支在子 agent 内部抛错并被记成证据（硬规则 6）。
+    """
     if not 0.0 <= config.exploration_ratio <= 1.0:
         raise ValueError("exploration_ratio must be between zero and one")
     if config.min_tools < 1 or config.max_tools < config.min_tools:
@@ -469,6 +479,27 @@ def plan_evidence_tasks(
                 config.max_tools):
             raise AssertionError("planned task violates per-agent tool bounds")
         plan.tasks.append(task)
+
+    if remaining_calls is not None:
+        # 必需 need 的任务优先保留，其次按打分；超出余量的任务整个延后。
+        def _prio(task: PlannedEvidenceTask) -> tuple:
+            covered = [need for need in needs if need.need_id in task.need_ids]
+            required = any(need.required for need in covered)
+            best = max((float(score.get("total", 0.0))
+                        for score in task.score_components.values()
+                        if isinstance(score, dict)), default=0.0)
+            return (0 if required else 1, -best, task.task_id)
+        kept: list[PlannedEvidenceTask] = []
+        used = 0
+        for task in sorted(plan.tasks, key=_prio):
+            cost = len(task.selected_tools)
+            if used + cost > max(0, int(remaining_calls)):
+                plan.deferred_need_ids.extend(task.need_ids)
+                continue
+            used += cost
+            kept.append(task)
+        plan.tasks = kept
+        plan.deferred_need_ids = sorted(set(plan.deferred_need_ids))
     return plan
 
 
