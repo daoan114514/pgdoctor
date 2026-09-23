@@ -23,9 +23,11 @@ from safety.gate import RemediationProposal
 
 print("=" * 74)
 print("直接测：终止阻塞会话的提案能否过门")
+# 会话控制的回滚只认 IRREVERSIBLE（gate 的契约，nodes.yaml 的模板也这么写）；
+# 原夹具用 "SELECT 1" 是靠旧的"过盾就行"路径过的，2026-09-23 回滚白名单收紧后不再成立。
 for sql, rb in [
-    ("SELECT pg_terminate_backend(12345)", "SELECT 1"),
-    ("SELECT pg_cancel_backend(12345)", "SELECT 1"),
+    ("SELECT pg_terminate_backend(12345)", "IRREVERSIBLE"),
+    ("SELECT pg_cancel_backend(12345)", "IRREVERSIBLE"),
 ]:
     p = RemediationProposal(
         action_type="session_control", sql=sql, rollback=rb,

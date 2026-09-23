@@ -259,12 +259,14 @@ def assess(p: RemediationProposal) -> GateDecision:
                              "touches_data": False})
 
     # 声明标记不是 SQL，不能拿去解析（IRREVERSIBLE 在上面已提前返回，
-    # NO_ROLLBACK_NEEDED 会走到这里，两者都得跳过护盾）
+    # NO_ROLLBACK_NEEDED 会走到这里，两者都得跳过）。SQL 形式的回滚按前向动作
+    # 类别做 AST 配对白名单 —— 原来"过不了护盾但含 DROP 就放行"的子串豁免会让
+    # DROP TABLE orders CASCADE 通过，而 rollback() 是不过盾直接执行的。
     if not undo_journal.is_marker(p.rollback):
-        rb = shield.inspect_sql(p.rollback)
-        if not rb.allowed and "DROP" not in p.rollback.upper():
+        rb = shield.inspect_rollback(p.sql, p.rollback)
+        if not rb.allowed:
             return denial("ROLLBACK_INVALID", RetryPhase.PLAN,
-                          ["回滚语句本身不合法"],
+                          ["回滚语句不在允许形态内"],
                           shield_reasons=rb.reasons)
 
     concurrent = shield.is_concurrent_index(p.sql)
@@ -424,6 +426,13 @@ def rollback(undo_id: str) -> tuple[bool, str]:
         undo_journal.mark(undo_id, UndoStatus.APPLIED,
                           "该动作不可撤销，提案时已显式声明")
         return True, "该动作不可撤销（提案时已声明 IRREVERSIBLE），无需回滚"
+    # 执行前再验一次：日志是文件，提案时通过不等于现在还成立。配对用日志里的
+    # forward_sql，而不是信任 undo_sql 自己。不通过就冻结升级，绝不执行。
+    rb = shield.inspect_rollback(rec.get("forward_sql", ""), rec.get("undo_sql", ""))
+    if not rb.allowed:
+        why = "; ".join(rb.reasons)
+        undo_journal.mark(undo_id, UndoStatus.UNDO_FAILED, f"回滚语句未通过白名单: {why}")
+        return False, f"撤销被拒，未执行（需人工介入）: {why}"
     try:
         with db.connect(role="rw", autocommit=True) as conn, conn.cursor() as cur:
             cur.execute("SET lock_timeout = '5s'")

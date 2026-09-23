@@ -161,6 +161,123 @@ def inspect_sql(sql: str) -> ShieldVerdict:
     return v
 
 
+def _stmt_name_parts(node) -> list[str]:
+    """DropStmt.objects 里的名字是 String 列表；取小写的最后一段（不带 schema）。"""
+    out = []
+    for obj in (getattr(node, "objects", None) or []):
+        parts = obj if isinstance(obj, (list, tuple)) else [obj]
+        vals = [str(getattr(x, "sval", getattr(x, "val", x))) for x in parts]
+        out.append(vals[-1].lower() if vals else "")
+    return out
+
+
+def inspect_rollback(forward_sql: str, rollback_sql: str) -> ShieldVerdict:
+    """回滚语句的 AST 白名单：按前向动作类别配对，不看字符串。
+
+    原来的规则是"回滚过不了护盾但含 DROP 就放行"（本意只是放行建索引的逆操作
+    DROP INDEX），于是 DROP TABLE orders CASCADE、`DELETE FROM orders -- drop` 都能过，
+    而 gate.rollback() 以 agent_rw 直接执行日志里的 undo_sql（2026-09-23 架构评审
+    发现，与 CLAUDE.md 硬规则 3 直接冲突）。这里改成：
+
+      create_index         ↔ 恰好一条 DROP INDEX（可带 CONCURRENTLY / IF EXISTS），
+                             同名索引，不带 CASCADE
+      dml_update/dml_delete ↔ 一条过护盾的 UPDATE/DELETE（必须带 WHERE）
+      set_parameter        ↔ 同名的 SET / RESET
+      alter_table_options  ↔ 同一张表、受控子类型的 ALTER TABLE
+      标记（IRREVERSIBLE / NO_ROLLBACK_NEEDED）由 gate 按类别单独校验，这里放行——
+      它们永远不会被执行。
+      其它组合一律拒绝。
+    """
+    rb = (rollback_sql or "").strip().rstrip(";")
+    if rb.upper() in ("IRREVERSIBLE", "NO_ROLLBACK_NEEDED"):
+        return ShieldVerdict(True, [], [rb.upper()], [rb.upper()])
+    fwd = classify(forward_sql)
+    try:
+        tree = parse_sql(rb)
+    except Exception as exc:
+        return ShieldVerdict(False, [f"回滚语句无法解析: {exc}"])
+    if len(tree) != 1:
+        return ShieldVerdict(False, [f"回滚必须恰好一条语句，实际 {len(tree)} 条"])
+    stmt = tree[0].stmt
+    kind = _node_name(stmt)
+    nested: list[str] = []
+    _walk(stmt, nested)
+    for n in set(nested):
+        if n != kind:
+            return ShieldVerdict(False, [f"回滚语句嵌套了灾难动作: {FORBIDDEN_STMT[n]}"])
+
+    def deny(msg: str) -> ShieldVerdict:
+        return ShieldVerdict(False, [msg], [kind])
+
+    if fwd == "create_index":
+        if kind != "DropStmt":
+            return deny(f"建索引的回滚只能是 DROP INDEX，实际 {kind}")
+        remove = getattr(getattr(stmt, "removeType", None), "name", str(getattr(stmt, "removeType", "")))
+        if remove != "OBJECT_INDEX":
+            return deny(f"回滚只允许 DROP INDEX，实际 DROP {remove}")
+        behavior = getattr(getattr(stmt, "behavior", None), "name", "")
+        if behavior == "DROP_CASCADE":
+            return deny("回滚的 DROP INDEX 不允许 CASCADE")
+        names = _stmt_name_parts(stmt)
+        if len(names) != 1:
+            return deny(f"回滚必须只删一个索引，实际 {len(names)} 个")
+        try:
+            fwd_stmt = parse_sql(forward_sql)[0].stmt
+            created = str(getattr(fwd_stmt, "idxname", "") or "").lower()
+        except Exception:
+            created = ""
+        if not created:
+            return deny("前向 CREATE INDEX 没有显式索引名，无法配对回滚")
+        if names[0] != created:
+            return deny(f"回滚删的索引 {names[0]} 与前向创建的 {created} 不一致")
+        return ShieldVerdict(True, [], [kind], [RawStream()(stmt)])
+
+    if fwd in ("dml_update", "dml_delete"):
+        if kind not in ("UpdateStmt", "DeleteStmt"):
+            return deny(f"DML 的回滚只能是 UPDATE/DELETE，实际 {kind}")
+        v = inspect_sql(rb)
+        return v if not v.allowed else ShieldVerdict(True, [], [kind], v.statements)
+
+    if fwd == "set_parameter":
+        if kind != "VariableSetStmt":
+            return deny(f"SET 的回滚只能是 SET/RESET，实际 {kind}")
+        try:
+            fwd_name = str(parse_sql(forward_sql)[0].stmt.name or "").lower()
+        except Exception:
+            fwd_name = ""
+        if str(getattr(stmt, "name", "") or "").lower() != fwd_name:
+            return deny(f"回滚的参数名 {getattr(stmt, 'name', '')} 与前向 {fwd_name} 不一致")
+        v = inspect_sql(rb)
+        return v if not v.allowed else ShieldVerdict(True, [], [kind], v.statements)
+
+    if fwd == "alter_table_options":
+        if kind != "AlterTableStmt":
+            return deny(f"ALTER TABLE 的回滚只能是 ALTER TABLE，实际 {kind}")
+        try:
+            fwd_rel = str(parse_sql(forward_sql)[0].stmt.relation.relname or "").lower()
+        except Exception:
+            fwd_rel = ""
+        rel = str(getattr(getattr(stmt, "relation", None), "relname", "") or "").lower()
+        if rel != fwd_rel:
+            return deny(f"回滚的表 {rel} 与前向 {fwd_rel} 不一致")
+        v = inspect_sql(rb)
+        return v if not v.allowed else ShieldVerdict(True, [], [kind], v.statements)
+
+    if fwd == "vacuum_analyze":
+        # 自愈类动作本无需回滚，但允许模型给一条无害的语句（只读 SELECT 或再做一次
+        # VACUUM/ANALYZE）—— 它会以 rw 角色执行，所以只能是这两类且必须过护盾；
+        # 任何 DML/DDL 都不行，否则"回滚"就成了绕过分级的写入口。
+        rb_kind = classify(rb)
+        if rb_kind not in ("select", "vacuum_analyze"):
+            return deny(f"VACUUM/ANALYZE 的回滚只能是 NO_ROLLBACK_NEEDED、只读 SELECT "
+                        f"或再一次 VACUUM/ANALYZE，实际 {rb_kind}")
+        v = inspect_sql(rb)
+        return v if not v.allowed else ShieldVerdict(True, [], [kind], v.statements)
+    if fwd == "session_control":
+        return deny("会话控制不可撤销，rollback 请写 IRREVERSIBLE")
+    return deny(f"{fwd} 没有允许的回滚形态")
+
+
 def classify(sql: str) -> str:
     """给分级门用的动作类型。"""
     try:
