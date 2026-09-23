@@ -489,17 +489,8 @@ _CUMULATIVE_EPOCH_KEYS = {
 
 
 def _window_predicate_ids() -> set[str]:
-    ids: set[str] = set()
-    graph = G.load()
-    for node_id, data in graph.nodes(data=True):
-        if data.get("kind") != "RootCause":
-            continue
-        ids.update(
-            str(item.get("predicate_id") or "")
-            for item in G.refuting_evidence(node_id)
-            if item.get("window_required")
-        )
-    return ids - {""}
+    """同一份定义在 graph.window_predicate_ids（需求生成也读它），这里只是转发。"""
+    return set(G.window_predicate_ids())
 
 
 def _contaminated_by(binding: EvidenceBinding,
@@ -520,9 +511,8 @@ def _contaminated_by(binding: EvidenceBinding,
     （row_estimate_deviation 与 stats_range_drift 判 stale_statistics 都属于
     这一类），所以绑定目标里出现的污染源不算数。
     """
-    own_targets = set(binding.target_node_ids)
-    return sorted((G.invalidators_of(binding.evidence_type) - own_targets) &
-                  live_invalidators)
+    from agent.explanation_runtime import contaminated_by
+    return contaminated_by(binding, live_invalidators)
 
 
 def _binding_trust(st: EpisodeState, binding: EvidenceBinding, *,
@@ -829,10 +819,8 @@ def check_explanation(
     selected_ids = {path.path_id for path in selected}
     selected_roots = explanation.derive_selected_root_causes()
     window_predicates = _window_predicate_ids()
-    live_invalidators = {
-        path.root_node_id for path in paths.values()
-        if path.status != CausalStatus.REFUTED.value
-    }
+    from agent.explanation_runtime import live_invalidators as _live
+    live_invalidators = _live(explanation)
 
     trust: dict[str, tuple[bool, list[str]]] = {
         binding_id: _binding_trust(

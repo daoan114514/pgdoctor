@@ -45,3 +45,10 @@ glob `eval/results/*.json`，放在这里就不会再被当成"已完成"。
 | 文件 | 为什么隔离 |
 |---|---|
 | `guard_connection_exhaustion_20260923_prepidfix.json` | 诊断正确（D=True、ESC SUFFICIENT）但 O=False：模型在 PLAN 里正确调了 `get_active_sessions(include_idle=true)` 并提交 `pg_terminate_backend(<idle pid>)`，`create_intervention_plan` 却报四条 pid 前置条件不满足 —— PLAN 阶段的观测进不了绑定（绑定会 bump revision，与 GATE 的 ESC 同 revision 契约冲突），terminate 类修复历史上从未过门。修复后 5 个场景统一重跑 |
+
+## 2026-09-23 下午（ffd6e53，证据方向修复之前）
+
+| 文件 | 为什么隔离 |
+|---|---|
+| `guard_connection_exhaustion_20260923_ffd6e53.json` | pid 修复已生效：terminate 过门并执行，但单 pid 终止达不到"使用率 30s 内降 5%"（0.95→0.96），两次用尽升级，O=False。修复粒度与场景判据问题记入缺陷报告 |
+| `guard_lock_contention_20260923_ffd6e53.json` | D=True 但 ESC INSUFFICIENT×4 到预算耗尽：missing_index 被自家 `_stats_range_drift` 全表扫污染成 seq_scan_volume SUPPORTS，且 index_existence/slow_query_ranking 这两条"采集即 SUPPORTS"的门与真正的反证混成 INCONCLUSIVE，永远无法反证；explain_seq_scan 需求在走索引时永远拿不到观测，被索取 18 次。四条修复后 5 个场景统一重跑 |

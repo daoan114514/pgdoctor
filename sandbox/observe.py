@@ -128,9 +128,17 @@ class TableStats:
     stats_range_incomplete: list = field(default_factory=list)
     # 累计扫描计数器（原始值，窗口增量由 Toolbox 差分）。它记的是实际
     # 执行了什么，不经过规划器，所以过期统计污染不到它。
+    # 已扣除本 episode 自家取证扫描（_stats_range_drift）的净值；原始值与扣除量另记，
+    # 便于回查。
     seq_scan: int = 0
     seq_tup_read: int = 0
     idx_scan: int = 0
+    seq_scan_raw: int = 0
+    seq_tup_read_raw: int = 0
+    idx_scan_raw: int = 0
+    own_seq_scan: int = 0
+    own_seq_tup_read: int = 0
+    own_idx_scan: int = 0
     reltuples: int = 0
     stats_reset: str = ""
     raw_ref: str = ""
@@ -166,6 +174,9 @@ class Observer:
         self.trace = trace or TraceStore()
         self.last_raw_refs: dict[str, str] = {}
         self._extension_cache: dict[str, bool] = {}
+        # 本 episode 自家取证扫描（_stats_range_drift）累计给各表记上的扫描计数，
+        # get_table_stats 从原始计数器里扣掉它，seq_scan_volume 才量的是负载而不是自己。
+        self._own_scans: dict[str, dict[str, int]] = {}
 
     def extension_available(self, extension: str) -> bool:
         """Read-only capability probe used by the v2 tool planner."""
@@ -401,24 +412,44 @@ class Observer:
             " WHERE s.tablename = %s AND s.histogram_bounds IS NOT NULL",
             (table,), role="ro")
         worst, detail, incomplete = 0, [], []
-        for name, coltype, lo, hi in cols:
-            if lo is None or hi is None:
-                continue
-            try:
-                rows = db.query(
-                    f'SELECT count(*) FROM "{table}"'
-                    f' WHERE "{name}" < %s::{coltype} OR "{name}" > %s::{coltype}',
-                    (lo, hi), role="ro")
-            except Exception as exc:
-                # 跳过一列会让 max() 只在剩下的列上取，结果**只可能偏低** ——
-                # 偏低的占比会让判据返回 REFUTES，把真的统计过期排除掉。
-                # 所以测不到必须如实上报，由判据决定不能据此否定。
-                incomplete.append({"column": name, "error": str(exc)[:120]})
-                continue
-            beyond = int(rows[0][0] or 0) if rows else 0
-            detail.append({"column": name, "known_min": str(lo),
-                           "known_max": str(hi), "rows_outside": beyond})
-            worst = max(worst, beyond)
+        # 全表扫会给 pg_stat_user_tables 记 seq_scan / seq_tup_read，而 seq_scan_volume 读的
+        # 正是这个计数器的窗口增量 —— 自家的取证扫描把它污染成"窗口内有大规模顺序扫描"，
+        # missing_index 因此被 SUPPORTS（2026-09-23 跑批：lock_contention 里"3 次顺序扫描各读
+        # 400 万行"全是这里扫出来的；CLAUDE.md 规则 6 的只读版）。所以：一个事务、禁并行
+        # （并行 worker 各自计数，事务级视图看不到它们）、扫完从 pg_stat_xact_user_tables
+        # 读出本事务自己的精确计数，累加进 _own_scans，由 get_table_stats 从原始计数器扣掉。
+        with db.connect(role="ro", autocommit=False) as conn, conn.cursor() as cur:
+            cur.execute("SET LOCAL max_parallel_workers_per_gather = 0")
+            for name, coltype, lo, hi in cols:
+                if lo is None or hi is None:
+                    continue
+                cur.execute("SAVEPOINT drift_col")
+                try:
+                    cur.execute(
+                        f'SELECT count(*) FROM "{table}"'
+                        f' WHERE "{name}" < %s::{coltype} OR "{name}" > %s::{coltype}',
+                        (lo, hi))
+                    beyond = int((cur.fetchone() or [0])[0] or 0)
+                except Exception as exc:
+                    # 跳过一列会让 max() 只在剩下的列上取，结果**只可能偏低** ——
+                    # 偏低的占比会让判据返回 REFUTES，把真的统计过期排除掉。
+                    # 所以测不到必须如实上报，由判据决定不能据此否定。
+                    cur.execute("ROLLBACK TO SAVEPOINT drift_col")
+                    incomplete.append({"column": name, "error": str(exc)[:120]})
+                    continue
+                detail.append({"column": name, "known_min": str(lo),
+                               "known_max": str(hi), "rows_outside": beyond})
+                worst = max(worst, beyond)
+            cur.execute(
+                "SELECT coalesce(seq_scan, 0), coalesce(seq_tup_read, 0), coalesce(idx_scan, 0)"
+                " FROM pg_stat_xact_user_tables WHERE relname = %s", (table,))
+            row = cur.fetchone() or (0, 0, 0)
+            conn.rollback()
+        own = self._own_scans.setdefault(
+            table, {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
+        own["seq_scan"] += int(row[0] or 0)
+        own["seq_tup_read"] += int(row[1] or 0)
+        own["idx_scan"] += int(row[2] or 0)
         return worst, detail, incomplete
 
     def get_table_stats(self, table: str) -> TableStats:
@@ -447,6 +478,10 @@ class Observer:
             raise KeyError(table)
         (live, dead, la, laa, lav, size, av_enabled, av_running, av_trigger,
          seq_scan, seq_tup_read, idx_scan, reltuples, stats_reset) = r[0]
+        # 原始计数器在上面读、自家扫描在下面做：扣的是**此前**各次调用累计的自家计数，
+        # 本次扫描的计数会出现在下一次的原始值里，那时再扣。
+        own_before = dict(self._own_scans.get(
+            table) or {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
         drift_rows, drift_cols, drift_gaps = self._stats_range_drift(table)
         st = TableStats(table, live or 0, dead or 0,
                         round((dead or 0) / max(live or 1, 1), 4),
@@ -457,9 +492,15 @@ class Observer:
                             100.0 * drift_rows / max(live or 1, 1), 4),
                         stats_range_columns=drift_cols,
                         stats_range_incomplete=drift_gaps,
-                        seq_scan=int(seq_scan or 0),
-                        seq_tup_read=int(seq_tup_read or 0),
-                        idx_scan=int(idx_scan or 0),
+                        seq_scan=max(0, int(seq_scan or 0) - own_before["seq_scan"]),
+                        seq_tup_read=max(0, int(seq_tup_read or 0) - own_before["seq_tup_read"]),
+                        idx_scan=max(0, int(idx_scan or 0) - own_before["idx_scan"]),
+                        seq_scan_raw=int(seq_scan or 0),
+                        seq_tup_read_raw=int(seq_tup_read or 0),
+                        idx_scan_raw=int(idx_scan or 0),
+                        own_seq_scan=own_before["seq_scan"],
+                        own_seq_tup_read=own_before["seq_tup_read"],
+                        own_idx_scan=own_before["idx_scan"],
                         reltuples=int(reltuples or 0),
                         stats_reset=str(stats_reset or ""))
         raw = asdict(st)

@@ -416,6 +416,17 @@ _WINDOW_PREDICATES = frozenset({
 })
 
 
+# "采集即 SUPPORTS"的存在性门：只证明数据到手（ESC 的必需证据、路径的 required_supported
+# 读它），不证明因果方向。方向裁决里把它们当 NEUTRAL —— 否则它们的 SUPPORTS 与真正的反证
+# 混在一起，_decision_status 永远判 INCONCLUSIVE，missing_index 在任何场景都无法被反证
+# （2026-09-23 跑批，ESC 因此空转到预算耗尽）。
+GATE_PREDICATES = frozenset({"index_existence_v2", "slow_query_ranking_v2"})
+
+
+def is_gate_predicate(predicate_id: str) -> bool:
+    return str(predicate_id or "") in GATE_PREDICATES
+
+
 def registered_predicates() -> frozenset[str]:
     return frozenset(_PREDICATES)
 

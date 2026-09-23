@@ -260,19 +260,22 @@ class Toolbox:
                     "parallel_workers": 0, "top_nodes": [], "raw_ref": ""}
         scan = "Seq Scan" if any("Seq Scan" in s for s in d.scan_types) else (
             "Index Scan" if any("Index Scan" in s for s in d.scan_types) else "other")
-        kind = "explain_seq_scan" if scan == "Seq Scan" else "explain_plan"
         structured_plan = asdict(d)
         structured_plan.pop("raw_ref", None)
         # DML 走的是同表同 WHERE 的 SELECT 代理（只读角色连纯 EXPLAIN UPDATE 都被拒），
         # 访问路径可信、写代价不在其中 —— 在摘要里说清楚，别让下游当成原语句的实测。
         proxy_note = ("（原语句为 DML，以同 WHERE 的 SELECT 代理取访问路径，"
                       "不含写路径代价）" if getattr(d, "mode", "analyze") == "select_proxy" else "")
-        self._evidence(
-            kind, d.raw_ref,
-            f"{d.total_time_ms}ms, {scan}, Rows Removed by Filter="
-            f"{d.rows_removed_by_filter:,}, 用到索引={d.indexes_used or '无'}{proxy_note}",
-            bears_on=["missing_index", "stale_statistics"],
-            structured_value=structured_plan)
+        # 同一份计划落两条证据：explain_seq_scan（判据看有没有大量过滤的顺序扫描）与
+        # explain_plan（判据看有没有走索引）。原来按结果二选一，走索引时 explain_seq_scan
+        # 这条需求永远拿不到观测，ESC 一轮轮重复索取（2026-09-23 跑批）。
+        for kind in ("explain_seq_scan", "explain_plan"):
+            self._evidence(
+                kind, d.raw_ref,
+                f"{d.total_time_ms}ms, {scan}, Rows Removed by Filter="
+                f"{d.rows_removed_by_filter:,}, 用到索引={d.indexes_used or '无'}{proxy_note}",
+                bears_on=["missing_index", "stale_statistics"],
+                structured_value=structured_plan)
 
         # 估计与实际行数的偏差单独记一条：它是统计过期的判别特征，
         # 混在执行计划摘要里容易被忽略（实测子 agent 只看了 last_analyze

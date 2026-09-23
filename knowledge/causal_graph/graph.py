@@ -744,15 +744,35 @@ def path_frontier(explanation: ExplanationGraph) -> list[dict]:
         0 if item["target_kind"] == "EDGE" else 1, item["target_id"]))
 
 
+@functools.lru_cache(maxsize=1)
+def window_predicate_ids() -> frozenset[str]:
+    """窗口类反证判据（REFUTED_BY 边上 window_required 为真）。esc 与需求生成共用。"""
+    ids: set[str] = set()
+    g = load()
+    for node_id, data in g.nodes(data=True):
+        if data.get("kind") != "RootCause":
+            continue
+        for item in refuting_evidence(node_id):
+            if item.get("window_required"):
+                ids.add(str(item.get("predicate_id") or ""))
+    return frozenset(ids - {""})
+
+
 def _binding_satisfies(explanation: ExplanationGraph, *, evidence_type: str,
                        target_ids: list[str]) -> bool:
     targets = set(target_ids)
     for binding in explanation.evidence_bindings.values():
-        if (binding.evidence_type != evidence_type or not binding.is_trusted() or
-                binding.predicate_result not in {
-                    PredicateResult.SUPPORTS.value,
-                    PredicateResult.REFUTES.value,
-                }):
+        if binding.evidence_type != evidence_type or not binding.is_trusted():
+            continue
+        # 非窗口判据的 NEUTRAL 是确定性结果（同一份执行计划再取一次还是 NEUTRAL），
+        # 也算需求已满足；原来只认 SUPPORTS/REFUTES，explain_seq_scan 在走索引时永远
+        # NEUTRAL，ESC 一轮轮重复索取（2026-09-23 跑批：单个 episode 18 次）。窗口判据的
+        # NEUTRAL 是"窗口内没活动"，下一个窗口可能不同，仍要再取。
+        decisive = binding.predicate_result in {PredicateResult.SUPPORTS.value,
+                                                PredicateResult.REFUTES.value}
+        settled_neutral = (binding.predicate_result == PredicateResult.NEUTRAL.value and
+                           binding.predicate_id not in window_predicate_ids())
+        if not (decisive or settled_neutral):
             continue
         if targets.intersection(binding.target_node_ids + binding.target_edge_ids):
             return True

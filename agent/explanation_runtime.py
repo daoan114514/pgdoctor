@@ -26,7 +26,7 @@ from agent.explanation import (
     PredicateResult,
 )
 from knowledge.causal_graph import graph as G
-from knowledge.evidence_predicates import PredicateContext, evaluate
+from knowledge.evidence_predicates import PredicateContext, evaluate, is_gate_predicate
 
 
 class CausalGateError(ValueError):
@@ -280,10 +280,14 @@ def _causal_relation(graph, cause_id: str, binding: EvidenceBinding,
     relations = graph.get_edge_data(cause_id, binding.evidence_type) or {}
     confirms = "CONFIRMED_BY" in relations
     refuter = relations.get("REFUTED_BY") or {}
+    refuter_scope = str(refuter.get("scope") or "")
+    # 根因节点被反证，它发出的因果边自然也被反证：边一级同时接受 NODE 范围的
+    # REFUTED_BY。原来边只认 PATH、节点只认 NODE，需求落在哪一级由 frontier 决定，
+    # 一条反证边总有一级是死的（2026-09-23：explain_plan 对 missing_index 从未生效）。
     refutes = (
         bool(refuter) and
         str(refuter.get("predicate_id") or "") == binding.predicate_id and
-        str(refuter.get("scope") or "") == scope
+        (refuter_scope == scope or (scope == "PATH" and refuter_scope == "NODE"))
     )
     return confirms, refutes
 
@@ -326,6 +330,43 @@ def window_spans_own_write(st: EpisodeState, binding) -> bool:
     return False
 
 
+def live_invalidators(explanation) -> set[str]:
+    """尚未被反证的候选根因：它们为真时会让别的证据关于其它根因的裁决失真。"""
+    return {path.root_node_id for path in explanation.candidate_paths
+            if path.status != CausalStatus.REFUTED.value}
+
+
+def contaminated_by(binding: EvidenceBinding, live: set[str],
+                    edge_sources: dict[str, set[str]] | None = None) -> list[str]:
+    """这条绑定的来源，是否正被一条尚未反证的候选路径怀疑失真（provenance_rules 推出）。
+
+    自身豁免：证据判它自己的来源是否失真是检验不是污染，所以绑定目标节点、以及目标边的
+    起点根因都不算污染源。ESC 的 EVIDENCE_TRUST 与这里的方向裁决共用这一个函数（规则 4）。
+    """
+    own_targets = set(binding.target_node_ids)
+    for edge_id in binding.target_edge_ids:
+        own_targets |= set((edge_sources or {}).get(edge_id, set()))
+    return sorted((G.invalidators_of(binding.evidence_type) - own_targets) & live)
+
+
+def _direction_result(binding: EvidenceBinding, live: set[str],
+                      edge_sources: dict[str, set[str]] | None = None) -> str:
+    """绑定对节点/边状态的方向贡献。
+
+    存在性门（index_existence、slow_query_ranking）只算 NEUTRAL：它们的 SUPPORTS 仍留在
+    绑定上，供 ESC 的 ROOT_REQUIRED_EVIDENCE 与路径的 required_supported 读取；只是不再把
+    "数据到手"当成"支持该根因"。被污染的 REFUTES 也只算 NEUTRAL：拿被污染的证据去关掉
+    竞争路径正是静默选错的形状（污染只压 REFUTES 不压 SUPPORTS，与 ESC 同一条规则）。
+    原来这条规则只在 ESC 里有，路径状态由这里直接算，explain_plan 的反证范围一改成 NODE，
+    stale_statistics 未排除时它就能把 missing_index 判成 REFUTED。"""
+    if is_gate_predicate(binding.predicate_id):
+        return PredicateResult.NEUTRAL.value
+    if (binding.predicate_result == PredicateResult.REFUTES.value and
+            contaminated_by(binding, live, edge_sources)):
+        return PredicateResult.NEUTRAL.value
+    return binding.predicate_result
+
+
 def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
     explanation = st.explanation_graph
     if explanation is None:
@@ -340,6 +381,9 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
     for path in explanation.candidate_paths:
         for index, edge_id in enumerate(path.edge_ids):
             edge_sources.setdefault(edge_id, set()).add(path.node_ids[index])
+    # 用进入时的路径状态算"尚未反证的污染源"；bind_evidence 会反复调用这里，
+    # 一条路径被干净证据反证后，下一轮它就不再污染别的证据。
+    live = live_invalidators(explanation)
 
     for binding in explanation.evidence_bindings.values():
         for node_id in binding.target_node_ids:
@@ -360,7 +404,7 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
                         PredicateResult.NOT_APPLICABLE.value,
                     }):
                 node_results.setdefault(node_id, {}).setdefault(
-                    binding.raw_ref, set()).add(binding.predicate_result)
+                    binding.raw_ref, set()).add(_direction_result(binding, live, edge_sources))
         for edge_id in binding.target_edge_ids:
             directions = [
                 _causal_relation(
@@ -383,7 +427,7 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
                         PredicateResult.NOT_APPLICABLE.value,
                     }):
                 edge_results.setdefault(edge_id, {}).setdefault(
-                    binding.raw_ref, set()).add(binding.predicate_result)
+                    binding.raw_ref, set()).add(_direction_result(binding, live, edge_sources))
 
     for symptom_id in st.observed_symptom_ids:
         explanation.set_node_status(symptom_id, CausalStatus.SUPPORTED)
