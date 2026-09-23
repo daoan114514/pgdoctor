@@ -97,7 +97,8 @@ check("re.findall" not in inspect.getsource(gate._blast_radius) and "re.search" 
 print("[3] 只读探测白名单 shield.inspect_readonly（explain_query 入口）")
 HOT = "SELECT * FROM orders WHERE created_at > now() - interval '1 day' AND user_id = %(uid)s"
 for sql, ok, why in (
-    (HOT.replace("%(uid)s", "NULL"), True, "热查询本身允许"),
+    (HOT, True, "热查询原文（带 %(uid)s 占位符）允许 —— 2026-09-23 冒烟实测被拒过"),
+    ("SELECT * FROM orders WHERE id = %s AND note LIKE '100%%'", True, "位置占位符与 %% 也允许"),
     ("UPDATE orders SET status = 'X' WHERE id = 1", True, "带 WHERE 的 UPDATE 允许（走 SELECT 代理）"),
     ("SELECT pg_sleep(600)", False, "pg_sleep 拒绝"),
     ("SELECT pg_advisory_lock(1)", False, "advisory lock 拒绝"),

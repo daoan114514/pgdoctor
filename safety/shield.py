@@ -529,6 +529,34 @@ def inspect_session_control(sql: str) -> tuple[bool, list[str], int | None]:
     return ok, reasons, (pid if ok else None)
 
 
+def _parseable(sql: str) -> str:
+    """把 psycopg 的占位符（%(name)s / %s / %%）换成能解析的形态，只用于 AST 检查。
+
+    热查询原文带 %(uid)s，执行时由 params 代入；pglast 解析不了它。2026-09-23 冒烟：
+    inspect_readonly 上线后 14 次 EXPLAIN 因 "SQL 无法解析" 被拒，explain_query 的
+    8 个 need 全部 ERROR —— checkall 全绿、活库才炸（CLAUDE.md 规则 5）。"""
+    out: list[str] = []
+    i, n = 0, len(sql)
+    while i < n:
+        if sql.startswith("%(", i):
+            j = sql.find(")s", i)
+            if j > i:
+                out.append("NULL")
+                i = j + 2
+                continue
+        if sql.startswith("%%", i):
+            out.append("%")
+            i += 2
+            continue
+        if sql.startswith("%s", i):
+            out.append("NULL")
+            i += 2
+            continue
+        out.append(sql[i])
+        i += 1
+    return "".join(out)
+
+
 def inspect_readonly(sql: str) -> ShieldVerdict:
     """只读探测入口（explain_query）的 AST 白名单。
 
@@ -536,7 +564,7 @@ def inspect_readonly(sql: str) -> ShieldVerdict:
     数据修改 CTE 这些语义副作用，也挡不住无 WHERE 的大排序把 temp 计数器污染成
     work_mem_spill 的证据（CLAUDE.md 规则 6）。"""
     try:
-        tree = parse_sql(sql)
+        tree = parse_sql(_parseable(sql))
     except Exception as exc:
         return ShieldVerdict(False, [f"SQL 无法解析: {exc}"])
     if len(tree) != 1:
