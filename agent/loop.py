@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass, field
 from agent import esc as esc_mod
 from agent import explanation_runtime as xr
 from agent import verification as verify_mod
-from agent.episode_state import EpisodeState, RemediationAttempt
+from agent.episode_state import DEFAULT_MAX_STEPS, EpisodeState, RemediationAttempt
 from agent.explanation import CausalStatus
 from agent.policy import Policy
 from agent.state_machine import Phase, PhaseViolation, StateMachine
@@ -43,6 +43,8 @@ class RunResult:
     transitions: list[tuple] = field(default_factory=list)
     violations: list[str] = field(default_factory=list)
     applied_sql: list[str] = field(default_factory=list)
+    # applied_sql 里去掉已被成功回滚的：打分只看仍然生效的修复。
+    effective_sql: list[str] = field(default_factory=list)
     gate_decisions: list[dict] = field(default_factory=list)
     rollbacks: list[str] = field(default_factory=list)
     elapsed_s: float = 0.0
@@ -92,6 +94,14 @@ def _post_episode_learning(env, st: EpisodeState, res: RunResult, *,
         res.learning_result = dict(result)
         return
 
+    # 打分前把终态、是否升级、最后一次 ESC 裁决放进 audit：报告口径的诊断要看它们。
+    res.audit.setdefault("final_phase", res.final_phase)
+    res.audit.setdefault("escalated", any("ESCALATE" in str(t) for t in res.transitions))
+    res.audit.setdefault("esc_last_verdict", next(
+        (str(r.get("verdict") if isinstance(r, dict) else getattr(r, "verdict", ""))
+         for r in reversed(res.esc_reports)), ""))
+    res.audit.setdefault("esc_used", bool(res.esc_reports))
+    res.effective_sql = effective_applied_sql(res.applied_sql, st.intervention_attempts)
     try:
         score = scorer(
             res.claimed_fault_class,
@@ -99,6 +109,7 @@ def _post_episode_learning(env, st: EpisodeState, res: RunResult, *,
             ledger=st.ledger,
             kpi=res.final_kpi,
             regression=res.final_regression,
+            applied_sql=res.effective_sql,
         )
         score_dict = asdict(score) if hasattr(score, "__dataclass_fields__") \
             else {
@@ -302,8 +313,21 @@ def _typed_proposal(st: EpisodeState) -> RemediationProposal:
         if key in RemediationProposal.__annotations__})
 
 
+def effective_applied_sql(applied_sql: list[str], attempts) -> list[str]:
+    """仍然生效的修复语句：执行过、且没有被成功回滚的。
+
+    Outcome 量的是"agent 的干预把故障修好了"。一个修复执行后 VERIFY 不过被回滚，
+    它对最终状态没有贡献；原来 applied_sql 只增不减，回滚后仍算"有干预"。
+    """
+    def _norm(sql: str) -> str:
+        return " ".join(str(sql).split()).rstrip(";").lower()
+    rolled = {_norm(a.sql) for a in (attempts or [])
+              if getattr(a, "rollback_status", "") == "SUCCEEDED"}
+    return [sql for sql in applied_sql if _norm(sql) not in rolled]
+
+
 def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
-                max_steps: int = 45, allow_repair: bool = False,
+                max_steps: int = DEFAULT_MAX_STEPS, allow_repair: bool = False,
                 confirm_cb=None, quiet: bool = False, use_esc: bool = True,
                 use_cases: bool = True, use_cases_split: str = "train",
                 use_learned: bool = True,
@@ -478,8 +502,13 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                 # ★ 证据充分性检查：DIAGNOSE 离开分析域前的硬转移。
                 # 写流程必须先过 ESC 才能进 PLAN；只读流程也必须先过 ESC
                 # 才能发布 REPORT，避免把证据不足的解释包装成最终诊断。
-                if (cur is Phase.DIAGNOSE and
-                        nxt in {Phase.PLAN, Phase.REPORT} and use_esc):
+                # v2 下 DIAGNOSE 没选出路径时也要过一遍 ESC：原来只在离开分析域
+                # （PLAN/REPORT）时才跑，空选直接回 INVESTIGATE，于是 ESC 的 directives
+                # 从没生成过、esc_retries 从不增加，EXHAUSTED/AMBIGUOUS 出口在解释最弱
+                # 的时候反而不可达 —— stale_statistics 跑满 32 步 esc=[]（架构评审第 4 条）。
+                if (cur is Phase.DIAGNOSE and use_esc and
+                        (nxt in {Phase.PLAN, Phase.REPORT} or
+                         (nxt is Phase.INVESTIGATE and st.schema_version == 2))):
                     if st.schema_version == 2:
                         rep = esc_mod.check_explanation(st)
                         st.esc_verdict = rep["verdict"]
@@ -862,6 +891,11 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                     attempt.updated_at = time.time()
                     st.record_intervention_attempt(attempt)
                 res.rollbacks.append(f"{undo_id}: {msg[:60]}")
+                if okr:
+                    # 修复已撤销：VERIFY 时量的那一窗 KPI 是"修复还在"的状态，不能拿去
+                    # 判 Outcome。清掉，打分时 env.score() 会补采回滚后的真实状态。
+                    res.final_kpi = None
+                    res.final_regression = None
                 log(f"  ROLLBACK     -> ok={okr} {msg[:56]}")
                 if not okr:
                     # 回滚失败是最危险的情形：冻结并升级，绝不重试
@@ -978,7 +1012,7 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
 
 
 # 向后兼容：W3 的只诊断入口
-def run_diagnosis(env, obs, policy, max_steps: int = 40,
+def run_diagnosis(env, obs, policy, max_steps: int = DEFAULT_MAX_STEPS,
                   allow_repair: bool = False, quiet: bool = False):
     return run_episode(env, obs, policy, max_steps=max_steps,
                        allow_repair=allow_repair, quiet=quiet)

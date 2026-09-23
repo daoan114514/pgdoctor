@@ -1162,24 +1162,31 @@ def check_explanation(
         need.need_id: _need_unavailable_attempts(st, need)
         for need in ordered_needs
     }
-    long_unavailable = [
-        need for need in ordered_needs
-        if need.required and (
-            not need.candidate_tools or
-            unavailable_attempts[need.need_id] >=
-            config.unavailable_attempts_before_exhausted
-        )
-    ]
-    unavailable_optional = [
-        need for need in ordered_needs
-        if not need.required and (
-            not need.candidate_tools or
-            unavailable_attempts[need.need_id] >=
-            config.unavailable_attempts_before_exhausted
-        )
-    ]
+    def _unavailable(need) -> bool:
+        return (not need.candidate_tools or
+                unavailable_attempts[need.need_id] >=
+                config.unavailable_attempts_before_exhausted)
+
+    # 只有**选中路径**与**未决 P0** 上的必需证据长期不可得才算 EXHAUSTED。未选中的
+    # 备选路径拿不到证据，是"不能进一步反证它"，不是"选中的解释走不下去"——
+    # 2026-09-22 lock_contention：选中路径已 SUPPORTED、17 个 need 可取，却因
+    # work_mem_spill / table_bloat 两条备选的 explain 被只读角色拒而 EXHAUSTED 升级。
+    blocking_path_ids = selected_ids | set(unresolved_p0_paths)
+
+    def _blocking(need) -> bool:
+        return (need.target_kind == EvidenceTargetKind.P0.value or
+                bool(set(need.path_ids).intersection(blocking_path_ids)))
+
+    long_unavailable = [need for need in ordered_needs
+                        if need.required and _unavailable(need) and _blocking(need)]
+    unavailable_alternatives = [need for need in ordered_needs
+                                if need.required and _unavailable(need) and
+                                not _blocking(need)]
+    unavailable_optional = [need for need in ordered_needs
+                            if not need.required and _unavailable(need)]
     available_needs = [need for need in ordered_needs
                        if need not in long_unavailable and
+                       need not in unavailable_alternatives and
                        need not in unavailable_optional and
                        need.candidate_tools]
     max_steps = int(st.budget.get("max_steps", 0) or 0)
@@ -1197,6 +1204,7 @@ def check_explanation(
                 f"esc_retries={retries}/{config.max_esc_retries}, "
                 f"available_needs={len(available_needs)}, "
                 f"long_unavailable={len(long_unavailable)}, "
+                f"alternatives_unavailable={len(unavailable_alternatives)}, "
                 f"optional_unavailable={len(unavailable_optional)}"),
         missing=[need.need_id for need in long_unavailable] +
         (["episode step budget exhausted"] if budget_exhausted else []) +

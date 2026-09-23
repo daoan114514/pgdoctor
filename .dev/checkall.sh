@@ -41,7 +41,8 @@ for f in .dev/harness_lint.py .dev/graph_lint.py .dev/graph_expand_check.py .dev
          .dev/rollback_allowlist_check.py \
          .dev/evidence_binding_check.py \
          .dev/evidence_budget_check.py \
-         .dev/esc_steering_check.py .dev/long_idle_txn_diagnosable_check.py; do
+         .dev/esc_steering_check.py .dev/long_idle_txn_diagnosable_check.py \
+         .dev/score_semantics_check.py .dev/sdk_tool_surface_check.py; do
   [ -f "$f" ] || continue
   printf '%-32s ' "$f"
   # 单脚本上限。原来是 180s，2026-09-22 实测 evo_check.py 单跑要 213s（要连活库，

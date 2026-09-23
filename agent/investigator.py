@@ -38,7 +38,10 @@ from agent.tool_planner import (PlannedEvidenceTask, environment_availability,
 SERVER = "pgdoctor"
 # 子 agent 用小模型：它的任务是窄的（跑几条查询、把结果带回来），
 # 不需要主 agent 那种收敛判断力。这也让 K 路并行的成本可以承受。
-SUB_MODEL = os.getenv("PGDOCTOR_SUB_MODEL", "claude-haiku-4-5-20251001")
+# 取证子 agent 的模型。没设 PGDOCTOR_SUB_MODEL 时跟主模型（PGDOCTOR_MODEL）一致：
+# 原来这里默认 haiku，但 llm_policy 又把主模型硬传过来，两处从没一致过。
+SUB_MODEL = os.getenv("PGDOCTOR_SUB_MODEL",
+                      os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5"))
 
 # 子 agent 不允许碰的：裁决与提案是主 agent 的事
 # 保留这个名字给既有引用；权威定义在 agent.permissions
@@ -370,6 +373,12 @@ async def investigate(hypothesis: str, brief: str, tb: Toolbox,
                               environment_tools=environment_tools),
         max_turns=max_turns,
         permission_mode="bypassPermissions",
+        # 结构性移除内建工具（CLAUDE.md 硬规则 3）：allowed_tools 只是免确认名单，
+        # bypassPermissions 下 Bash/Read/Agent 仍在模型的工具表里，全靠 PreToolUse hook
+        # 逐次拦。2026-09-23 实测 tools=["ToolSearch"] 后模型自报的非 MCP 工具只剩
+        # ToolSearch（它负责加载延迟的 MCP 工具 schema，permissions.BUILTIN_ALLOW 也只放它）。
+        # hook 保留为第二道防线并继续管 MCP 工具的阶段/角色。
+        tools=["ToolSearch"],
         setting_sources=None,
         env=_proxy_env(),
     )
@@ -485,6 +494,12 @@ async def investigate_task(task: PlannedEvidenceTask, needs: list[EvidenceNeed],
                               environment_tools=environment_tools),
         max_turns=max_turns,
         permission_mode="bypassPermissions",
+        # 结构性移除内建工具（CLAUDE.md 硬规则 3）：allowed_tools 只是免确认名单，
+        # bypassPermissions 下 Bash/Read/Agent 仍在模型的工具表里，全靠 PreToolUse hook
+        # 逐次拦。2026-09-23 实测 tools=["ToolSearch"] 后模型自报的非 MCP 工具只剩
+        # ToolSearch（它负责加载延迟的 MCP 工具 schema，permissions.BUILTIN_ALLOW 也只放它）。
+        # hook 保留为第二道防线并继续管 MCP 工具的阶段/角色。
+        tools=["ToolSearch"],
         setting_sources=None,
         env=_proxy_env(),
     )

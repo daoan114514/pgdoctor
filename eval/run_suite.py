@@ -61,6 +61,9 @@ class EpisodeOutcome:
     # 原先的 safe_pass 语义 —— 改名是因为 DBA-Bench 的 Safe Pass 要求
     # 故障真被修好，两者不是一个指标，混用会让对比失去意义。
     diagnosis_strict: bool = False
+    # 报告口径：以 REPORT/DONE 收尾、最后一次 ESC 是 SUFFICIENT 且根因对。diagnosis 是
+    # "曾经选对过"（ESCALATE 也算），benchmark 的 Diagnosis 用这个。
+    diagnosis_reported: bool = False
     non_destructive: bool = False
     outcome: bool = False
     safe_pass: bool = False
@@ -137,6 +140,7 @@ def _model_reachable() -> bool:
             model=os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5"),
             system_prompt="只回一个数字。", max_turns=1,
             permission_mode="bypassPermissions", setting_sources=None,
+            tools=[],            # 探针不需要任何工具
             env=env)
         from agent.failure_class import is_infra_failure
         try:
@@ -228,11 +232,21 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
             # run_episode owns scoring and learning finalization.  Repeating it
             # here used to sample a second KPI window and write L1-L4 twice.
             score = res.benchmark_score
-            if not score:
-                raise RuntimeError("run_episode did not persist benchmark score")
+            # 先把 episode 自己的字段记下来，再看有没有分：原来"没分"直接 raise，
+            # claimed/steps/error 全丢，episode 以 fired=True、unusable=False 计入分母。
             out.final_phase = res.final_phase
             out.claimed = res.claimed_fault_class
+            out.steps = res.steps
+            out.elapsed_s = res.elapsed_s
+            out.error = res.error
+            out.episode_id = res.episode_id
+            if not score:
+                out.unusable = True
+                out.error = ("HARNESS: run_episode did not persist benchmark score"
+                             + (f"; {res.error}" if res.error else ""))
+                return out
             out.diagnosis = bool(score.get("diagnosis"))
+            out.diagnosis_reported = bool(score.get("diagnosis_reported"))
             out.diagnosis_strict = bool(score.get("diagnosis_strict"))
             out.non_destructive = bool(score.get("non_destructive"))
             out.outcome = bool(score.get("outcome"))
@@ -287,6 +301,11 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
                 (res.audit or {}).get("shield_blocked") or [])
     except Exception as exc:
         out.error = f"{type(exc).__name__}: {exc}"
+        # 跑批代码自己崩了不是"模型没诊断出来"：标 HARNESS、不进分母，但要在汇总里
+        # 喊出来（dead 列表会打印）。停机与脏基线在下面单独归类。
+        if type(exc).__name__ not in ("BaselineNotHealthy", "ModelUnavailable") and                 "error result: success" not in str(exc).lower():
+            out.unusable = True
+            out.error = f"HARNESS: {type(exc).__name__}: {exc}"
         if type(exc).__name__ == "BaselineNotHealthy":
             # 环境没散干净，不是诊断失败。fired 保持 False，本来就不进
             # 分母；这里只是别打一堆 traceback 让人以为是崩溃。
@@ -297,6 +316,26 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
         else:
             traceback.print_exc()
     return out
+
+
+def _write_results(path: Path, tag: str, args, learned_layers, results, t0) -> None:
+    """结果落盘。每个 episode 结束都调一次：原来只在整批结束写，守护看门狗一杀
+    整批白跑，而被杀的那个 episode 从不出现在任何分母里（幸存者偏差）。"""
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    serialized = [asdict(r) for r in results]
+    usable_serialized = [asdict(r) for r in results
+                         if r.fired and not r.unusable]
+    from eval.metrics_v2 import aggregate_episode_metrics
+    aggregate_v2 = aggregate_episode_metrics(usable_serialized)
+    path.write_text(json.dumps(
+        {"tag": tag, "policy": args.policy, "split": args.split,
+         "use_esc": not args.no_esc, "use_cases": not args.no_cases,
+         "learned_layers": sorted(learned_layers),
+         "elapsed_s": round(time.time() - t0, 1),
+         "complete": False,
+         "metrics_v2": aggregate_v2,
+         "episodes": serialized},
+        ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def main() -> None:
@@ -402,28 +441,19 @@ def main() -> None:
               f"D={r.diagnosis}(严{r.diagnosis_strict}) O={r.outcome} "
               f"S={r.safe_pass}(无损{r.non_destructive}) "
               f"steps={r.steps} ${r.cost_usd} {r.error[:40]}", flush=True)
-        if r.unusable and i < len(picks):
+        _write_results(RESULTS / f"{tag}.json", tag, args, learned_layers,
+                       results, t0)       # 每个 episode 后落盘，被杀也不丢已完成的
+        from agent.failure_class import is_infra_failure
+        if r.unusable and is_infra_failure(text=r.error) and i < len(picks):
             # 撞到额度墙就整批中止。继续往下跑毫无意义：每个场景都要先花
             # 两分钟重建沙箱、灌数据、等告警，然后必然撞上同一堵墙。
+            # harness 自己崩（HARNESS: 前缀）不中止：那是单个 episode 的事。
             print(f"!! 模型不可用，剩余 {len(picks) - i} 个场景不再尝试",
                   flush=True)
             break
 
-    RESULTS.mkdir(parents=True, exist_ok=True)
     path = RESULTS / f"{tag}.json"
-    serialized = [asdict(r) for r in results]
-    usable_serialized = [asdict(r) for r in results
-                         if r.fired and not r.unusable]
-    from eval.metrics_v2 import aggregate_episode_metrics
-    aggregate_v2 = aggregate_episode_metrics(usable_serialized)
-    path.write_text(json.dumps(
-        {"tag": tag, "policy": args.policy, "split": args.split,
-         "use_esc": not args.no_esc, "use_cases": not args.no_cases,
-         "learned_layers": sorted(learned_layers),
-         "elapsed_s": round(time.time() - t0, 1),
-         "metrics_v2": aggregate_v2,
-         "episodes": serialized},
-        ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_results(path, tag, args, learned_layers, results, t0)
 
     usable = [r for r in results if r.fired and not r.unusable]
     dead = [r for r in results if r.unusable]
@@ -436,8 +466,9 @@ def main() -> None:
         print("   这类失败不是模型能力问题，混进统计会让整轮实验失真")
     if dead:
         print(f"   （三率仅基于 {len(usable)} 个有效 episode 计算）")
-    print(f"Diagnosis {sum(r.diagnosis for r in usable)}/{n}  "
-          f"[严格 {sum(r.diagnosis_strict for r in usable)}/{n}]  "
+    print(f"Diagnosis(报告口径) {sum(r.diagnosis_reported for r in usable)}/{n}  "
+          f"[曾选对 {sum(r.diagnosis for r in usable)}/{n}  "
+          f"严格 {sum(r.diagnosis_strict for r in usable)}/{n}]  "
           f"Outcome {sum(r.outcome for r in usable)}/{n}  "
           f"SafePass {sum(r.safe_pass for r in usable)}/{n}  "
           f"[无损 {sum(r.non_destructive for r in usable)}/{n}]  "

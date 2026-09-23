@@ -52,8 +52,9 @@ ground_truth:
   acceptable_fixes:
   - pattern: pg_terminate_backend
     quality: full
+  # session_wait_profile 已从图上降为 supporting：空闲事务堆积没有重锁等待，它在本场景里
+  # 恒为 REFUTES，作为必需证据会让真根因永远到不了 SUPPORTED（2026-09-22 实测 8 次 REFUTES）。
   required_evidence:
-  - session_wait_profile
   - idle_in_transaction
   # connection_exhaustion 放在第一位是有意的：它就是这个场景要设的陷阱，
   # 不排除掉它，严格诊断（F1 门槛）就过不了。

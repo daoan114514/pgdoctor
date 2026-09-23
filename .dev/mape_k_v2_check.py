@@ -86,11 +86,9 @@ try:
     check("short explanation can close while upstream path stays open",
           short_path.status == "SUPPORTED" and long_path.status == "UNTESTED")
 
-    record(st, store, "idle_in_transaction", {"idle_in_transaction": 8},
-           ["long_idle_transaction"])
-    xr.bind_evidence(st)
-    check("missing required evidence keeps the long path open",
-          long_path.status == "UNTESTED")
+    # 2026-09-23 起 long_idle_transaction 的必需证据只有 idle_in_transaction；
+    # session_wait_profile 是 supporting（空闲事务堆积本身没有锁等待）。所以先记
+    # supporting 的会话画像 —— 路径必须仍然开放；再记必需的 idle_in_transaction 才闭合。
     session_ref = record(st, store, "session_wait_profile", [{
         "pid": 4242,
         "state": "idle in transaction",
@@ -102,6 +100,11 @@ try:
         "is_current_diagnostic_connection": False,
         "is_system_or_diagnostic": False,
     }], ["long_idle_transaction"])
+    xr.bind_evidence(st)
+    check("missing required evidence keeps the long path open",
+          long_path.status == "UNTESTED")
+    record(st, store, "idle_in_transaction", {"idle_in_transaction": 8},
+           ["long_idle_transaction"])
     xr.bind_evidence(st)
     check("all required structured predicates support the long path",
           long_path.status == "SUPPORTED" and

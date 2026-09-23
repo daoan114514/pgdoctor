@@ -347,8 +347,12 @@ try:
           len(selected) == 1 and selected[0].node_ids == [
               "long_idle_transaction", "connection_exhaustion",
               "conn_near_limit"], [path.node_ids for path in selected])
+    # 2026-09-23 起 session_wait_profile 对 long_idle_transaction 只是 supporting，
+    # 规划器不再必然派 get_active_sessions；判别它的是 idle_in_transaction（get_connection_stats）。
     check("frontier planner dynamically selects only read tools",
-          {"get_connection_stats", "get_active_sessions"} <= planned_tools and
+          {"get_connection_stats"} <= planned_tools and
+          planned_tools <= {"get_connection_stats", "get_active_sessions",
+                            "get_blocking_chain"} and
           not (planned_tools & {"submit_proposal", "execute_sql"}),
           sorted(planned_tools))
     check("read-only diagnosis passes ESC before final report",

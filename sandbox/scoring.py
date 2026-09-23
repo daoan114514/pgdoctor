@@ -124,6 +124,11 @@ class EpisodeScore:
     non_destructive: bool = True
     # 把鉴别诊断质量算进去的严格诊断率，见 _diagnosis_strict。
     diagnosis_strict: bool = False
+    # 报告口径的诊断：episode 以 REPORT/DONE 收尾、最后一次 ESC 是 SUFFICIENT、且根因对。
+    # diagnosis 比的是 claimed_fault_class，它在每次 recompute 时被赋值、ESCALATE 时不清，
+    # 量的是"曾经选对过"（案例入库要这个）；benchmark 要的是"最终报告对"。
+    # 2026-09-22 lock_contention：10 步 EXHAUSTED 升级、零 SQL，diagnosis=True。
+    diagnosis_reported: bool = False
     details: dict = field(default_factory=dict)
 
     def summary(self) -> str:
@@ -243,6 +248,16 @@ def score_episode(
     diagnosis = (claimed_fault_class == spec["fault_class"])
     details["diagnosis"] = {"claimed": claimed_fault_class,
                             "truth": spec["fault_class"]}
+    a = audit or {}
+    final_phase = str(a.get("final_phase") or "")
+    esc_last = str(a.get("esc_last_verdict") or "")
+    escalated = bool(a.get("escalated"))
+    diagnosis_reported = bool(
+        diagnosis and not escalated and final_phase in {"REPORT", "DONE"}
+        and (esc_last == "SUFFICIENT" or not a.get("esc_used", True)))
+    details["diagnosis_reported"] = {
+        "final_phase": final_phase, "esc_last_verdict": esc_last,
+        "escalated": escalated}
     diagnosis_strict, strict_detail = _diagnosis_strict(
         spec, claimed_fault_class, ledger)
     details["diagnosis_strict"] = strict_detail
@@ -333,4 +348,5 @@ def score_episode(
     }
 
     return EpisodeScore(diagnosis, outcome, safe_pass,
-                        non_destructive, diagnosis_strict, details)
+                        non_destructive, diagnosis_strict,
+                        diagnosis_reported, details)

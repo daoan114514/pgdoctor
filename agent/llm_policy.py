@@ -194,8 +194,13 @@ class LLMPolicy(Policy):
 
     def __init__(self, model: str = MODEL, max_turns_per_phase: int = 12,
                  verbose: bool = True, use_subagents: bool = True,
-                 batch_size: int = 2):
+                 batch_size: int = 2, sub_model: str | None = None):
         self.model = model
+        # 取证子 agent 的模型。原来这里把主模型硬传给编排器，investigator.SUB_MODEL
+        # （PGDOCTOR_SUB_MODEL）成了死配置，子 agent 实际全跑在主模型上（2026-09-23 架构
+        # 评审第 9 条）。默认仍与主模型一致 —— 子 agent 的任务是机械的（调一个工具、抄观测），
+        # 换小模型是合理的成本杠杆，但要先量过再换，不在这里静默降级。
+        self.sub_model = (sub_model or os.getenv("PGDOCTOR_SUB_MODEL") or model)
         self.max_turns = max_turns_per_phase
         self.verbose = verbose
         # 关掉就退回单 agent 一把梭，用于对照隔离编排到底带来什么
@@ -231,6 +236,12 @@ class LLMPolicy(Policy):
             hooks=make_phase_hook(phase, self.blocked),
             max_turns=self.max_turns,
             permission_mode="bypassPermissions",
+            # 结构性移除内建工具（CLAUDE.md 硬规则 3）：allowed_tools 只是免确认名单，
+            # bypassPermissions 下 Bash/Read/Agent 仍在模型的工具表里，全靠 PreToolUse hook
+            # 逐次拦。2026-09-23 实测 tools=["ToolSearch"] 后模型自报的非 MCP 工具只剩
+            # ToolSearch（它负责加载延迟的 MCP 工具 schema，permissions.BUILTIN_ALLOW 也只放它）。
+            # hook 保留为第二道防线并继续管 MCP 工具的阶段/角色。
+            tools=["ToolSearch"],
             setting_sources=None,      # 不加载用户/项目设置，保证可复现
             env=_proxy_env(),
             cwd=str(os.getcwd()),
@@ -320,7 +331,7 @@ class LLMPolicy(Policy):
                         use_learned=bool(ctx.get("use_learned", True)),
                         use_l2="l2" in set(ctx.get("learned_layers", [])),
                         use_l4="l4" in set(ctx.get("learned_layers", []))),
-                    verbose=self.verbose, model=self.model))
+                    verbose=self.verbose, model=self.sub_model))
                 self.orchestration = result
                 self.usage.append({"phase": "INVESTIGATE(subagents)",
                                    "cost_usd": result.cost_usd,

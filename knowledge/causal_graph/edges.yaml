@@ -89,7 +89,12 @@ confirmed_by:
   - {cause: table_bloat,      evidence: dead_tuple_ratio, necessity: supporting}
   - {cause: table_bloat,      evidence: physical_bloat_ratio, necessity: required}
   - {cause: connection_exhaustion, evidence: connection_count, necessity: required}
-  - {cause: long_idle_transaction, evidence: session_wait_profile, necessity: required}
+  # session_wait_profile 只在有重锁等待时 SUPPORTS（Lock:*），而空闲事务堆积本身没有
+  # 锁等待（会话等在 Client:ClientRead）——2026-09-22 实测：该场景里它 8 次 REFUTES、
+  # idle_in_transaction 4 次 SUPPORTS，作为 required 它让真根因永远到不了 SUPPORTED。
+  # 判别 long_idle_transaction 的是 idle_in_transaction（power 0.95）；锁等待只是它
+  # 偶尔的伴随现象，降为 supporting。
+  - {cause: long_idle_transaction, evidence: session_wait_profile, necessity: supporting}
   - {cause: long_idle_transaction, evidence: idle_in_transaction, necessity: required}
   - {cause: autovacuum_starvation, evidence: autovacuum_health,
      necessity: required}

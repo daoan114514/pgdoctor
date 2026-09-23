@@ -338,10 +338,16 @@ class DBAScenarioEnv:
     def score(self, claimed_fault_class: str | None,
               audit: dict | None = None,
               kpi=None, regression=None,
-              ledger: dict | None = None) -> EpisodeScore:
+              ledger: dict | None = None,
+              applied_sql: list[str] | None = None) -> EpisodeScore:
+        # applied_sql 可由调用方覆盖成"仍然生效的"语句：被成功回滚的修复不算修复。
+        # kpi 为 None 时补采一次 —— 回滚之后 loop 会把 final_kpi 清掉，这里量到的
+        # 才是回滚后的真实状态，而不是修复还在时的那一窗。
         if kpi is None or regression is None:
             kpi, regression = self.verify()
-        return score_episode(self.spec, claimed_fault_class, self.applied_sql,
+        return score_episode(self.spec, claimed_fault_class,
+                             list(self.applied_sql if applied_sql is None
+                                  else applied_sql),
                              kpi, regression, audit, ledger,
                              baseline=self.healthy_kpi)
 
