@@ -88,6 +88,56 @@ check(bool(r.get("is_error")) and "invalid collection status" in txt,
 r = call("UNKNOWN")
 check(not r.get("is_error"), "UNKNOWN 被接受")
 
+print("[5] raw_refs 的几种写法都能解析成多条 ref（2026-09-23 冒烟：JSON 列表写法全被拒）")
+two = ["trace://ep/step_019", "trace://ep/step_020"]
+forms = {
+    "分号分隔": "trace://ep/step_019; trace://ep/step_020",
+    "JSON 列表字符串": '["trace://ep/step_019", "trace://ep/step_020"]',
+    "逗号分隔": "trace://ep/step_019, trace://ep/step_020",
+    "真列表": list(two),
+}
+for label, value in forms.items():
+    rep, sink = _make_tool()
+    r = asyncio.run(rep.handler(dict(base, raw_refs=value, collection_status="OBSERVED")))
+    got = (sink.get("evidence_reports", {}).get("need_x") or {}).get("raw_refs")
+    check(not r.get("is_error") and got == two, f"{label} -> {got}")
+rep, sink = _make_tool()
+r = asyncio.run(rep.handler(dict(base, raw_refs="trace://ep/step_019",
+                                 limitations='["只看了一张表", "窗口 60s"]',
+                                 collection_status="OBSERVED")))
+got = (sink.get("evidence_reports", {}).get("need_x") or {}).get("limitations")
+check(got == ["只看了一张表", "窗口 60s"], f"limitations 的 JSON 列表写法 -> {got}")
+rep, sink = _make_tool()
+r = asyncio.run(rep.handler(dict(base, raw_refs="trace://ep/step_019",
+                                 limitations="a, b; c", collection_status="OBSERVED")))
+got = (sink.get("evidence_reports", {}).get("need_x") or {}).get("limitations")
+check(got == ["a, b", "c"], f"limitations 仍按分号切、逗号保留 -> {got}")
+
+print("[6] 工具 schema 在 API 层就把列表与枚举定死（模型不必猜分隔符或同义词）")
+rep, sink = _make_tool()
+sch = rep.input_schema
+check(sch is inv.REPORT_EVIDENCE_SCHEMA and sch.get("type") == "object",
+      "report_evidence 用完整 JSON schema")
+props = sch.get("properties", {})
+for name in ("raw_refs", "observations", "limitations"):
+    check(props.get(name, {}).get("type") == "array", f"{name} 声明为 array")
+check(props.get("collection_status", {}).get("enum") == values,
+      "collection_status 的 enum 就是 EvidenceStatus 的取值")
+check(set(sch.get("required", [])) == set(props), "六个字段都是 required")
+vprops = inv.REPORT_VERDICT_SCHEMA["properties"]
+check(vprops["verdict"].get("enum") == ["CONFIRMED", "REFUTED", "INCONCLUSIVE"],
+      "report_verdict 的 verdict 是 enum")
+check(all(vprops[n].get("type") == "array" for n in ("incidental", "missing_evidence")),
+      "report_verdict 的两个列表字段声明为 array")
+rep, sink = _make_tool()
+r = asyncio.run(rep.handler({"need_id": "need_x", "tool": "explain_query",
+                             "raw_refs": list(two), "observations": [{"k": 1}, {"k": 2}],
+                             "collection_status": "OBSERVED", "limitations": []}))
+got = sink.get("evidence_reports", {}).get("need_x") or {}
+check(not r.get("is_error") and got.get("raw_refs") == two and
+      got.get("observations") == [{"k": 1}, {"k": 2}] and got.get("limitations") == [],
+      "按 schema 传真数组时原样入账")
+
 print()
 if fails:
     print(f"SUBAGENT CONTRACT: FAIL（{len(fails)}/{checks}）")

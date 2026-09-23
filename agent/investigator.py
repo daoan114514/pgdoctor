@@ -199,6 +199,86 @@ SUB_SYSTEM = """你是一名 PostgreSQL 排障工程师，本次只负责调查�
 数据库很大（orders 表 1200 万行），注意区分"慢"与"扫了太多行"。"""
 
 
+# 工具入参用完整 JSON schema：列表在 API 层就是 array，状态就是 enum，模型不必猜
+# 分隔符、也不必猜同义词。2026-09-23 之前这里全是 str：模型把列表抄成 JSON 字符串
+# （三分之二的 OBSERVED 报告因此被拒）、把状态写成 45 种写法（635/655 被拒），两次
+# 都是"系统要它给一样它拿不到的东西"。宽容解析（_list_arg）保留作兜底，不是主路径。
+REPORT_EVIDENCE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "need_id": {"type": "string",
+                    "description": "被指派的 need_id，原样回填"},
+        "tool": {"type": "string",
+                 "description": "取证用的工具名，必须是本任务指派的工具"},
+        "raw_refs": {"type": "array", "items": {"type": "string"},
+                     "description": "只能取自工具结果的 evidence_raw_refs；"
+                                    "OBSERVED 至少一条"},
+        "observations": {"type": "array", "items": {"type": "object"},
+                         "description": "工具返回的观测事实，逐条对象，不写结论"},
+        "collection_status": {"type": "string",
+                              "enum": [status.value for status in EvidenceStatus]},
+        "limitations": {"type": "array", "items": {"type": "string"},
+                        "description": "采集局限；没有就给空数组"},
+    },
+    "required": ["need_id", "tool", "raw_refs", "observations",
+                 "collection_status", "limitations"],
+}
+REPORT_VERDICT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string",
+                    "enum": ["CONFIRMED", "REFUTED", "INCONCLUSIVE"]},
+        "confidence": {"type": "string"},
+        "reasoning": {"type": "string"},
+        "incidental": {"type": "array", "items": {"type": "string"},
+                       "description": "与本假设无关但可能对其他假设有用的发现"},
+        "missing_evidence": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["verdict", "confidence", "reasoning",
+                 "incidental", "missing_evidence"],
+}
+
+
+def _list_arg(value) -> list[str]:
+    """子 agent 传来的列表参数：分号分隔字符串、JSON 列表字符串、真列表都认。
+
+    schema 原来只声明了 str，模型看到 evidence_raw_refs 是个列表就会原样抄成
+    '["trace://…/step_019", "trace://…/step_020"]'。这里原来只按分号切，整段就成了
+    一条不存在的 ref，合并层以 "raw_ref was not collected by this task" 整条拒掉。
+    2026-09-23 冒烟实测多条引用的报告全军覆没；回扫 9 月 22 日那批 5 场景跑批的
+    子 agent 会话，359 条 OBSERVED 报告里 242 条是这种写法（单条写成
+    '["trace://…/step_040"]' 的也算），也就是三分之二的有效证据被静默丢弃。
+    """
+    if isinstance(value, (list, tuple)):
+        items = [str(v) for v in value]
+    else:
+        text = str(value or "").strip()
+        items = None
+        if text.startswith("["):
+            try:
+                loaded = json.loads(text)
+                if isinstance(loaded, list):
+                    items = [str(v) for v in loaded]
+            except (TypeError, ValueError):
+                items = None
+        if items is None:
+            items = text.split(";")
+    return [x.strip() for x in items if x and x.strip()]
+
+
+def _ref_list_arg(value) -> list[str]:
+    """raw_refs 专用：ref 形如 trace://<episode>/step_NNN，本身不含空白、逗号、引号、
+    括号，所以把这些全当分隔符再切一遍是安全的（逗号分隔、带引号的写法都能认）。
+    非法 token 不在这里过滤：留给合并层报 "raw_ref was not collected"，那条更准。"""
+    out: list[str] = []
+    for item in _list_arg(value):
+        text = item
+        for ch in '[]"' + "',":
+            text = text.replace(ch, " ")
+        out.extend(tok for tok in text.split() if tok)
+    return list(dict.fromkeys(out))
+
+
 def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
                call_cache: dict | None = None) -> list:
     def wrap(fn):
@@ -254,41 +334,37 @@ def _tools_for(tb: Toolbox, sink: dict, *, include_evidence_refs: bool = False,
           "汇报本次调查结论。verdict 取 CONFIRMED / REFUTED / INCONCLUSIVE。"
           "reasoning 说明依据；incidental 记录与本假设无关但可能对其他假设"
           "有用的发现。",
-          {"verdict": str, "confidence": str, "reasoning": str,
-           "incidental": str, "missing_evidence": str})
+          REPORT_VERDICT_SCHEMA)
     async def report_verdict(args):
         sink["verdict"] = args.get("verdict", "INCONCLUSIVE")
         sink["confidence"] = _parse_conf(args.get("confidence"))
         sink["reasoning"] = args.get("reasoning", "")
         for key, dst in (("incidental", "incidental"),
                          ("missing_evidence", "missing_evidence")):
-            raw = args.get(key, "") or ""
-            sink[dst] = [x.strip() for x in str(raw).split(";") if x.strip()]
+            sink[dst] = _list_arg(args.get(key, "") or "")
         return {"content": [{"type": "text", "text": "已记录"}]}
 
     @tool("report_evidence",
           "v2 调查回传。只报告工具观测、raw_ref、采集状态和局限；"
-          "不得返回根因结论或支持/反证方向。" + COLLECTION_STATUS_HELP,
-          {"need_id": str, "tool": str, "raw_refs": str,
-           "observations": str, "collection_status": str,
-           "limitations": str})
+          "不得返回根因结论或支持/反证方向。"
+          "raw_refs 是数组，只能填工具结果 evidence_raw_refs 里的值。"
+          + COLLECTION_STATUS_HELP,
+          REPORT_EVIDENCE_SCHEMA)
     async def report_evidence(args):
         try:
-            observations = json.loads(args.get("observations", "[]") or "[]")
+            observations = args.get("observations", [])
+            if isinstance(observations, str):
+                observations = json.loads(observations or "[]")
             if not isinstance(observations, list):
                 observations = [observations]
             report = EvidenceReport.from_dict({
                 "need_id": args.get("need_id", ""),
                 "tool": args.get("tool", ""),
-                "raw_refs": [x.strip() for x in
-                             str(args.get("raw_refs", "")).split(";")
-                             if x.strip()],
+                "raw_refs": _ref_list_arg(args.get("raw_refs", "")),
                 "observations": observations,
                 "collection_status": str(args.get("collection_status", "ERROR")
                                          ).strip().upper(),
-                "limitations": [x.strip() for x in
-                                str(args.get("limitations", "")).split(";")
-                                if x.strip()],
+                "limitations": _list_arg(args.get("limitations", "")),
             })
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             return {"content": [{"type": "text",
@@ -525,8 +601,10 @@ Call each collection tool at most once.  A single observation may cover several
 needs.  Then call report_evidence once for every assigned need_id, reusing the
 same raw_refs where appropriate.  raw_refs MUST be copied from the tool
 result's evidence_raw_refs list (the trace refs of the observations the tool
-persisted); a report citing refs the task did not collect is rejected.  The exact output fields are need_id, tool,
-raw_refs, observations (JSON list), collection_status, and limitations.
+persisted); a report citing refs the task did not collect is rejected.
+raw_refs, observations and limitations are JSON arrays.  The exact output
+fields are need_id, tool, raw_refs, observations, collection_status, and
+limitations.
 {COLLECTION_STATUS_HELP}
 Do not decide causal direction."""
 
