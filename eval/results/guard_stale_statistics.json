@@ -1,0 +1,353 @@
+{
+  "tag": "guard_stale_statistics",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "learned_layers": [
+    "l1",
+    "l2",
+    "l3",
+    "l4"
+  ],
+  "elapsed_s": 1194.9,
+  "metrics_v2": {
+    "p0_obligation_recall": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1.0
+    },
+    "observed_symptom_coverage": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "unexplained_symptom_rate": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "selected_path_edge_precision": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "selected_path_edge_recall": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "selected_path_edge_f1": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "required_evidence_completion": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "raw_ref_validity": {
+      "numerator": 24,
+      "denominator": 24,
+      "value": 1.0
+    },
+    "raw_ref_freshness": {
+      "numerator": 0,
+      "denominator": 24,
+      "value": 0.0
+    },
+    "duplicate_evidence_rate": {
+      "numerator": 0,
+      "denominator": 24,
+      "value": 0.0
+    },
+    "information_gain_per_call": {
+      "numerator": 5.906891,
+      "denominator": 29,
+      "value": 0.203686
+    },
+    "duplicate_tool_call_rate": {
+      "numerator": 30,
+      "denominator": 29,
+      "value": 1.034483
+    },
+    "unknown_error_rate": {
+      "numerator": 3,
+      "denominator": 29,
+      "value": 0.103448
+    },
+    "esc_unsafe_pass": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "esc_over_conservative": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "expected_effect_hit_rate": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "failure_attribution_accuracy": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "rollback_completeness": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "root_recall_at_k": {
+      "1": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "3": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "path_recall_at_k": {
+      "1": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "3": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "tool_calls": 29,
+    "gate_context_bypass_count": 0,
+    "esc_verdict_distribution": {},
+    "episode_count": 1
+  },
+  "episodes": [
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": null,
+      "diagnosis": false,
+      "diagnosis_strict": false,
+      "non_destructive": true,
+      "outcome": false,
+      "safe_pass": false,
+      "steps": 32,
+      "elapsed_s": 1040.3,
+      "cost_usd": 3.5573,
+      "esc_verdicts": [],
+      "gate_decisions": [],
+      "shield_blocked": [],
+      "outcome_note": "步数预算耗尽",
+      "applied_sql": [],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_stale_statistics_eval_v1_1790090995",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 3,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "observed_symptom_coverage": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "selected_path_edge_recall": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "required_evidence_completion": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "raw_ref_validity": {
+          "numerator": 24,
+          "denominator": 24,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 0,
+          "denominator": 24,
+          "value": 0.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 24,
+          "value": 0.0
+        },
+        "tool_calls": 29,
+        "information_gain_per_call": {
+          "numerator": 5.906891,
+          "denominator": 29,
+          "value": 0.203686,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 30,
+          "denominator": 29,
+          "value": 1.034483
+        },
+        "unknown_error_rate": {
+          "numerator": 3,
+          "denominator": 29,
+          "value": 0.103448
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    }
+  ]
+}
