@@ -8,7 +8,7 @@
 | 因果图 | `graph_9204c5e9eaa28e2590d021b1` |
 | SDK / CLI | claude-agent-sdk 0.2.157 / CLI 2.1.277 |
 | 运行参数（`harness.run`） | max_steps 30，子 agent 并发 4，无参 / 钉参工具确定性执行，窗口下限 30 秒 |
-| 结果文件 | `eval/results/guard_*.json`，合并版 `eval/results/llm_eval_guarded.json` |
+| 结果文件 | `eval/results/quarantine/guard_*_20260924_5cc2c25.json`，合并版 `eval/results/quarantine/llm_eval_guarded_20260924_5cc2c25.json`（本报告的缺陷修复后被复跑取代，移入隔离区） |
 | 时间 | 16:40 起、17:17 结束，一次跑完，无停机、无重跑 |
 | 成本 | 5 个计分 episode 合计 **$0.92** |
 
@@ -83,6 +83,16 @@
 1. P3 基线提示工具名：改动小。
 2. P2-1 MONITOR 建表扫描基线：先确认 MONITOR 只建计数器基线的做法（toolbox 里读计数器、不落其它证据条目），再用 `.dev/tool_perturbation_live.py` 确认不引入新的计数器扰动，checkall 后全量复跑。
 3. 再评估 ESC 的"主要竞争路径"门槛是否应覆盖本批仍未解决的 work_mem_spill / table_bloat。
+
+## 修复状态（复跑前）
+
+| 缺陷 | 修法 | 验证 |
+|---|---|---|
+| P2-1 表扫描首读白读 | MONITOR 收尾时由 loop 调 `tb.establish_counter_baselines()`：用只读计数器的 `observer.get_table_scan_counters` 给目标表建扫描基线（系统动作：不扣步数、不落证据条目）；统计周期表达式 `_STATS_EPOCH_SQL` 与 `get_table_stats` 共用，计数器组 `TABLE_SCAN_COUNTERS` 与差分共用 | `evidence_direction_check` [13]：第一次取证读数就是窗口增量；活库：新读数对计数器零扰动，与 `get_table_stats` 原始值、周期串完全一致 |
+| P3 基线提示工具名 | `_cumulative_delta` 的提示由调用方传工具名，表扫描写 `get_table_stats` | 同上 [13] |
+| 活库标定顺带发现：并行计划的自家索引扫描记账方向反了 | 统计过期热查询在时间锚漂移后走了并行计划，"逐项取大"在并行时是下界（orders 原始 6、记 4），净 idx_scan 偏高会把一个空窗口从 NEUTRAL 判成 REFUTES（规则 1）。改为 `_merge_own_counts`：顺序扫描取计划（精确），索引扫描非并行取大（精确）、并行取两者之和（上界，净值只会偏低） | `evidence_direction_check` [10]；活库 `.dev/tool_perturbation_live.py`：并行时原始 6 / 记 7、原始 5 / 记 6（上界），并行全表扫仍精确 |
+
+复跑前按规则 9 重锚时间锚（本批跑时已漂 3.4-3.9 小时，统计过期热查询的计划随之变成并行）。
 
 ## 附录：每个 episode 的原始素材
 

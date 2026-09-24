@@ -270,8 +270,18 @@ check("items" not in own, "从未执行的节点（loops=0）不记账")
 esrc = inspect.getsource(observe.Observer.explain_query)
 check("_plan_own_counts" in esrc and "_flush_own_stats" in esrc and "Temp Written Blocks" in esrc
       and "block_size" in esrc, "explain_query 记扫描账与外溢上界，并强制刷出本连接的统计")
-check("pg_stat_xact_user_tables" in esrc and "max(merged[key], value)" in esrc,
-      "计划 JSON（含并行 worker）与事务级视图（含规划期索引探测）逐项取大（活库标定：.dev/tool_perturbation_live.py）")
+check("pg_stat_xact_user_tables" in esrc and "_merge_own_counts(" in esrc
+      and "parallel=acc[\"workers\"] > 0" in esrc, "计划 JSON 与事务级视图按并行与否合并（活库标定：.dev/tool_perturbation_live.py）")
+_plan_c = {"orders": {"seq_scan": 3, "seq_tup_read": 12000000, "idx_scan": 4}}
+_lead_c = {"orders": {"seq_scan": 1, "seq_tup_read": 4000000, "idx_scan": 3},
+           "users": {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 2}}
+_par = observe._merge_own_counts(_plan_c, _lead_c, parallel=True)
+_ser = observe._merge_own_counts(_plan_c, _lead_c, parallel=False)
+check(_par["orders"]["seq_scan"] == 3 and _par["orders"]["seq_tup_read"] == 12000000,
+      "顺序扫描取计划（全体参与者，规划器不做顺序扫描）")
+check(_par["orders"]["idx_scan"] == 7 and _par["users"]["idx_scan"] == 2,
+      "并行计划的索引扫描取两者之和（上界：净值只会偏低，只会多给 NEUTRAL）", _par)
+check(_ser["orders"]["idx_scan"] == 4, "非并行计划的索引扫描取大（leader 即全部，精确）", _ser)
 check("_flush_own_stats" in inspect.getsource(observe.Observer._stats_range_drift), "值域漂移扫描同样强制刷出")
 for fn in (observe.Observer.get_table_stats, observe.Observer.get_database_stats):
     fsrc = inspect.getsource(fn)
@@ -443,6 +453,80 @@ if wm_path is not None:
     check(not xr._entry_matches(ex12, need12b, entry12b), "图上没有关系、bears_on 也没有 -> 仍不能绑")
 else:
     check(False, "latency_p99_up 的召回里有 work_mem_spill 路径")
+
+print("[13] MONITOR 给目标表建扫描基线：第一次取证读数就有判定力（2026-09-24 缺陷报告 5cc2c25 P2-1、P3）")
+eid13 = eid + "_mon"
+st13 = EpisodeState(eid13, "direction_fixture")
+st13.budget["max_steps"] = 30
+obs13 = SimpleNamespace(trace=TraceStore(eid13))
+counter_calls13: list[str] = []
+
+
+def _counters13(table):
+    counter_calls13.append(table)
+    return {"table": table, "seq_scan_raw": 100, "seq_tup_read_raw": 1000000, "idx_scan_raw": 50,
+            "own_seq_scan": 0, "own_seq_tup_read": 0, "own_idx_scan": 0, "stats_reset": "epoch",
+            "raw_ref": obs13.trace.record("get_table_scan_counters", {}, "{}", {"k": 1})}
+
+
+obs13.get_table_scan_counters = _counters13
+obs13.get_table_stats = lambda _t: _ts(
+    seq_scan=120, seq_tup_read=241000000, idx_scan=50, seq_scan_raw=120, seq_tup_read_raw=241000000,
+    idx_scan_raw=50, raw_ref=obs13.trace.record("get_table_stats", {}, "{}", {"k": 1}))
+tb13 = Toolbox(obs13, st13, StateMachine(st13), target_context={"table": "orders", "hot_query": "SELECT 1"})
+before13, steps13 = len(st13.scratchpad), int(st13.budget.get("steps", 0))
+keys13 = tb13.establish_counter_baselines()
+check(keys13 == ["table_scan:orders"] and "table_scan:orders" in st13.cumulative_baselines,
+      "MONITOR 给目标表建了扫描基线", keys13)
+check(len(st13.scratchpad) == before13 and int(st13.budget.get("steps", 0)) == steps13,
+      "系统动作：不落证据条目、不扣 agent 步数")
+check(set(st13.cumulative_baselines["table_scan:orders"]["values"]) == set(toolbox_module.TABLE_SCAN_COUNTERS),
+      "基线与 get_table_stats 的差分是同一组计数器")
+check(tb13.establish_counter_baselines() == [] and len(counter_calls13) == 1, "已有基线不重建")
+try:
+    tb13.sm.goto(Phase.OBSERVE, "t"); tb13.sm.goto(Phase.HYPOTHESIZE, "t"); tb13.sm.goto(Phase.INVESTIGATE, "t")
+except Exception:
+    pass
+st13.cumulative_baselines["table_scan:orders"]["captured_at"] = time.time() - 5
+waits13: list[float] = []
+saved_sleep13 = toolbox_module._window_sleep
+toolbox_module._window_sleep = waits13.append
+try:
+    tb13.get_table_stats("orders")
+finally:
+    toolbox_module._window_sleep = saved_sleep13
+vol13 = [e for e in st13.scratchpad if e.get("evidence_type") == "seq_scan_volume"]
+check(bool(vol13) and vol13[0].get("status") == "OBSERVED"
+      and (vol13[0].get("structured_value") or {}).get("seq_scan") == 20,
+      "第一次取证读数就是窗口增量（原来是 UNKNOWN 基线、需求记不可得）",
+      vol13[0].get("observation") if vol13 else "no seq_scan_volume")
+check(len(waits13) == 1 and 24.0 <= waits13[0] <= 25.5, f"读之前仍等窗口满下限（{waits13}）")
+
+eid13b = eid + "_mon_b"
+st13b = EpisodeState(eid13b, "direction_fixture")
+st13b.budget["max_steps"] = 30
+obs13b = SimpleNamespace(trace=TraceStore(eid13b))
+obs13b.get_table_stats = obs13.get_table_stats
+tb13b = Toolbox(obs13b, st13b, StateMachine(st13b), target_context={"table": "orders", "hot_query": "SELECT 1"})
+check(tb13b.establish_counter_baselines() == [] and not st13b.cumulative_baselines,
+      "观测器不支持只读计数器时跳过（桩观测器）")
+try:
+    tb13b.sm.goto(Phase.OBSERVE, "t"); tb13b.sm.goto(Phase.HYPOTHESIZE, "t"); tb13b.sm.goto(Phase.INVESTIGATE, "t")
+except Exception:
+    pass
+tb13b.get_table_stats("orders")
+first13b = next((e for e in st13b.scratchpad if e.get("evidence_type") == "seq_scan_volume"), {})
+check(first13b.get("status") == "UNKNOWN" and "get_table_stats" in str(first13b.get("observation"))
+      and "get_database_stats" not in str(first13b.get("observation")),
+      "表扫描基线的提示指向 get_table_stats（原来写死 get_database_stats）", first13b.get("observation"))
+loop_src13 = (ROOT / "agent" / "loop.py").read_text(encoding="utf-8")
+monitor_block = loop_src13[loop_src13.index("if cur is Phase.MONITOR:"):][:400]
+check("tb.establish_counter_baselines()" in monitor_block, "loop 在 MONITOR 收尾时建基线（与策略无关，一处）")
+check("_STATS_EPOCH_SQL" in inspect.getsource(observe.Observer.get_table_stats)
+      and "_STATS_EPOCH_SQL" in inspect.getsource(observe.Observer.get_table_scan_counters),
+      "基线读数与 get_table_stats 用同一个统计周期表达式（ESC 按它核对 seq_scan_volume 的周期）")
+for d13 in (eid13, eid13b):
+    shutil.rmtree(TRACE_DIR / d13, ignore_errors=True)
 
 print()
 if fails:

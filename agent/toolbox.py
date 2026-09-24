@@ -67,6 +67,12 @@ def _explain_failure_is_database_side(exc: BaseException) -> bool:
 
 
 
+# 表扫描窗口差分的计数器组：原始值与本 episode 自家扫描各自差分（见 get_table_stats）。
+# MONITOR 建基线（establish_counter_baselines）与 get_table_stats 差分必须是同一组。
+TABLE_SCAN_COUNTERS = ("seq_scan_raw", "seq_tup_read_raw", "idx_scan_raw",
+                       "own_seq_scan", "own_seq_tup_read", "own_idx_scan")
+
+
 def _window_sleep(seconds: float) -> None:
     """等累计计数器窗口长满。单独成函数，离线检查替换它来断言等了多久。"""
     time.sleep(seconds)
@@ -217,9 +223,48 @@ class Toolbox:
             "waited_s": round(wait, 2), "floor_s": floor, "at": time.time()})
         return wait
 
+    def establish_counter_baselines(self) -> list[str]:
+        """MONITOR 的系统动作：告警时刻给目标表建扫描计数器基线。不是 agent 工具，不扣步数、
+        不落证据条目（MONITOR 多落一批 stats_range_drift 之类会改变绑定时机与诊断语义）。
+
+        库级计数器在 MONITOR 由 get_database_stats 建了基线，表扫描计数器原来没有：第一次
+        get_table_stats 发生在 INVESTIGATE 里只能建基线，seq_scan_volume 拿到 UNKNOWN、被记成
+        需求不可得，5/5 局都白读一次（2026-09-24 缺陷报告 5cc2c25 P2-1）。有了这个基线，第一次
+        取证读数（先由 _await_decisive_window 等满窗口下限）就有判定力。
+        """
+        table = (self.target_context or {}).get("table")
+        getter = getattr(self.o, "get_table_scan_counters", None)
+        key = f"table_scan:{table}"
+        if not table or getter is None or key in self.st.cumulative_baselines:
+            return []
+        try:
+            counts = getter(table)
+        except Exception as exc:                       # noqa: BLE001
+            self.st.evidence_task_audit.append({
+                "event": "counter_baseline_failed", "key": key,
+                "error": f"{type(exc).__name__}: {exc}"[:160], "at": time.time()})
+            return []
+        missing = [name for name in (*TABLE_SCAN_COUNTERS, "stats_reset")
+                   if name not in counts]
+        if missing or not counts.get("stats_reset"):
+            self.st.evidence_task_audit.append({
+                "event": "counter_baseline_failed", "key": key,
+                "error": f"missing {missing or ['stats_reset']}", "at": time.time()})
+            return []
+        now = time.time()
+        # 与 _cumulative_delta 写的快照同形：下一次 get_table_stats 直接对它差分。
+        self.st.cumulative_baselines[key] = {
+            "stats_reset": str(counts["stats_reset"]), "captured_at": now,
+            "values": {name: counts[name] for name in TABLE_SCAN_COUNTERS}}
+        self.st.evidence_task_audit.append({
+            "event": "counter_baseline", "key": key,
+            "raw_ref": str(counts.get("raw_ref") or ""), "at": now})
+        return [key]
+
     def _cumulative_delta(
             self, key: str, current: dict, counters: tuple[str, ...],
-            reset_key: str, error: str = "") -> tuple[dict | None, EvidenceStatus, str]:
+            reset_key: str, error: str = "",
+            tool: str = "get_database_stats") -> tuple[dict | None, EvidenceStatus, str]:
         """把累计计数器变成相邻两次观测之间的窗口增量。
 
         首次读取、统计被 reset、计数器回退、字段缺失都没有可解释的窗口，
@@ -243,7 +288,7 @@ class Toolbox:
         self.st.cumulative_baselines[key] = snapshot
         if not previous:
             return (None, EvidenceStatus.UNKNOWN,
-                    "已记录累计基线；需要在故障窗口后再次调用 get_database_stats")
+                    f"已记录累计基线；需要在故障窗口后再次调用 {tool}")
         if previous.get("stats_reset") != snapshot["stats_reset"]:
             return (None, EvidenceStatus.UNKNOWN,
                     "统计在两次观测之间被重置；新读数仅作为下一窗口基线")
@@ -373,9 +418,8 @@ class Toolbox:
             scan_counts[name + "_raw"] = raw if (raw or own) else int(getattr(s, name) or 0)
             scan_counts["own_" + name] = own
         scan_delta, scan_status, scan_note = self._cumulative_delta(
-            f"table_scan:{table}", scan_counts,
-            ("seq_scan_raw", "seq_tup_read_raw", "idx_scan_raw",
-             "own_seq_scan", "own_seq_tup_read", "own_idx_scan"), "stats_reset")
+            f"table_scan:{table}", scan_counts, TABLE_SCAN_COUNTERS, "stats_reset",
+            tool="get_table_stats")
         if scan_delta is not None:
             for name in ("seq_scan", "seq_tup_read", "idx_scan"):
                 scan_delta[name] = max(0, scan_delta[name + "_raw"] - scan_delta["own_" + name])

@@ -9,7 +9,8 @@ pg_stat_database 的累计计数器，而诊断工具自己也会执行查询：
 
   原始增量（工具前后各读一次共享统计）  vs  观测器自家记账的增量
 
-要求：顺序扫描次数、索引扫描次数精确相等；顺序读行数误差 ≤ 每个 loop 1 行（计划取整）；
+要求：顺序扫描次数精确相等；索引扫描次数非并行计划精确相等、并行计划记账是上界（原始 ≤ 记账，见
+observe._merge_own_counts）；顺序读行数误差 ≤ 每个 loop 1 行（计划取整）；
 外溢字节数原始增量 ≤ 自家上界（上界的方向不能反）；工具返回后立即读与 1.5 秒后再读一致
 （强制刷账生效，没有迟到的计数 —— 迟到会让扣除落在错的窗口里）。不记账的工具原始增量
 必须是 0。
@@ -62,8 +63,10 @@ def measure(label: str, call, *, accounted: bool, loops_hint: int = 64) -> None:
     o = Observer(TraceStore("ep_tool_perturbation_live"))
     before, own_before = counters(), own_of(o)
     started = time.monotonic()
-    call(o)
+    result = call(o)
     took = time.monotonic() - started
+    # 并行计划的索引扫描记账是上界（见 observe._merge_own_counts），这里按上界判
+    idx_upper = accounted and int(getattr(result, "parallel_workers", 0) or 0) > 0
     right_after = counters()
     time.sleep(1.5)
     settled = counters()
@@ -78,8 +81,10 @@ def measure(label: str, call, *, accounted: bool, loops_hint: int = 64) -> None:
         problems.append(f"工具返回后仍有迟到的计数 {late}")
     for rel in TABLES:
         r, w = raw[rel], (own[rel] if accounted else {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
-        if r["seq_scan"] != w["seq_scan"] or r["idx_scan"] != w["idx_scan"]:
-            problems.append(f"{rel} 扫描次数不符 raw={r} own={w}")
+        if r["seq_scan"] != w["seq_scan"]:
+            problems.append(f"{rel} 顺序扫描次数不符 raw={r} own={w}")
+        if (r["idx_scan"] > w["idx_scan"]) if idx_upper else (r["idx_scan"] != w["idx_scan"]):
+            problems.append(f"{rel} 索引扫描次数{'超过记账上界' if idx_upper else '不符'} raw={r} own={w}")
         if abs(r["seq_tup_read"] - w["seq_tup_read"]) > max(1, loops_hint):
             problems.append(f"{rel} 顺序读行数误差 {r['seq_tup_read'] - w['seq_tup_read']}")
     own_temp = own["temp_bytes"] if accounted else 0
@@ -123,6 +128,25 @@ measure("get_top_queries", lambda o: o.get_top_queries(5), accounted=False)
 measure("simulate_index（hypopg，不执行）",
         lambda o: o.simulate_index("CREATE INDEX ON orders (total)", seq_filter), accounted=False)
 measure("get_database_stats", lambda o: o.get_database_stats(), accounted=False)
+measure("get_table_scan_counters（MONITOR 基线，只读计数器）",
+        lambda o: o.get_table_scan_counters("orders"), accounted=False)
+
+# MONITOR 的基线读数与 get_table_stats 必须同源同口径：原始值一致、统计周期是同一个字符串
+# （ESC 按它核对 seq_scan_volume 的周期，差一个字符就判"周期不符"不可信）。
+print()
+print("== 基线读数与 get_table_stats 同口径")
+_o = Observer(TraceStore("ep_tool_perturbation_live"))
+_c = _o.get_table_scan_counters("orders")
+_t = _o.get_table_stats("orders")
+_same = (_c["stats_reset"] == _t.stats_reset and _c["seq_scan_raw"] == _t.seq_scan_raw
+         and _c["seq_tup_read_raw"] == _t.seq_tup_read_raw and _c["idx_scan_raw"] == _t.idx_scan_raw)
+print(f"   counters {{{_c['seq_scan_raw']}, {_c['seq_tup_read_raw']}, {_c['idx_scan_raw']}}} epoch {_c['stats_reset']!r}")
+print(f"   table    {{{_t.seq_scan_raw}, {_t.seq_tup_read_raw}, {_t.idx_scan_raw}}} epoch {_t.stats_reset!r}")
+if _same:
+    print("   OK")
+else:
+    print("   FAIL 基线读数与 get_table_stats 不同口径")
+    fails.append("get_table_scan_counters 与 get_table_stats 不同口径")
 
 print()
 if fails:

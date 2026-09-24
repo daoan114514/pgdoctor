@@ -497,6 +497,8 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                 nxt = policy.run_phase(cur, tb, st, ctx)
 
                 if cur is Phase.MONITOR:
+                    # 告警时刻给目标表建扫描计数器基线（系统动作，不扣步数、不落证据）
+                    tb.establish_counter_baselines()
                     st.incident_window["monitor_completed_at"] = time.time()
                     st.incident_window["source_epochs"] = {
                         key: value.get("stats_reset", "")

@@ -218,6 +218,34 @@ def _plan_own_counts(plan: dict, parent_rel: str = "",
     return out
 
 
+def _merge_own_counts(plan_counts: dict, leader: dict, parallel: bool) -> dict[str, dict[str, int]]:
+    """EXPLAIN ANALYZE 自家扫描记账：计划 JSON 与事务级视图两个来源合并。
+
+    两个来源各缺一块：计划 JSON 含并行 worker 但不含规划期的索引端点探测（范围谓词、连接估算
+    会真去索引里取最值），事务级视图（pg_stat_xact_user_tables）含规划期但只有 leader。
+
+      顺序扫描：规划器不做顺序扫描，计划按 loop 计的是全体参与者 -> 取大即取计划，精确。
+      索引扫描：非并行计划 leader 就是全部，事务级视图精确（>= 计划）-> 取大。
+                并行计划两者相加：leader 的执行期扫描算了两次，是**上界**。上界是安全的方向 ——
+                净 idx_scan 只会偏低，seq_scan_volume 用它只为区分"窗口里没有活动"（NEUTRAL）与
+                "只有索引扫描"（REFUTES），偏低只会多给 NEUTRAL，不会凭自家的规划期探测把一个
+                空窗口判成反证（规则 1）。取大在并行计划上是下界、方向反了：2026-09-24 活库实测
+                统计过期热查询走并行计划，orders 原始 6 次、只记 4 次（.dev/tool_perturbation_live.py）。
+    """
+    zero = {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0}
+    out: dict[str, dict[str, int]] = {}
+    for rel in set(plan_counts) | set(leader):
+        plan = plan_counts.get(rel, zero)
+        lead = leader.get(rel, zero)
+        out[rel] = {
+            "seq_scan": max(plan["seq_scan"], lead["seq_scan"]),
+            "seq_tup_read": max(plan["seq_tup_read"], lead["seq_tup_read"]),
+            "idx_scan": (plan["idx_scan"] + lead["idx_scan"] if parallel
+                         else max(plan["idx_scan"], lead["idx_scan"])),
+        }
+    return out
+
+
 def _flush_own_stats(conn) -> bool:
     """把本连接挂起的统计计数立即刷进共享统计（PG15+ pg_stat_force_next_flush）。
 
@@ -236,6 +264,12 @@ def _flush_own_stats(conn) -> bool:
     except Exception:                                  # noqa: BLE001
         return False
 
+
+# 累计统计的周期（stats_reset，没 reset 过取实例启动时刻）。表扫描计数器的窗口差分与 ESC 的
+# 统计周期核对都认它（esc._CUMULATIVE_EPOCH_KEYS：seq_scan_volume -> pg_stat_database），
+# get_table_stats 与 get_table_scan_counters 必须同一个表达式、同一个字符串（规则 4）。
+_STATS_EPOCH_SQL = ("(SELECT COALESCE(stats_reset, pg_postmaster_start_time())"
+                    " FROM pg_stat_database WHERE datname = current_database())")
 
 # "持续" idle in transaction 的门槛。事务型应用在语句之间会短暂处于这个状态，只有持续这么久的
 # 才算长事务占着连接（connection_residual 判据；偏高只会少反证）。
@@ -311,24 +345,19 @@ class Observer:
                       for rel, a, b, c in cur.fetchall()}
             conn.rollback()
             flushed = _flush_own_stats(conn)
+        acc = _acc()
+        _walk_plan(plan_json[0]["Plan"], acc)
+        acc["nodes"].sort(reverse=True)
         # ANALYZE 真执行了查询：它的扫描与外溢记进了负载读的累计计数器，记账后由
-        # get_table_stats / get_database_stats 扣掉（CLAUDE.md 规则 6）。两个来源各缺一块：
-        # 计划 JSON 含并行 worker 但不含规划期的索引端点探测（范围谓词、连接估算会真去
-        # 索引里取最值，活库实测每次 1-3 次 idx_scan），事务级视图含规划期但只有 leader。
-        # 两者都是下界，逐项取大：非并行计划精确，并行计划至多差几次规划期探测。
-        own_counts = _plan_own_counts(plan_json[0]["Plan"])
-        for rel, counts in leader.items():
-            merged = own_counts.setdefault(rel, {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
-            for key, value in counts.items():
-                merged[key] = max(merged[key], value)
+        # get_table_stats / get_database_stats 扣掉（CLAUDE.md 规则 6）。合并规则与方向见
+        # _merge_own_counts。
+        own_counts = _merge_own_counts(_plan_own_counts(plan_json[0]["Plan"]), leader,
+                                       parallel=acc["workers"] > 0)
         for rel, counts in own_counts.items():
             self._add_own_scans(rel, counts)
         own_temp = int(plan_json[0]["Plan"].get("Temp Written Blocks", 0) or 0) * block_size
         self._own_temp_bytes += own_temp
         self._note_own_flush(flushed)
-        acc = _acc()
-        _walk_plan(plan_json[0]["Plan"], acc)
-        acc["nodes"].sort(reverse=True)
         digest = ExplainDigest(
             total_time_ms=round(plan_json[0].get("Execution Time", 0.0), 2),
             scan_types=acc["scans"][:5],
@@ -601,8 +630,7 @@ class Observer:
             "                 current_setting('autovacuum_vacuum_scale_factor')::numeric)"
             "        * greatest(s.n_live_tup, 0))::bigint"
             " , s.seq_scan, s.seq_tup_read, s.idx_scan, c.reltuples::bigint"
-            " , (SELECT COALESCE(stats_reset, pg_postmaster_start_time())"
-            "    FROM pg_stat_database WHERE datname = current_database())"
+            " , " + _STATS_EPOCH_SQL +
             " FROM pg_stat_user_tables s JOIN pg_class c ON c.oid = s.relid"
             " WHERE s.relname = %s", (table,), role="ro")
         if not r:
@@ -640,6 +668,32 @@ class Observer:
                                 json.dumps(raw, ensure_ascii=False), raw)
         st.raw_ref = ref
         return st
+
+    def get_table_scan_counters(self, table: str) -> dict:
+        """只读表扫描累计计数器与统计周期：不做值域扫描、不落任何证据。
+
+        MONITOR 在告警时刻用它给热表建扫描基线（系统动作，发生在 agent 的任何动作之前，规则 6
+        干净）。原来第一次 get_table_stats 在 INVESTIGATE 里，只能建基线、seq_scan_volume 拿到
+        UNKNOWN，5/5 局都白读一次（2026-09-24 缺陷报告 5cc2c25 P2-1）。原始值、自家扣除量、统计
+        周期与 get_table_stats 同源同口径，Toolbox 按同一组计数器差分。
+        """
+        self._await_own_stats()
+        rows = db.query(
+            "SELECT s.seq_scan, s.seq_tup_read, s.idx_scan, " + _STATS_EPOCH_SQL +
+            " FROM pg_stat_user_tables s WHERE s.relname = %s", (table,), role="ro")
+        if not rows:
+            raise KeyError(table)
+        seq_scan, seq_tup_read, idx_scan, epoch = rows[0]
+        own = dict(self._own_scans.get(table) or {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
+        out = {"table": table,
+               "seq_scan_raw": int(seq_scan or 0), "seq_tup_read_raw": int(seq_tup_read or 0),
+               "idx_scan_raw": int(idx_scan or 0),
+               "own_seq_scan": int(own["seq_scan"]), "own_seq_tup_read": int(own["seq_tup_read"]),
+               "own_idx_scan": int(own["idx_scan"]),
+               "stats_reset": str(epoch or "")}
+        out["raw_ref"] = self.trace.record("get_table_scan_counters", {"table": table},
+                                           json.dumps(out, ensure_ascii=False), dict(out))
+        return out
 
     def get_physical_bloat(self, table: str) -> dict:
         """Measure physical reclaimable space with pgstattuple_approx.
