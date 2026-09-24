@@ -35,6 +35,8 @@ class ToolPlanningConfig:
     # 不再各起一个 12 轮 SDK 会话。子 agent 在这些任务上只是"调一次工具、抄观测"，
     # 判定本来就在 predicate 层（架构评审第 9 条）。
     deterministic_argless: bool = True
+    # 参数由目标上下文完全决定的工具（热查询 / 目标表）也由编排器直接执行（2026-09-24）
+    deterministic_pinned: bool = True
 
 
 DEFAULT_TOOL_PLANNING = ToolPlanningConfig()

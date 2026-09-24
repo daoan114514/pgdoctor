@@ -373,6 +373,20 @@ ungrounded = G.ungrounded_root_causes()
 check("每个根因都有未被污染的可反证证据", not ungrounded,
       [f"{rc}: 可反证证据 {evs} 全部被污染" for rc, evs in ungrounded.items()])
 
+# 累计计数器窗口判据集合必须与图上 provenance=cumulative_counter 的证据一致（2026-09-24）
+from knowledge import evidence_predicates as _ep  # noqa: E402
+_cum = {str(d.get("predicate_id")) for n, d in G.load().nodes(data=True)
+        if d.get("kind") == "Evidence" and d.get("provenance") == "cumulative_counter"}
+check("累计计数器判据集合与 provenance 一致", _cum == set(_ep.CUMULATIVE_WINDOW_PREDICATES),
+      sorted(_cum ^ set(_ep.CUMULATIVE_WINDOW_PREDICATES)))
+
+# 预期效果标的 node 必须是该修复的 expected_effect_nodes 之一（intervention_options 按它筛选）
+_bad_nodes = [f"{f['id']}: {e.get('metric')} -> {e.get('node')}"
+              for f in nodes_raw.get("fixes", []) or []
+              for e in f.get("expected_effects", []) or []
+              if e.get("node") and e.get("node") not in (f.get("expected_effect_nodes") or [])]
+check("expected_effects.node 都在 expected_effect_nodes 里", not _bad_nodes, _bad_nodes)
+
 print()
 print("=" * 62)
 if fails:
@@ -380,5 +394,6 @@ if fails:
 elif warns:
     print(f"GRAPH LINT: PASS（{len(warns)} 条警告待人工判断）")
 else:
+
     print("GRAPH LINT: PASS")
 sys.exit(1 if fails else 0)

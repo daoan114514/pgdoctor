@@ -690,7 +690,13 @@ def intervention_options(st: EpisodeState, *, executable_only: bool = False
             bounded_effects = [node_id for node_id in
                                option.get("expected_effect_nodes", [])
                                if node_id in downstream]
-            item = {**option, "expected_effect_nodes": bounded_effects}
+            # 预期效果标了 node 的，只保留证明本路径上节点（干预目标或其下游）的那几条；
+            # 没标 node 的照旧全部保留。
+            keep_nodes = set(bounded_effects) | {option["target_node_id"]}
+            path_effects = [effect for effect in option.get("expected_effects", []) or []
+                            if not effect.get("node") or effect.get("node") in keep_nodes]
+            item = {**option, "expected_effect_nodes": bounded_effects,
+                    "expected_effects": path_effects}
             manual = (item.get("execution") == "escalate_only" or
                       item.get("manual") or
                       item.get("intervention_kind") == "MANUAL")
@@ -914,6 +920,11 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
                     + (f" (+{len(missing) - 10} more)" if len(missing) > 10 else ""), [])
         return True, f"{label} holds for all {len(pids)} pid(s)", refs
 
+    connection_pressure_refs = [
+        binding.raw_ref for binding in bindings
+        if binding.predicate_id == "connection_count_v2" and
+        binding.predicate_result == PredicateResult.SUPPORTS.value]
+
     fresh_counterfactuals = _fresh_observations(
         st, {"counterfactual_index"},
         float(G.load().nodes.get("counterfactual_index", {}).get(
@@ -989,9 +1000,13 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
                 ("transaction_age_seconds", "xact_age_seconds", "xact_age")),
             "database_role_bound": lambda row: bool(
                 row.get("role") or row.get("usename") or row.get("user")),
-            "blocking_or_xmin_impact_bound": lambda row: bool(
+            # 危害三选一：持锁挡人、持快照挡 vacuum、占连接槽。最后一种要求可信证据证明连接
+            # 已逼近上限（connection_count_v2 SUPPORTS），而不是任何空闲事务都能杀。
+            "session_impact_bound": lambda row: bool(
                 row.get("blocking_impact") or row.get("blocked_session_count") or
-                row.get("backend_xmin") or row.get("xmin_age")),
+                row.get("backend_xmin") or row.get("xmin_age") or
+                (connection_pressure_refs and
+                 str(row.get("state", "")).lower().startswith("idle in transaction"))),
             "pid_is_client_backend_and_state_idle": lambda row: (
                 str(row.get("backend_type", "client backend")).lower() ==
                 "client backend" and str(row.get("state", "")).lower() == "idle"),
@@ -1004,8 +1019,11 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
         check = checks.get(condition_id)
         if check is None:
             return False, f"no deterministic evaluator for {condition_id}", []
-        return per_pid(lambda _binding, row: check(row),
-                       f"trace-bound PID facts satisfy {condition_id}")
+        ok, reason, refs = per_pid(lambda _binding, row: check(row),
+                                   f"trace-bound PID facts satisfy {condition_id}")
+        if ok and condition_id == "session_impact_bound" and connection_pressure_refs:
+            refs = list(refs) + connection_pressure_refs
+        return ok, reason, refs
 
     results: list[dict] = []
     for condition in option.get("preconditions", []):

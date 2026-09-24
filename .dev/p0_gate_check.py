@@ -236,9 +236,11 @@ class _RoutePolicy(Policy):
         raw_ref = store.record(
             "p0_fixture", {"evidence_type": evidence_type},
             json.dumps(value, ensure_ascii=False), value)
+        # 窗口要不短于 MIN_REFUTE_WINDOW_S（30s）才能否定：原来的 1 秒窗口零增量只是下界
+        # （规则 1，2026-09-24），替代根因反证不掉，orphaned_prepared_transaction 到不了 SUFFICIENT。
         context = PredicateContext(
             target_kind=target_kind, target_ids=tuple(target_ids),
-            window_start=now - 1 if window else None,
+            window_start=now - 90 if window else None,
             window_end=now if window else None,
             source_epoch=st.episode_id if window else "")
         decision = evaluate(predicate_id, value, context=context)

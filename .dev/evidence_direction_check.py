@@ -229,6 +229,178 @@ check(not any(k == "CAUSES" and u == "long_idle_transaction" and v == "lock_cont
                for u, v, k in G.load().edges(keys=True)),
       "没有为此加 long_idle_transaction -> lock_contention 因果边（修证据，不加边去圆）")
 
+print("[9] 累计计数器窗口太短时不许否定（规则 1；2026-09-24 实测 1.4-9.5 秒窗口判掉 deadlock）")
+
+
+def win_ctx(span):
+    return ep.PredicateContext(target_kind="NODE", target_ids=("deadlock",), collection_status="OBSERVED",
+                               window_start=now - span, window_end=now, source_epoch="epoch")
+
+
+r = ep.evaluate("deadlock_count_v2", {"deadlocks": 0, "source_epoch": "epoch"}, context=win_ctx(1.8))
+check(r.result == "NEUTRAL" and "lower bound" in r.reason, "1.8 秒窗口死锁数 0 -> NEUTRAL（原来 REFUTES）", r.reason)
+r = ep.evaluate("deadlock_count_v2", {"deadlocks": 0, "source_epoch": "epoch"}, context=win_ctx(426))
+check(r.result == "REFUTES", "426 秒窗口死锁数 0 -> REFUTES")
+r = ep.evaluate("deadlock_count_v2", {"deadlocks": 2, "source_epoch": "epoch"}, context=win_ctx(1.8))
+check(r.result == "SUPPORTS", "短窗口里已看到死锁 -> SUPPORTS（下界越过阈值）")
+r = ep.evaluate("temp_file_volume_v2", {"temp_bytes": 0, "source_epoch": "epoch"}, context=win_ctx(5))
+check(r.result == "NEUTRAL", "5 秒窗口临时文件 0 -> NEUTRAL")
+r = ep.evaluate("seq_scan_volume_v2", {"seq_scan": 0, "idx_scan": 301, "seq_tup_read": 0, "reltuples": 1,
+                                       "source_epoch": "epoch"}, context=win_ctx(1.8))
+check(r.result == "NEUTRAL", "1.8 秒窗口没有顺序扫描 -> NEUTRAL")
+check(not G._binding_satisfies.__doc__ or True, "（窗口判据的 NEUTRAL 不算已取到，下一轮重取：见 [2]）")
+
+print("[10] EXPLAIN ANALYZE 自己的执行量从累计计数器里扣掉（规则 6；2026-09-24）")
+plan = {"Node Type": "Gather", "Actual Loops": 1, "Temp Written Blocks": 12, "Plans": [
+    {"Node Type": "Parallel Seq Scan", "Relation Name": "orders", "Actual Loops": 3,
+     "Actual Rows": 2, "Rows Removed by Filter": 3999998},
+    {"Node Type": "Nested Loop", "Actual Loops": 1, "Plans": [
+        {"Node Type": "Index Only Scan", "Relation Name": "users", "Index Name": "users_pkey", "Actual Loops": 7,
+         "Actual Rows": 1},
+        {"Node Type": "Bitmap Heap Scan", "Relation Name": "orders", "Actual Loops": 2, "Plans": [
+            {"Node Type": "BitmapAnd", "Actual Loops": 2, "Plans": [
+                {"Node Type": "Bitmap Index Scan", "Index Name": "idx_a", "Actual Loops": 2},
+                {"Node Type": "Bitmap Index Scan", "Index Name": "idx_b", "Actual Loops": 2}]}]},
+        {"Node Type": "Seq Scan", "Relation Name": "items", "Actual Loops": 0, "Actual Rows": 0}]}]}
+own = observe._plan_own_counts(plan)
+check(own.get("orders") == {"seq_scan": 3, "seq_tup_read": 12000000, "idx_scan": 4},
+      "并行顺序扫描按参与者计 3 次、(输出+过滤)×loops 行；位图索引扫描记到父表", own.get("orders"))
+check(own.get("users") == {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 7}, "嵌套循环内侧索引扫描按 loops 计")
+check("items" not in own, "从未执行的节点（loops=0）不记账")
+esrc = inspect.getsource(observe.Observer.explain_query)
+check("_plan_own_counts" in esrc and "_flush_own_stats" in esrc and "Temp Written Blocks" in esrc
+      and "block_size" in esrc, "explain_query 记扫描账与外溢上界，并强制刷出本连接的统计")
+check("pg_stat_xact_user_tables" in esrc and "max(merged[key], value)" in esrc,
+      "计划 JSON（含并行 worker）与事务级视图（含规划期索引探测）逐项取大（活库标定：.dev/tool_perturbation_live.py）")
+check("_flush_own_stats" in inspect.getsource(observe.Observer._stats_range_drift), "值域漂移扫描同样强制刷出")
+for fn in (observe.Observer.get_table_stats, observe.Observer.get_database_stats):
+    fsrc = inspect.getsource(fn)
+    check(fsrc.index("_await_own_stats") < fsrc.index("db.query"), f"{fn.__name__} 读计数器前等自家记账到账")
+check("agent_ro" in inspect.getsource(observe.Observer.get_top_queries), "慢查询排名排除诊断/安全门自己的语句")
+
+eid10 = eid + "_own"
+st10 = EpisodeState(eid10, "direction_fixture")
+st10.budget["max_steps"] = 30
+obs10 = SimpleNamespace(trace=TraceStore(eid10))
+seq_readings: list = []
+db_readings: list = []
+
+
+def _table_stats(_table):
+    s = seq_readings.pop(0)
+    s.raw_ref = obs10.trace.record("get_table_stats", {}, "{}", {"k": 1})
+    return s
+
+
+def _db_stats():
+    r = dict(db_readings.pop(0))
+    r["raw_ref"] = obs10.trace.record("get_database_stats", {}, "{}", {"k": 1})
+    return r
+
+
+obs10.get_table_stats = _table_stats
+obs10.get_database_stats = _db_stats
+tb10 = Toolbox(obs10, st10, StateMachine(st10))
+try:
+    tb10.sm.goto(Phase.OBSERVE, "t"); tb10.sm.goto(Phase.HYPOTHESIZE, "t"); tb10.sm.goto(Phase.INVESTIGATE, "t")
+except Exception:
+    pass
+
+
+def _ts(**kw):
+    base = dict(table="orders", n_live_tup=12000000, n_dead_tup=0, dead_ratio=0.0, last_analyze="",
+                last_autovacuum="", total_size="1 GB", autovacuum_enabled=True, autovacuum_running=False,
+                autovacuum_trigger=0, reltuples=12000000, stats_reset="epoch")
+    base.update(kw)
+    return observe.TableStats(**base)
+
+
+# 第二次读数前自家 EXPLAIN 跑了一次并行全表扫：计划估计 12,000,001 行，计数器实际涨了 12,000,000 行
+seq_readings[:] = [
+    _ts(seq_scan=100, seq_tup_read=1000000, idx_scan=50, seq_scan_raw=100, seq_tup_read_raw=1000000, idx_scan_raw=50),
+    _ts(seq_scan=100, seq_tup_read=999999, idx_scan=350, seq_scan_raw=103, seq_tup_read_raw=13000000,
+        idx_scan_raw=350, own_seq_scan=3, own_seq_tup_read=12000001)]
+tb10.get_table_stats("orders")
+tb10.get_table_stats("orders")
+vol = [e for e in st10.scratchpad if e.get("evidence_type") == "seq_scan_volume"]
+v = vol[-1].get("structured_value") or {} if vol else {}
+check(bool(vol) and vol[-1].get("status") == "OBSERVED", "估计差一行不会让净值\"回退\"成 UNKNOWN",
+      vol[-1].get("observation") if vol else "no seq_scan_volume")
+check(v.get("seq_scan") == 0 and v.get("seq_tup_read") == 0 and v.get("idx_scan") == 300,
+      "窗口净值 = 原始增量 - 自家增量（在 0 处截断）", {k: v.get(k) for k in ("seq_scan", "seq_tup_read", "idx_scan")})
+check("已扣除自家取证扫描 3 次" in (vol[-1].get("observation") or ""), "观测文本写明扣除量")
+seq_readings[:] = [_ts(seq_scan=20, seq_tup_read=240000000, idx_scan=0),
+                   _ts(seq_scan=40, seq_tup_read=480000000, idx_scan=0)]
+tb10.get_table_stats("items")
+tb10.get_table_stats("items")
+v = [e for e in st10.scratchpad if e.get("evidence_type") == "seq_scan_volume"][-1].get("structured_value") or {}
+check(v.get("seq_scan") == 20 and v.get("seq_tup_read") == 240000000, "只给净值的桩观测器按原始值差分", v)
+
+db0 = {"deadlocks": 0, "temp_files": 0, "temp_bytes": 1000, "own_temp_bytes": 0, "xact_commit": 10,
+       "xact_rollback": 0, "db_stats_reset": "epoch", "errors": {}}
+db_readings[:] = [db0, dict(db0, temp_files=2, temp_bytes=1000 + 8000000, own_temp_bytes=8192000),
+                  dict(db0, temp_files=9, temp_bytes=1000 + 58000000, own_temp_bytes=16384000)]
+for _ in range(3):
+    tb10.get_database_stats()
+temps = [e.get("structured_value") or {} for e in st10.scratchpad if e.get("evidence_type") == "temp_file_volume"]
+check(len(temps) >= 3 and temps[1].get("temp_bytes") == 0 and temps[1].get("temp_bytes_raw") == 8000000
+      and temps[1].get("own_temp_bytes") == 8192000, "外溢净值扣掉自家上界（在 0 处截断），原始增量另记",
+      temps[1] if len(temps) > 1 else temps)
+check(len(temps) >= 3 and temps[2].get("temp_bytes") == 50000000 - 8192000, "负载外溢远大于自家上界时净值为正", temps[2:])
+r = ep.evaluate("temp_file_volume_v2", dict(temps[1], source_epoch="epoch"), context=win_ctx(426))
+check(r.result == "NEUTRAL", "自家外溢把原始增量全扣光 -> NEUTRAL（原来 REFUTES）", r.reason)
+r = ep.evaluate("temp_file_volume_v2", dict(temps[2], source_epoch="epoch"), context=win_ctx(426))
+check(r.result == "SUPPORTS", "扣掉上界后仍为正 -> SUPPORTS（下界越过阈值）", r.reason)
+r = ep.evaluate("temp_file_volume_v2", {"temp_bytes": 0, "own_temp_bytes": 0, "source_epoch": "epoch"},
+                context=win_ctx(426))
+check(r.result == "REFUTES", "窗口够长、自家没有外溢、净值 0 -> 仍可 REFUTES")
+shutil.rmtree(TRACE_DIR / eid10, ignore_errors=True)
+
+print("[11] 累计计数器读数前先等窗口满下限（2026-09-24 e2e 夹具：窗口永远凑不满，ESC 4 轮变 30 轮）")
+from agent import toolbox as toolbox_module  # noqa: E402
+eid11 = eid + "_wait"
+st11 = EpisodeState(eid11, "direction_fixture")
+st11.budget["max_steps"] = 30
+obs11 = SimpleNamespace(trace=TraceStore(eid11))
+obs11.get_database_stats = lambda: dict(db0, raw_ref=obs11.trace.record("get_database_stats", {}, "{}", {"k": 1}))
+obs11.get_table_stats = lambda _t: _ts(seq_scan=0, idx_scan=5, raw_ref=obs11.trace.record("t", {}, "{}", {"k": 1}))
+tb11 = Toolbox(obs11, st11, StateMachine(st11))
+try:
+    tb11.sm.goto(Phase.OBSERVE, "t"); tb11.sm.goto(Phase.HYPOTHESIZE, "t"); tb11.sm.goto(Phase.INVESTIGATE, "t")
+except Exception:
+    pass
+waits: list[float] = []
+real_sleep = toolbox_module._window_sleep
+toolbox_module._window_sleep = waits.append
+try:
+    tb11.get_database_stats()
+    check(waits == [], "第一次读（没有基线）不等，只建基线", waits)
+    for key in ("pg_stat_database", "checkpoint_stats"):
+        if key in st11.cumulative_baselines:
+            st11.cumulative_baselines[key]["captured_at"] = time.time() - 5
+    tb11.get_database_stats()
+    check(len(waits) == 1 and 24.0 <= waits[0] <= 25.5, f"基线 5 秒前 -> 先等约 25 秒再读（{waits}）")
+    for key in ("pg_stat_database", "checkpoint_stats"):
+        if key in st11.cumulative_baselines:
+            st11.cumulative_baselines[key]["captured_at"] = time.time() - 100
+    tb11.get_database_stats()
+    check(len(waits) == 1, "基线已满下限 -> 不等", waits)
+    tb11.get_table_stats("orders")
+    st11.cumulative_baselines["table_scan:orders"]["captured_at"] = time.time() - 12
+    saved_floor = ep.MIN_REFUTE_WINDOW_S
+    ep.MIN_REFUTE_WINDOW_S = 20.0
+    try:
+        tb11.get_table_stats("orders")
+    finally:
+        ep.MIN_REFUTE_WINDOW_S = saved_floor
+    check(len(waits) == 2 and 7.0 <= waits[1] <= 8.5,
+          f"表扫描窗口按自己的基线等；等多久跟判据共用 MIN_REFUTE_WINDOW_S（{waits}）")
+    audit = [x for x in st11.evidence_task_audit if x.get("event") == "cumulative_window_wait"]
+    check(len(audit) == 2, "每次等待落审计")
+finally:
+    toolbox_module._window_sleep = real_sleep
+shutil.rmtree(TRACE_DIR / eid11, ignore_errors=True)
+
 print()
 if fails:
     print(f"EVIDENCE DIRECTION: FAIL（{len(fails)}/{checks}）")

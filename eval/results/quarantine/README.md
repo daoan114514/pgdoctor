@@ -64,3 +64,9 @@ glob `eval/results/*.json`，放在这里就不会再被当成"已完成"。
 | 文件 | 为什么隔离 |
 |---|---|
 | `guard_*_20260923_1c051d4.json`（5 个）+ `llm_eval_guarded_20260923_1c051d4.json` | 不是污染，是**被取代**：它们是缺陷报告的依据（D 曾选对 4/5、O 2/5、S 2/5），报告里的缺陷已在 `308cd15` 修复，诊断口径、connection 与 stale_statistics 的成功判据也都变了。守护只认 `eval/results/guard_*.json`，挪走后 5 个场景在新 harness 下统一重跑；缺陷报告仍引用这些文件，路径见此处 |
+
+## 2026-09-24 复跑（308cd15，本轮取证架构修复之前，跑到第 3 个场景时停）
+
+| 文件 | 为什么隔离 |
+|---|---|
+| `guard_*_20260924_308cd15.json`（3 个） | 不是污染，是**被取代**：connection_exhaustion（D/严格 D/O 全 True，340s，$0.68）、lock_contention（全 True，598s，$1.28）、misleading_idle_txn（D=True 严格 D=False、O=False，516s，$0.88）。停跑后改了：累计计数器窗口不足 30 秒不许否定、terminate_idle_transaction 的前置条件与按路径筛选的预期效果、misleading 场景成功判据（加连接使用率）、参数由目标上下文钉死的工具改由编排器确定性执行（并发改为 4）、同一轮按工具性质排执行顺序、EXPLAIN ANALYZE 自身的扫描与外溢从计数器里扣掉。5 个场景在新 harness 下统一重跑；这 3 个的耗时留作提速对照 |

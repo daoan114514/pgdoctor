@@ -175,6 +175,46 @@ import inspect as _inspect  # noqa: E402
 esrc = _inspect.getsource(gate.execute)
 check(esrc.index("_recheck_sessions(p)") < esrc.index("undo_journal.append("), "复核在写 journal 与执行之前")
 
+print("[6] 只占连接的空闲事务：连接逼近上限有可信证据时可终止；预期效果只留连接那一条（2026-09-24 misleading）")
+eid6 = "ep_session_control_contract_fixture6"
+store6 = TraceStore(eid6)
+paths6 = G.enumerate_causal_paths(["throughput_down"], use_learned=False)
+path6 = next(p for p in paths6 if p.node_ids == ["long_idle_transaction", "connection_exhaustion", "throughput_down"])
+exp6 = G.merge_paths([path6], episode_id=eid6, observed_symptoms=["throughput_down"])
+exp6.select_paths([path6.path_id], unexplained_symptoms=[], scope=ExplanationScope.FULL)
+st6 = EpisodeState(eid6, "session_control_fixture6")
+st6.explanation_graph = exp6
+iit = asdict(SessionDigest(5151, "idle in transaction", None, 190.0, "SELECT 1", role="app_user",
+                           transaction_age_seconds=190.0, backend_type="client backend", backend_xmin="",
+                           is_current_diagnostic_connection=False, is_system_or_diagnostic=False,
+                           identity_rechecked=True))
+ref6 = store6.record("bind_structured_evidence", {"evidence_type": "session_wait_profile"},
+                     json.dumps([iit]), [iit])
+st6.note("agent", "session_wait_profile", "PLAN 阶段 include_idle 观测", ref6, ["long_idle_transaction"],
+         status="OBSERVED", structured_value=[iit])
+options6 = [o for o in er.intervention_options(st6) if o["fix"] == "terminate_idle_transaction"]
+check(len(options6) == 1, "长事务→连接耗尽这条路径上有 terminate_idle_transaction 选项")
+if options6:
+    metrics6 = [e["metric"] for e in options6[0]["expected_effects"]]
+    check(metrics6 == ["connection_usage_ratio"], f"预期效果只留证明本路径节点的那条: {metrics6}")
+    res6 = {r["condition_id"]: r for r in er._evaluate_preconditions(
+        st6, option=options6[0], sql="SELECT pg_terminate_backend(5151)")}
+    check(not res6["session_impact_bound"]["satisfied"], "没有连接逼近上限的证据：不持锁不持快照的空闲事务不能杀")
+    from agent.explanation import EvidenceBinding  # noqa: E402
+    cc = {"used": 97, "max_connections": 100, "near_limit": True, "idle_in_transaction": 87}
+    ref_cc = store6.record("fixture", {"evidence_type": "connection_count"}, json.dumps(cc), cc)
+    exp6.add_evidence_binding(EvidenceBinding.create(
+        episode_id=eid6, raw_ref=ref_cc, evidence_type="connection_count", status="OBSERVED",
+        observed_at=time.time(), predicate_id="connection_count_v2", predicate_result="SUPPORTS",
+        structured_value=cc, target_node_ids=["connection_exhaustion"], target_edge_ids=[],
+        fresh_until=time.time() + 3600))
+    res6 = {r["condition_id"]: r for r in er._evaluate_preconditions(
+        st6, option=options6[0], sql="SELECT pg_terminate_backend(5151)")}
+    check(res6["session_impact_bound"]["satisfied"] and ref_cc in res6["session_impact_bound"]["evidence_refs"],
+          "有连接逼近上限的可信证据：占连接即算危害，引用该证据")
+    check(all(r["satisfied"] for r in res6.values()), "全部前置条件满足: " + str({k: v["satisfied"] for k, v in res6.items()}))
+shutil.rmtree(TRACE_DIR / eid6, ignore_errors=True)
+
 print()
 if fails:
     print(f"SESSION CONTROL CONTRACT: FAIL（{len(fails)}/{checks}）")

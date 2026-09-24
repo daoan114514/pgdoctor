@@ -96,7 +96,13 @@ try:
         context=PredicateContext(
             window_start=10, window_end=20, source_epoch="epoch-b",
             expected_source_epoch="epoch-a"))
+    # 窗口要不短于 MIN_REFUTE_WINDOW_S（30s）才能否定：10 秒窗口的零增量只是下界（规则 1）
     valid_window = evaluate(
+        "deadlock_count_v2", {"deadlocks": 0, "source_epoch": "epoch-a"},
+        context=PredicateContext(
+            window_start=10, window_end=100, source_epoch="epoch-a",
+            expected_source_epoch="epoch-a"))
+    short_window = evaluate(
         "deadlock_count_v2", {"deadlocks": 0, "source_epoch": "epoch-a"},
         context=PredicateContext(
             window_start=10, window_end=20, source_epoch="epoch-a",
@@ -105,6 +111,8 @@ try:
           no_window.result == wrong_epoch.result == "NOT_APPLICABLE")
     check("same-window cumulative delta can refute",
           valid_window.result == "REFUTES")
+    check("a 10s window cannot refute (lower bound only)",
+          short_window.result == "NEUTRAL")
 
     print("\n[4] Stable binding identity and raw_ref deduplication")
     store = TraceStore(episode_id)

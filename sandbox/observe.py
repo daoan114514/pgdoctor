@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -142,8 +143,8 @@ class TableStats:
     stats_range_incomplete: list = field(default_factory=list)
     # 累计扫描计数器（原始值，窗口增量由 Toolbox 差分）。它记的是实际
     # 执行了什么，不经过规划器，所以过期统计污染不到它。
-    # 已扣除本 episode 自家取证扫描（_stats_range_drift）的净值；原始值与扣除量另记，
-    # 便于回查。
+    # 已扣除本 episode 自家取证扫描（_stats_range_drift、explain_query 的 ANALYZE）的净值；
+    # 原始值与扣除量另记，便于回查。
     seq_scan: int = 0
     seq_tup_read: int = 0
     idx_scan: int = 0
@@ -181,6 +182,65 @@ def _acc() -> dict:
             "est_act": [], "workers": 0, "nodes": []}
 
 
+_SEQ_SCAN_NODES = frozenset({"Seq Scan", "Parallel Seq Scan"})
+_INDEX_SCAN_NODES = frozenset({"Index Scan", "Index Only Scan", "Bitmap Index Scan"})
+
+
+def _plan_own_counts(plan: dict, parent_rel: str = "",
+                     out: dict | None = None) -> dict[str, dict[str, int]]:
+    """EXPLAIN ANALYZE 真的执行了一遍查询，它给 pg_stat_user_tables 记的账（CLAUDE.md 规则 6）。
+
+    从计划 JSON 按节点还原，而不是读 pg_stat_xact_user_tables：并行 worker 各自计数，
+    事务级视图只看得到 leader 自己（_stats_range_drift 能关并行，热查询的 EXPLAIN 不能 ——
+    关了就不是在诊断那个计划了）。计划里的 Actual Rows / Rows Removed by Filter 是
+    按 loop 平均的（并行节点的 loop 数就是参与者数），乘回 loops 才是总数。
+
+    seq_scan：每次 (重)扫描计一次 = loops；seq_tup_read：扫描交给执行器的可见元组 =
+    (输出 + 被过滤) × loops；idx_scan：索引扫描每次 (重)扫描计一次。Bitmap Index Scan 节点
+    不带表名，记到父节点 Bitmap Heap Scan 的表上。
+    """
+    out = {} if out is None else out
+    ntype = plan.get("Node Type", "")
+    rel = plan.get("Relation Name", "") or parent_rel
+    loops = int(plan.get("Actual Loops", 0) or 0)
+    if rel and loops and (ntype in _SEQ_SCAN_NODES or ntype in _INDEX_SCAN_NODES):
+        acc = out.setdefault(rel, {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
+        if ntype in _SEQ_SCAN_NODES:
+            per_loop = (float(plan.get("Actual Rows", 0) or 0)
+                        + float(plan.get("Rows Removed by Filter", 0) or 0))
+            acc["seq_scan"] += loops
+            acc["seq_tup_read"] += int(round(per_loop * loops))
+        else:
+            acc["idx_scan"] += loops
+    child_rel = rel if ntype in {"Bitmap Heap Scan", "BitmapAnd", "BitmapOr"} else ""
+    for child in plan.get("Plans", []) or []:
+        _plan_own_counts(child, child_rel, out)
+    return out
+
+
+def _flush_own_stats(conn) -> bool:
+    """把本连接挂起的统计计数立即刷进共享统计（PG15+ pg_stat_force_next_flush）。
+
+    自家扫描 / 外溢记账后要从原始计数器里扣掉，前提是原始计数器**已经**含有它们。
+    不刷的话要等后端退出时才刷，与下一次读计数器之间是毫秒级竞态：先扣后到账，
+    这一窗口的净值被低估（可能低到 0，反证了真根因），下一窗口又被高估。
+    强制标志在语句结束、回到空闲时（发 ReadyForQuery 之前）生效，所以 execute
+    返回时已经刷完。只能在自动提交模式下调：事务块里空闲不刷。
+    """
+    try:
+        if not conn.autocommit:
+            conn.rollback()
+            conn.autocommit = True
+        conn.execute("SELECT pg_stat_force_next_flush()")
+        return True
+    except Exception:                                  # noqa: BLE001
+        return False
+
+
+# 刷不掉时（旧版本 / 权限），等后端退出刷账的上限。宁可慢：见 CLAUDE.md 首要原则。
+OWN_STATS_SETTLE_S = 2.0
+
+
 class Observer:
     """所有只读诊断工具。每次调用都落轨迹。"""
 
@@ -188,9 +248,15 @@ class Observer:
         self.trace = trace or TraceStore()
         self.last_raw_refs: dict[str, str] = {}
         self._extension_cache: dict[str, bool] = {}
-        # 本 episode 自家取证扫描（_stats_range_drift）累计给各表记上的扫描计数，
-        # get_table_stats 从原始计数器里扣掉它，seq_scan_volume 才量的是负载而不是自己。
+        # 本 episode 自家取证扫描（_stats_range_drift、explain_query 的 ANALYZE）累计给各表
+        # 记上的扫描计数，get_table_stats 从原始计数器里扣掉它，seq_scan_volume 才量的是
+        # 负载而不是自己。
         self._own_scans: dict[str, dict[str, int]] = {}
+        # explain_query 执行时外溢的临时文件字节数上界（Temp Written Blocks × 块大小：每次
+        # 写至多一块，文件大小不会超过它）。get_database_stats 从 temp_bytes 里扣掉。
+        self._own_temp_bytes: int = 0
+        # 刷账失败时，读累计计数器前要等到这个时刻（time.monotonic）。
+        self._own_settle_until: float = 0.0
 
     def extension_available(self, extension: str) -> bool:
         """Read-only capability probe used by the v2 tool planner."""
@@ -206,14 +272,56 @@ class Observer:
     def raw_ref_for(self, tool: str) -> str:
         return self.last_raw_refs.get(tool, "")
 
+    def _note_own_flush(self, flushed: bool) -> None:
+        if not flushed:
+            self._own_settle_until = max(self._own_settle_until,
+                                         time.monotonic() + OWN_STATS_SETTLE_S)
+
+    def _await_own_stats(self) -> None:
+        """读累计计数器之前：自家记账若没能强制刷出，等它随后端退出到账。"""
+        wait = self._own_settle_until - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+
+    def _add_own_scans(self, table: str, counts: dict) -> None:
+        own = self._own_scans.setdefault(
+            table, {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
+        for key in own:
+            own[key] += int(counts.get(key, 0) or 0)
+
     def explain_query(self, sql: str, params: dict | None = None) -> ExplainDigest:
         # 只读连接挡写权限，挡不住 pg_sleep / advisory lock / 数据修改 CTE / 无 WHERE
         # 大排序污染 temp 计数器（CLAUDE.md 规则 6）。语句先过 AST 白名单，不合规直接拒，
         # 由调用方回给模型，不落盘为证据。
         run_sql, mode = _explainable(sql)
-        with db.connect(role="ro") as conn, conn.cursor() as cur:
+        # 放进一个事务：跑完读 pg_stat_xact_user_tables 拿 leader 自己的精确计数。
+        with db.connect(role="ro", autocommit=False) as conn, conn.cursor() as cur:
             cur.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + run_sql, params or {})
             plan_json = cur.fetchone()[0]
+            cur.execute("SELECT current_setting('block_size')::int")
+            block_size = int(cur.fetchone()[0])
+            cur.execute("SELECT relname, coalesce(seq_scan, 0), coalesce(seq_tup_read, 0),"
+                        " coalesce(idx_scan, 0) FROM pg_stat_xact_user_tables"
+                        " WHERE coalesce(seq_scan, 0) > 0 OR coalesce(idx_scan, 0) > 0")
+            leader = {rel: {"seq_scan": int(a), "seq_tup_read": int(b), "idx_scan": int(c)}
+                      for rel, a, b, c in cur.fetchall()}
+            conn.rollback()
+            flushed = _flush_own_stats(conn)
+        # ANALYZE 真执行了查询：它的扫描与外溢记进了负载读的累计计数器，记账后由
+        # get_table_stats / get_database_stats 扣掉（CLAUDE.md 规则 6）。两个来源各缺一块：
+        # 计划 JSON 含并行 worker 但不含规划期的索引端点探测（范围谓词、连接估算会真去
+        # 索引里取最值，活库实测每次 1-3 次 idx_scan），事务级视图含规划期但只有 leader。
+        # 两者都是下界，逐项取大：非并行计划精确，并行计划至多差几次规划期探测。
+        own_counts = _plan_own_counts(plan_json[0]["Plan"])
+        for rel, counts in leader.items():
+            merged = own_counts.setdefault(rel, {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
+            for key, value in counts.items():
+                merged[key] = max(merged[key], value)
+        for rel, counts in own_counts.items():
+            self._add_own_scans(rel, counts)
+        own_temp = int(plan_json[0]["Plan"].get("Temp Written Blocks", 0) or 0) * block_size
+        self._own_temp_bytes += own_temp
+        self._note_own_flush(flushed)
         acc = _acc()
         _walk_plan(plan_json[0]["Plan"], acc)
         acc["nodes"].sort(reverse=True)
@@ -229,6 +337,9 @@ class Observer:
         digest.mode = mode
         trace_digest = asdict(digest)
         trace_digest.pop("raw_ref", None)
+        trace_digest["own_counts"] = own_counts
+        trace_digest["own_temp_bytes"] = own_temp
+        trace_digest["own_stats_flushed"] = flushed
         digest.raw_ref = self.trace.record(
             "explain_query", {"sql": sql[:200], "executed_sql": run_sql[:200], "mode": mode},
             json.dumps(plan_json, indent=2), trace_digest)
@@ -294,6 +405,10 @@ class Observer:
             " round(total_exec_time::numeric,2), rows, query"
             " FROM pg_stat_statements"
             " WHERE query NOT ILIKE %s"
+            # 诊断连接与安全门自己的语句不是负载：track=all 时 EXPLAIN ANALYZE 执行的
+            # 热查询、值域漂移的 count(*) 全表扫都会进来，按用户单独成条（规则 6）。
+            "   AND userid NOT IN (SELECT oid FROM pg_roles"
+            "                      WHERE rolname IN ('agent_ro', 'agent_rw'))"
             " ORDER BY total_exec_time DESC LIMIT %s",
             ("%pg_stat_statements%", n), role="ro")
         out = [{"queryid": str(r[0]), "calls": r[1], "mean_ms": float(r[2]),
@@ -457,14 +572,14 @@ class Observer:
                 " FROM pg_stat_xact_user_tables WHERE relname = %s", (table,))
             row = cur.fetchone() or (0, 0, 0)
             conn.rollback()
-        own = self._own_scans.setdefault(
-            table, {"seq_scan": 0, "seq_tup_read": 0, "idx_scan": 0})
-        own["seq_scan"] += int(row[0] or 0)
-        own["seq_tup_read"] += int(row[1] or 0)
-        own["idx_scan"] += int(row[2] or 0)
+            flushed = _flush_own_stats(conn)
+        self._add_own_scans(table, {"seq_scan": row[0], "seq_tup_read": row[1],
+                                    "idx_scan": row[2]})
+        self._note_own_flush(flushed)
         return worst, detail, incomplete
 
     def get_table_stats(self, table: str) -> TableStats:
+        self._await_own_stats()
         r = db.query(
             "SELECT n_live_tup, n_dead_tup, last_analyze, last_autoanalyze,"
             " last_autovacuum, pg_size_pretty(pg_total_relation_size(s.relid)),"
@@ -724,6 +839,7 @@ class Observer:
         是 18 —— 照文档抄会直接报列不存在，所以两套都试。
         """
         out: dict = {"errors": {}}
+        self._await_own_stats()
         try:
             r = db.query(
                 "SELECT deadlocks, temp_files, temp_bytes, "
@@ -731,8 +847,13 @@ class Observer:
                 "COALESCE(stats_reset, pg_postmaster_start_time()) "
                 "FROM pg_stat_database WHERE datname = current_database()",
                 role="ro")[0]
+            # own_temp_bytes：本 episode 自家 EXPLAIN ANALYZE 外溢的累计上界。窗口净值由
+            # Toolbox 用两者各自的增量相减 —— 扣的是上界，净值只可能偏低：为正说明负载
+            # 确实外溢了，为 0 而自家有外溢时不能据此否定（判据看 own_temp_bytes）。
+            # temp_files 计划里给不出，保持原始值。
             out.update({"deadlocks": int(r[0]), "temp_files": int(r[1]),
                         "temp_bytes": int(r[2]),
+                        "own_temp_bytes": self._own_temp_bytes,
                         "blk_read_time_ms": float(r[3] or 0),
                         "blk_write_time_ms": float(r[4] or 0),
                         "xact_commit": int(r[5]), "xact_rollback": int(r[6]),

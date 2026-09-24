@@ -387,6 +387,15 @@ def _deadlock_count(value: dict, _ctx: PredicateContext) -> PredicateDecision:
 
 def _temp_file_volume(value: dict, _ctx: PredicateContext) -> PredicateDecision:
     size = int(value.get("temp_bytes", 0) or 0)
+    own = int(value.get("own_temp_bytes", 0) or 0)
+    if size <= 0 and own > 0:
+        # 净值是原始增量减去自家 EXPLAIN ANALYZE 外溢的**上界**，只可能偏低：
+        # 为正可以支持，为 0 却可能是把负载的外溢一并扣掉了（CLAUDE.md 规则 1、6）。
+        return _decision(
+            PredicateResult.NEUTRAL,
+            f"the agent's own EXPLAIN ANALYZE spilled up to {own} bytes in this window "
+            f"and accounts for all {int(value.get('temp_bytes_raw', 0) or 0)} raw bytes; "
+            "a workload spill cannot be ruled out")
     return _supports_if(size > 0, support=f"{size} temporary bytes in incident window",
                         refute="temporary byte delta is zero in incident window")
 
@@ -450,6 +459,22 @@ def is_gate_predicate(predicate_id: str) -> bool:
     return str(predicate_id or "") in GATE_PREDICATES
 
 
+# 累计计数器的窗口判据（证据 provenance 为 cumulative_counter）。它们量的是"窗口内计数器
+# 涨了多少"，窗口越短越可能漏掉 —— 零增量只是下界。graph_lint 核对这个集合与图上
+# provenance 一致。
+CUMULATIVE_WINDOW_PREDICATES = frozenset({
+    "deadlock_count_v2", "seq_scan_volume_v2", "temp_file_volume_v2", "checkpoint_stats_v2",
+    # 存在性门，从不 REFUTES，下面的规则对它不起作用；列在这里是为了与图上 provenance 对齐
+    "slow_query_ranking_v2",
+})
+# 否定裁决要求的最短窗口。告警本身是在 30 秒滚动窗口（sandbox.metrics.WINDOW_S）上判出来的，
+# 声称"事故期间没有 X"的证据至少要看这么长；harness_lint 核对两者一致。
+# 2026-09-24：MONITOR 阶段读一次计数器、几秒后 INVESTIGATE 再读一次，窗口只有 1.4-9.5 秒，
+# 其间死锁数与临时文件量为 0 就判 deadlock / work_mem_spill 不成立（4 个 episode 都有）——
+# 规则 1 禁止的"拿偏低的部分结果做否定裁决"。短窗口的 SUPPORTS 仍然有效（下界已越阈值）。
+MIN_REFUTE_WINDOW_S = 30.0
+
+
 def registered_predicates() -> frozenset[str]:
     return frozenset(_PREDICATES)
 
@@ -484,7 +509,17 @@ def evaluate(predicate_id: str, value: Any, *, context: PredicateContext,
         if value_epoch and context.source_epoch and value_epoch != context.source_epoch:
             return _decision(PredicateResult.NOT_APPLICABLE,
                              "structured value and binding source epochs differ")
-    return predicate(value, context)
+    decision = predicate(value, context)
+    if (decision.result == PredicateResult.REFUTES.value and
+            predicate_id in CUMULATIVE_WINDOW_PREDICATES and
+            context.window_start is not None and context.window_end is not None and
+            context.window_end - context.window_start < MIN_REFUTE_WINDOW_S):
+        span = context.window_end - context.window_start
+        return _decision(
+            PredicateResult.NEUTRAL,
+            f"window is only {span:.1f}s (< {MIN_REFUTE_WINDOW_S:.0f}s); a zero or low "
+            f"delta over it is a lower bound and cannot refute: {decision.reason}")
+    return decision
 
 
 def legacy_structured_value(predicate_id: str, observation: str) -> Any:

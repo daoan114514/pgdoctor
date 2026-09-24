@@ -30,8 +30,55 @@ from agent.permissions import Role
 # 编排器进程内确定性执行的无参工具：子 agent 对它们做的事只有"调一次、把结构化观测
 # 原样抄进 report_evidence"，而判定在 predicate 层。每个任务省一整个 SDK 会话
 # （实测 50-140s、约 $0.1-0.3），且没有"猜枚举值"之类的合同风险。
-DETERMINISTIC_TOOLS = frozenset({"get_connection_stats", "get_vacuum_horizon",
-                                 "get_database_stats", "get_blocking_chain"})
+ARGLESS_TOOLS = frozenset({"get_connection_stats", "get_vacuum_horizon",
+                           "get_database_stats", "get_blocking_chain"})
+# 参数完全由目标上下文决定的工具（2026-09-24）：取证子 agent 调它们时，sql / table 必须等于
+# 告警的热查询 / 目标表（toolbox._enter 的对照），报告内容也不参与任何判定 —— 模型没有实际
+# 选择，却要花 50-90 秒、$0.08-0.12 起一个 SDK 会话（lock_contention 一局 12 个子 agent 任务里
+# 11 个是这类，占整局费用 84%）。由编排器按目标上下文直接执行。simulate_index 要设计索引
+# 定义，仍交给子 agent。
+PINNED_ARG_TOOLS = frozenset({"explain_query", "get_indexes", "get_table_stats",
+                              "get_physical_bloat", "get_top_queries"})
+DETERMINISTIC_TOOLS = ARGLESS_TOOLS | PINNED_ARG_TOOLS
+# 同一轮确定性任务的执行顺序由工具性质给出（系统决定，不由模型规划 DAG）：先跑读累计
+# 计数器做窗口差分的工具，最后跑会真执行查询、给这些计数器记账的工具。自家记账已在观测器
+# 这个最底层读取点扣掉（CLAUDE.md 规则 4、6）；顺序是第二道 —— 扣除量来自计划 JSON 的
+# 估计，窗口能不跨过它就不跨。get_table_stats 自己的值域扫描在读完计数器之后才做、按事务级
+# 视图精确扣除，所以它算读者。
+WINDOW_READER_TOOLS = frozenset({"get_database_stats", "get_table_stats", "get_top_queries"})
+COUNTER_PERTURBING_TOOLS = frozenset({"explain_query"})
+
+
+def deterministic_rank(tool: str) -> int:
+    if tool in WINDOW_READER_TOOLS:
+        return 0
+    if tool in COUNTER_PERTURBING_TOOLS:
+        return 2
+    return 1
+
+
+# explain_query 的 %(uid)s 取负载自己的探针 uid（注入器给出，与负载打的是同一段行）；
+# 取不到时用工具的默认值 —— 原来模型随手填 1 / 1001 / 4242。
+DEFAULT_PROBE_UID = 4242
+
+
+def deterministic_args(tool: str, target_context: dict) -> dict:
+    """确定性执行时的参数，全部取自目标上下文。取不到必需目标就抛 ValueError（与子 agent
+    会被 toolbox._enter 以"目标未知"拒绝是同一个结果）。"""
+    context = target_context or {}
+    if tool == "explain_query":
+        if not context.get("hot_query"):
+            raise ValueError("目标上下文里没有热查询")
+        uid = context.get("probe_uid")
+        return {"sql": context["hot_query"],
+                "params": {"uid": int(uid) if uid is not None else DEFAULT_PROBE_UID}}
+    if tool in {"get_indexes", "get_table_stats", "get_physical_bloat"}:
+        if not context.get("table"):
+            raise ValueError("目标上下文里没有目标表")
+        return {"table": context["table"]}
+    if tool == "get_top_queries":
+        return {"n": 5}
+    return {}
 
 
 def _run_task_deterministic(st: EpisodeState, tb: Toolbox, task) -> EvidenceTaskResult:
@@ -45,7 +92,8 @@ def _run_task_deterministic(st: EpisodeState, tb: Toolbox, task) -> EvidenceTask
     before = len(st.scratchpad)
     started = time.monotonic()
     try:
-        getattr(scoped, tool)()
+        getattr(scoped, tool)(**deterministic_args(
+            tool, getattr(task, "target_context", {}) or {}))
     except EvidenceBudgetExhausted:
         result.budget_exhausted = True
         return result
@@ -498,11 +546,14 @@ async def run_evidence_investigation(
     semaphore = asyncio.Semaphore(max(1, max_concurrency))
     by_id = {need.need_id: need for need in needs}
 
+    def deterministic_tool(task) -> str:
+        tool = task.selected_tools[0] if len(task.selected_tools) == 1 else ""
+        if ((planning_config.deterministic_argless and tool in ARGLESS_TOOLS) or
+                (planning_config.deterministic_pinned and tool in PINNED_ARG_TOOLS)):
+            return tool
+        return ""
+
     async def run_task(task):
-        if (planning_config.deterministic_argless and
-                len(task.selected_tools) == 1 and
-                task.selected_tools[0] in DETERMINISTIC_TOOLS):
-            return _run_task_deterministic(st, tb, task)
         async with semaphore:
             started = time.monotonic()
             result = await investigate_task(
@@ -513,8 +564,22 @@ async def run_evidence_investigation(
             result.duration_s = time.monotonic() - started
             return result
 
-    task_results = list(await asyncio.gather(*[
-        run_task(task) for task in plan.tasks]))
+    # 确定性任务先于子 agent 全部跑完，按 deterministic_rank 排序（同级保持规划顺序）；
+    # 结果仍按规划顺序交给合并，合并不受执行顺序影响。
+    order = sorted((i for i, task in enumerate(plan.tasks) if deterministic_tool(task)),
+                   key=lambda i: deterministic_rank(deterministic_tool(plan.tasks[i])))
+    slots: list[EvidenceTaskResult | None] = [None] * len(plan.tasks)
+    for i in order:
+        slots[i] = _run_task_deterministic(st, tb, plan.tasks[i])
+    delegated = [i for i in range(len(plan.tasks)) if slots[i] is None]
+    for i, result in zip(delegated, await asyncio.gather(*[
+            run_task(plan.tasks[i]) for i in delegated])):
+        slots[i] = result
+    task_results = [result for result in slots if result is not None]
+    st.evidence_task_audit.append({
+        "event": "evidence_execution_order",
+        "deterministic": [plan.tasks[i].task_id for i in order],
+        "delegated": [plan.tasks[i].task_id for i in delegated], "at": time.time()})
     merged = merge_evidence_task_results(st, plan, task_results)
     _mark_unavailable(st, plan, needs, task_results)
     _record_tool_learning_observations(

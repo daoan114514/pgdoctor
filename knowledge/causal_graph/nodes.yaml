@@ -341,7 +341,7 @@ fixes:
       - {id: pid_state_idle_in_transaction, required: true}
       - {id: transaction_age_bound, required: true}
       - {id: database_role_bound, required: true}
-      - {id: blocking_or_xmin_impact_bound, required: true}
+      - {id: session_impact_bound, required: true}
       - {id: pid_identity_rechecked_fresh, required: true}
     expected_effect_nodes:
       [long_idle_transaction, autovacuum_starvation, queries_blocked,
@@ -349,11 +349,18 @@ fixes:
     risk_tier: CONFIRM
     template: "SELECT pg_terminate_backend({pid})"
     rollback: "IRREVERSIBLE"
+    # 空闲事务的危害有三种：持锁挡人（queries_blocked）、持快照挡 vacuum（autovacuum_starvation）、
+    # 占连接槽（connection_exhaustion）。每条预期效果标明它证明的是哪个节点，intervention_options
+    # 只保留所选路径上的那几条。原来三种里只认前两种、且两条效果都必须达成：misleading_idle_txn
+    # 的事务里只跑过 SELECT 1，不持锁也不持快照，危害只有占连接 —— 前置条件永远不满足、
+    # 效果也永远测不出来，根因诊断对了却结构上修不了（2026-09-24 复测）。
     expected_effects:
       - {metric: oldest_backend_xmin_age, direction: decrease,
-         minimum_change: 1, window_seconds: 60}
+         minimum_change: 1, window_seconds: 60, node: autovacuum_starvation}
       - {metric: blocked_session_count, direction: decrease,
-         minimum_change: 1, window_seconds: 30}
+         minimum_change: 1, window_seconds: 30, node: queries_blocked}
+      - {metric: connection_usage_ratio, direction: decrease,
+         minimum_change: 0.05, window_seconds: 30, node: connection_exhaustion}
   - id: enable_autovacuum
     action_type: alter_table_options
     intervention_kind: CORRECTIVE

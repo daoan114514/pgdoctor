@@ -14,11 +14,11 @@ lock_contention_train_v1:
   fingerprint: 2f307130504fe19a
   revision: 4
 misleading_idle_txn_eval_v1:
-  fingerprint: af88d51ef16f2484
-  revision: 1
-misleading_idle_txn_train_v1:
-  fingerprint: cd7c2f41b33ed8d4
+  fingerprint: c5b5af623299447e
   revision: 2
+misleading_idle_txn_train_v1:
+  fingerprint: 333d43cef189add0
+  revision: 3
 missing_index_eval_v1:
   fingerprint: 64df146182807bc9
   revision: 7

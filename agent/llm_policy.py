@@ -36,6 +36,7 @@ from agent.permissions import Role, allowed_tools
 from agent.policy import Policy
 from agent.state_machine import Phase
 from agent.tool_planner import ToolPlanningConfig
+from agent.tool_planner import infer_target_context
 from agent.toolbox import Toolbox, tool_result_text
 
 MODEL = os.getenv("PGDOCTOR_MODEL", "claude-sonnet-4-5")
@@ -442,6 +443,8 @@ class LLMPolicy(Policy):
                 # deterministic predicates update the explanation graph.
                 result = self._run(run_evidence_investigation(
                     st, tb, needs, hot, max_concurrency=self.batch_size,
+                    target_context=infer_target_context(
+                        hot, probe_uid=ctx.get("probe_uid")),
                     planning_config=ToolPlanningConfig(
                         use_learned=bool(ctx.get("use_learned", True)),
                         use_l2="l2" in set(ctx.get("learned_layers", [])),

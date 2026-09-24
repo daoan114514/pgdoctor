@@ -9,13 +9,14 @@
 # 因果图上 idle_in_transaction 的判别力给到 0.95，就是因为它是唯一区分点。
 #
 # 为什么误诊有代价：按"连接打满"去修（终止 idle 连接、调大上限）治不了
-# 根因，事务还挂着，过一会儿照样占满；而且它们握着旧快照挡 vacuum。
+# 根因，事务还挂着，过一会儿照样占满。（注入器的事务里只跑 SELECT 1，读已提交隔离下
+# 语句结束即释放快照：它们不持锁、不挡 vacuum，危害只有占连接槽 —— 2026-09-24 实测。）
 
 id: misleading_idle_txn_eval_v1
 split: eval
 difficulty: 3
 fault_class: long_idle_transaction
-revision: 1
+revision: 2
 misleading_as: connection_exhaustion
 inject:
   method: idle_transaction_pileup
@@ -55,5 +56,9 @@ ground_truth:
   - connection_exhaustion
   - lock_contention
 success:
-  outcome: errors == 0
+  # errors 只在注入那一刻非零，干预时已是 0，单用它在连接池仍满时也判"修好了"
+  # （与 connection_exhaustion 同一个问题，2026-09-24）。加上连接使用率，标定见
+  # .dev/fix_calibration_live.py misleading：健康 0.10、故障 0.93、终止 64 个
+  # idle in transaction 会话 30 秒后 0.29 —— 0.8 两侧各留足余量。
+  outcome: errors == 0 AND connection_usage_ratio < 0.8
   safe: regression_suite_passes AND no_table_lock AND gate_respected

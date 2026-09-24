@@ -66,6 +66,11 @@ def _explain_failure_is_database_side(exc: BaseException) -> bool:
                             psycopg.OperationalError))
 
 
+
+def _window_sleep(seconds: float) -> None:
+    """等累计计数器窗口长满。单独成函数，离线检查替换它来断言等了多久。"""
+    time.sleep(seconds)
+
 class Toolbox:
     def __init__(self, observer: Observer, state: EpisodeState, sm: StateMachine,
                  *, role: Role = Role.MAIN, task_context: Any = None,
@@ -187,6 +192,30 @@ class Toolbox:
                          self.task_context, "need_ids", ()) or ()),
                      collection_tool=(self.calls[-1] if self.calls else ""))
         return ref
+
+    def _await_decisive_window(self, *keys: str) -> float:
+        """累计计数器窗口不满下限时先等满，再读（CLAUDE.md 首要原则：宁慢勿错）。
+
+        窗口短于 evidence_predicates.MIN_REFUTE_WINDOW_S 时零增量只是下界，判据只能给
+        NEUTRAL，而窗口类 NEUTRAL 不算已取到、下一轮重取 —— 可每次读数都把基线推到"现在"，
+        重取得到的又是一个短窗口。取证改成确定性执行后一轮只要几秒，窗口永远凑不满，ESC
+        空转到预算耗尽（2026-09-24 e2e 夹具：4 轮变 30 轮、8 秒变 474 秒）。所以在读数这一刻
+        保证判定力：上一个基线还不满下限就等到满。下限与判据共用同一个常量（规则 4）。
+        没有基线（第一次读）不等：那次读数只建基线。"""
+        from knowledge import evidence_predicates as ep
+        floor = float(ep.MIN_REFUTE_WINDOW_S)
+        now = time.time()
+        ages = [now - float(base.get("captured_at", now) or now)
+                for key in keys
+                if isinstance(base := self.st.cumulative_baselines.get(key), dict)]
+        wait = min(floor, max((floor - age for age in ages), default=0.0))
+        if wait <= 0:
+            return 0.0
+        _window_sleep(wait)
+        self.st.evidence_task_audit.append({
+            "event": "cumulative_window_wait", "keys": list(keys),
+            "waited_s": round(wait, 2), "floor_s": floor, "at": time.time()})
+        return wait
 
     def _cumulative_delta(
             self, key: str, current: dict, counters: tuple[str, ...],
@@ -311,6 +340,7 @@ class Toolbox:
 
     def get_table_stats(self, table: str = "orders") -> dict:
         self._enter("get_table_stats", {"table": table})
+        self._await_decisive_window(f"table_scan:{table}")
         s = self.o.get_table_stats(table)
         raw_ref = s.raw_ref
         structured_stats = asdict(s)
@@ -332,11 +362,23 @@ class Toolbox:
         # seq_scan=0，索引丢后 seq_scan=20 / 每次读满 1200 万行整张表；而
         # 统计过期场景 seq_scan=0（规划器仍走索引），所以它能干净地把这两个
         # 根因分开。
+        # 原始计数器与本 episode 自家扫描（值域漂移的全表扫、EXPLAIN ANALYZE）各自差分，
+        # 窗口净值 = 原始增量 - 自家增量。不对"原始 - 自家"的累计净值差分：自家的
+        # seq_tup_read 由计划里按 loop 平均的行数乘回，差一两行就会让累计净值"回退"，
+        # 被当成计数器重置报 UNKNOWN（CLAUDE.md 规则 6）。
+        scan_counts = {"stats_reset": s.stats_reset}
+        for name in ("seq_scan", "seq_tup_read", "idx_scan"):
+            raw, own = int(getattr(s, name + "_raw", 0) or 0), int(getattr(s, "own_" + name, 0) or 0)
+            # 只填净值的桩观测器（raw 与 own 都是 0）按净值即原始值处理
+            scan_counts[name + "_raw"] = raw if (raw or own) else int(getattr(s, name) or 0)
+            scan_counts["own_" + name] = own
         scan_delta, scan_status, scan_note = self._cumulative_delta(
-            f"table_scan:{table}", {
-                "seq_scan": s.seq_scan, "seq_tup_read": s.seq_tup_read,
-                "idx_scan": s.idx_scan, "stats_reset": s.stats_reset,
-            }, ("seq_scan", "seq_tup_read", "idx_scan"), "stats_reset")
+            f"table_scan:{table}", scan_counts,
+            ("seq_scan_raw", "seq_tup_read_raw", "idx_scan_raw",
+             "own_seq_scan", "own_seq_tup_read", "own_idx_scan"), "stats_reset")
+        if scan_delta is not None:
+            for name in ("seq_scan", "seq_tup_read", "idx_scan"):
+                scan_delta[name] = max(0, scan_delta[name + "_raw"] - scan_delta["own_" + name])
         if scan_delta is None:
             self._evidence(
                 "seq_scan_volume", raw_ref, scan_note,
@@ -350,7 +392,10 @@ class Toolbox:
                 f"{table} 窗口 {scan_delta['window_s']:.1f}s: "
                 f"顺序扫描 {scan_delta['seq_scan']} 次、共读 "
                 f"{scan_delta['seq_tup_read']:,} 行（每次平均 {per_scan:,.0f} 行"
-                f"／全表 {s.reltuples:,} 行），索引扫描 {scan_delta['idx_scan']} 次",
+                f"／全表 {s.reltuples:,} 行），索引扫描 {scan_delta['idx_scan']} 次"
+                + (f"；已扣除自家取证扫描 {scan_delta['own_seq_scan']} 次顺序、"
+                   f"{scan_delta['own_seq_tup_read']:,} 行"
+                   if scan_delta["own_seq_scan"] or scan_delta["own_idx_scan"] else ""),
                 bears_on=["missing_index"], status=scan_status,
                 structured_value=scan_delta,
                 window_start=scan_delta["window_start"],
@@ -532,6 +577,7 @@ class Toolbox:
 
     def get_database_stats(self) -> dict:
         self._enter("get_database_stats")
+        self._await_decisive_window("pg_stat_database", "checkpoint_stats")
         r = self.o.get_database_stats()
         errors = r.get("errors", {})
         raw_ref = r.get("raw_ref", "")
@@ -551,11 +597,19 @@ class Toolbox:
                 bears_on=["disk_pressure"], status=EvidenceStatus.ERROR,
                 structured_value={"error": errors["disk_usage"]})
 
+        # 自家 EXPLAIN ANALYZE 外溢的上界与原始 temp_bytes 各自差分，窗口净值只可能偏低
+        # （见 observe.get_database_stats）；只给原始值的桩观测器按自家外溢为 0 处理。
+        db_counts = dict(r)
+        if "temp_bytes" in db_counts:
+            db_counts.setdefault("own_temp_bytes", 0)
         db_delta, db_status, db_reason = self._cumulative_delta(
-            "pg_stat_database", r,
-            ("deadlocks", "temp_files", "temp_bytes",
+            "pg_stat_database", db_counts,
+            ("deadlocks", "temp_files", "temp_bytes", "own_temp_bytes",
              "xact_commit", "xact_rollback"),
             "db_stats_reset", errors.get("pg_stat_database", ""))
+        if db_delta is not None:
+            db_delta["temp_bytes_raw"] = db_delta["temp_bytes"]
+            db_delta["temp_bytes"] = max(0, db_delta["temp_bytes_raw"] - db_delta["own_temp_bytes"])
         if db_delta is None:
             db_summary = db_reason
             self._evidence(
@@ -581,7 +635,10 @@ class Toolbox:
             self._evidence(
                 "temp_file_volume", raw_ref,
                 f"窗口 {window:.1f}s: 临时文件增量={db_delta['temp_files']} 个, "
-                f"外溢增量 {db_delta['temp_bytes'] / 1048576:.1f} MB",
+                f"外溢增量 {db_delta['temp_bytes'] / 1048576:.1f} MB"
+                + (f"（已扣除自家 EXPLAIN 外溢上界 "
+                   f"{db_delta['own_temp_bytes'] / 1048576:.1f} MB）"
+                   if db_delta["own_temp_bytes"] else ""),
                 bears_on=["work_mem_spill"], structured_value=db_delta,
                 target_kind="PATH", window_start=db_delta["window_start"],
                 window_end=db_delta["window_end"],

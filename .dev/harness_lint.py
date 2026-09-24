@@ -358,6 +358,12 @@ for k, s in specs.items():
 check("相对故障水平的判据在故障水平处不成立、且可满足", not fault_bad, fault_bad[:3])
 
 
+print("\n[8c] 窗口判据的否定下限不短于告警所用的指标窗口")
+from knowledge import evidence_predicates as _ep  # noqa: E402
+check("MIN_REFUTE_WINDOW_S >= metrics.WINDOW_S", _ep.MIN_REFUTE_WINDOW_S >= metrics.WINDOW_S,
+      (_ep.MIN_REFUTE_WINDOW_S, metrics.WINDOW_S))
+
+
 print("\n[9] 有持续时间的故障必须撑过整个 episode")
 # 故障中途自愈，后半段取的是"故障不在"的证据，打分时 env.score() 补采的 KPI 也是
 # 恢复后的样子 —— 零干预的 episode 拿到 Outcome=True。2026-09-22 实测 lock_contention

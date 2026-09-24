@@ -380,6 +380,8 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
         # 告警里带上慢查询本身：真实场景里 APM 会指出哪条查询在拖慢，
         # 让 agent 从零猜"哪条查询有问题"不是本项目要解决的问题。
         "hot_query": " ".join(env.spec["workload"]["hot_query"].split()),
+        # 负载探针 uid（注入器给出）：确定性执行 explain_query 时代入 %(uid)s
+        "probe_uid": getattr(env, "probe_uid", None),
         "allow_repair": allow_repair,
         "explanation": {"explanation_id": "", "revision": 0,
                         "frontier": [], "needs": []},

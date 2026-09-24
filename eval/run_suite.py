@@ -212,7 +212,9 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
         policy = ScriptedPolicy()
     else:
         from agent.llm_policy import LLMPolicy
-        policy = LLMPolicy(verbose=False, use_subagents=True, batch_size=2)
+        # 子 agent 并发 4（2026-09-24）：工具调用在事件循环里同步执行，数据库访问仍是串行的，
+        # 并发只让等待模型的时间重叠；大多数取证已改为确定性执行，剩下的子 agent 任务不多。
+        policy = LLMPolicy(verbose=False, use_subagents=True, batch_size=4)
 
     scored = False
     try:

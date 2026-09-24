@@ -57,6 +57,37 @@ def connection() -> bool:
         return ok
 
 
+def misleading() -> bool:
+    """misleading_idle_txn：终止已观测的 idle in transaction 客户端会话（最多 64 个）。"""
+    from safety import gate, shield
+    from safety.gate import RemediationProposal
+    path = ROOT / "sandbox" / "scenarios" / "misleading_idle_txn_eval_v1.yaml"
+    with DBAScenarioEnv(str(path), warmup_s=15.0, degrade_timeout_s=90.0, quiet=True) as env:
+        obs = env.reset()
+        print("fired:", obs.fired)
+        print(kpi_line("healthy", env.healthy_kpi))
+        fault, _ = env.verify(settle_s=0)
+        print(kpi_line("fault", fault))
+        rows = env.observe().get_active_sessions(include_idle=True)
+        pids = [r.pid for r in rows if r.state == "idle in transaction"
+                and not r.is_system_or_diagnostic and not r.is_current_diagnostic_connection
+                ][:shield.MAX_SESSION_TARGETS]
+        print(f"idle-in-transaction client pids observed: {len(pids)}")
+        sql = "SELECT " + ", ".join(f"pg_terminate_backend({pid})" for pid in pids)
+        p = RemediationProposal(action_type="session_control", sql=sql, rollback="IRREVERSIBLE",
+                                root_cause="long_idle_transaction", fix_id="terminate_idle_transaction")
+        print("assess:", gate.assess(p).tier, "| recheck:", gate._recheck_sessions(p))
+        db.execute(sql, role="rw")
+        ok = False
+        for wait in (30, 30):
+            time.sleep(wait)
+            kpi, _ = env.verify(settle_s=0)
+            ok = metrics.eval_expr(env.spec["success"]["outcome"], kpi, baseline=env.healthy_kpi,
+                                   fault=getattr(env, "fault_kpi", None))
+            print(kpi_line(f"after +{wait}s", kpi), "| success:", ok)
+        return ok
+
+
 def stale(fix: bool = True) -> bool:
     """fix=False 是对照组：不做任何修复，看故障态 p50 自己会不会降下来（判据的假阳性风险）。"""
     path = ROOT / "sandbox" / "scenarios" / "stale_statistics_eval_v1.yaml"
@@ -95,5 +126,5 @@ def stale(fix: bool = True) -> bool:
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else "connection"
     ok = {"connection": connection, "stale": stale,
-          "stale_nofix": lambda: stale(fix=False)}[which]()
+          "stale_nofix": lambda: stale(fix=False), "misleading": misleading}[which]()
     print("FIX CALIBRATION", which, ":", "RECOVERED" if ok else "NOT RECOVERED")

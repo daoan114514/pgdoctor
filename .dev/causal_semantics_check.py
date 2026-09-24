@@ -74,7 +74,7 @@ check("idle transaction containment binds PID, age, role, and impact", {
     item.get("id") for item in
     fixes["terminate_idle_transaction"]["preconditions"]
 } >= {"concrete_pid_bound", "transaction_age_bound", "database_role_bound",
-      "blocking_or_xmin_impact_bound"})
+      "session_impact_bound"})
 check("idle backend containment excludes diagnostic/system sessions", {
     item.get("id") for item in fixes["terminate_idle_backend"]["preconditions"]
 } >= {"pid_is_not_current_diagnostic_connection",
@@ -133,9 +133,10 @@ check("the same simulation cannot refute a different fix",
       evaluate("counterfactual_index_v2", counter_value,
                context=other_fix_ctx).result == "NOT_APPLICABLE")
 
+# "完整窗口"要不短于 MIN_REFUTE_WINDOW_S（30s）：10 秒窗口的零增量只是下界（规则 1，2026-09-24）
 window_ctx = PredicateContext(
     target_kind="PATH", target_ids=("path_fixture",),
-    window_start=10.0, window_end=20.0, source_epoch="epoch_a")
+    window_start=10.0, window_end=100.0, source_epoch="epoch_a")
 no_window_ctx = PredicateContext(target_kind="PATH",
                                  target_ids=("path_fixture",))
 check("zero deadlock delta refutes only with a complete window",
