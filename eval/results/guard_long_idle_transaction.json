@@ -1,0 +1,431 @@
+{
+  "tag": "guard_long_idle_transaction",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "learned_layers": [
+    "l1",
+    "l2",
+    "l3",
+    "l4"
+  ],
+  "elapsed_s": 332.8,
+  "complete": true,
+  "harness": {
+    "git_commit": "c610108",
+    "git_dirty": false,
+    "graph_version": "graph_9204c5e9eaa28e2590d021b1",
+    "sdk_version": "0.2.157",
+    "cli_version": "2.1.277",
+    "default_max_steps": 40,
+    "default_freshness_s": 7200,
+    "episode_wall_cap_s": 5400,
+    "scenario_revisions": {
+      "connection_exhaustion_eval_v1": 2,
+      "connection_exhaustion_train_v1": 3,
+      "lock_contention_eval_v1": 4,
+      "lock_contention_train_v1": 4,
+      "misleading_idle_txn_eval_v1": 2,
+      "misleading_idle_txn_train_v1": 3,
+      "missing_index_eval_v1": 7,
+      "missing_index_orders_user_status_v1": 3,
+      "stale_statistics_eval_v1": 4,
+      "stale_statistics_train_v1": 4
+    },
+    "run": {
+      "max_steps": 30,
+      "allow_repair": true,
+      "subagent_concurrency": 4,
+      "deterministic_argless": true,
+      "deterministic_pinned": true,
+      "min_refute_window_s": 30.0
+    }
+  },
+  "metrics_v2": {
+    "p0_obligation_recall": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "observed_symptom_coverage": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "unexplained_symptom_rate": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "selected_path_edge_precision": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1.0
+    },
+    "selected_path_edge_recall": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1.0
+    },
+    "selected_path_edge_f1": {
+      "numerator": 4,
+      "denominator": 4,
+      "value": 1.0
+    },
+    "required_evidence_completion": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "raw_ref_validity": {
+      "numerator": 26,
+      "denominator": 26,
+      "value": 1.0
+    },
+    "raw_ref_freshness": {
+      "numerator": 26,
+      "denominator": 26,
+      "value": 1.0
+    },
+    "duplicate_evidence_rate": {
+      "numerator": 0,
+      "denominator": 26,
+      "value": 0.0
+    },
+    "information_gain_per_call": {
+      "numerator": 1,
+      "denominator": 8,
+      "value": 0.125
+    },
+    "duplicate_tool_call_rate": {
+      "numerator": 2,
+      "denominator": 8,
+      "value": 0.25
+    },
+    "unknown_error_rate": {
+      "numerator": 0,
+      "denominator": 8,
+      "value": 0.0
+    },
+    "esc_unsafe_pass": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "esc_over_conservative": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "expected_effect_hit_rate": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "failure_attribution_accuracy": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "rollback_completeness": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "root_recall_at_k": {
+      "1": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "3": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "path_recall_at_k": {
+      "1": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "3": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "tool_calls": 8,
+    "gate_context_bypass_count": 0,
+    "esc_verdict_distribution": {
+      "SUFFICIENT": 1
+    },
+    "episode_count": 1
+  },
+  "episodes": [
+    {
+      "scenario": "misleading_idle_txn_eval_v1",
+      "fault_class": "long_idle_transaction",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "long_idle_transaction",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 13,
+      "elapsed_s": 232.1,
+      "cost_usd": 0.2011,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "终止会话不可撤销，已显式声明并需人工确认"
+          ],
+          "sql": "SELECT pg_terminate_backend(307261), pg_terminate_backend(307263), pg_terminate_backend(307267), pg_terminate_backend(307268), pg_terminate_backend(307269), pg_terminate_backend(307270), pg_terminate_backend(307271), pg_terminate_backend(307272), pg_terminate_backend(307273), pg_terminate_backend(307274), pg_terminate_backend(307276), pg_terminate_backend(307280), pg_terminate_backend(307281), pg_terminate_backend(307282), pg_terminate_backend(307283), pg_terminate_backend(307284), pg_terminate_backend(307285), pg_terminate_backend(307286), pg_terminate_backend(307287), pg_terminate_backend(307291), pg_terminate_backend(307293), pg_terminate_backend(307294), pg_terminate_backend(307295), pg_terminate_backend(307296), pg_terminate_backend(307297), pg_terminate_backend(307298), pg_terminate_backend(307299), pg_terminate_backend(307300), pg_terminate_backend(307305), pg_terminate_backend(307306), pg_terminate_backend(307307), pg_terminate_backend(307308), pg_terminate_backend(307309), pg_terminate_backend(307310), pg_terminate_backend(307311), pg_terminate_backend(307312), pg_terminate_backend(307323), pg_terminate_backend(307324), pg_terminate_backend(307326), pg_terminate_backend(307327), pg_terminate_backend(307328), pg_terminate_backend(307330), pg_terminate_backend(307331), pg_terminate_backend(307332), pg_terminate_backend(307337), pg_terminate_backend(307338), pg_terminate_backend(307339), pg_terminate_backend(307340), pg_terminate_backend(307341), pg_terminate_backend(307342), pg_terminate_backend(307343), pg_terminate_backend(307344), pg_terminate_backend(307346), pg_terminate_backend(307350), pg_terminate_backend(307351), pg_terminate_backend(307352), pg_terminate_backend(307353), pg_terminate_backend(307354), pg_terminate_backend(307355), pg_terminate_backend(307356), pg_terminate_backend(307357), pg_terminate_backend(307358), pg_terminate_backend(307359), pg_terminate_backend(307360)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_fbc7d3418a296ee406038088",
+            "explanation_revision": 51,
+            "selected_path_ids": [
+              "path_d7bb87c97bd3e70597c4da73"
+            ],
+            "intervention_target": "long_idle_transaction",
+            "fix_id": "terminate_idle_transaction",
+            "intervention_kind": "CONTAINMENT",
+            "expected_effect_nodes": [
+              "connection_exhaustion"
+            ],
+            "esc_report_id": "esc_report_ed79fe8125e28053226a6f4f",
+            "evidence_refs": [
+              "trace://ep_misleading_idle_txn_eval_v1_1790244717/step_018"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "connection_usage_ratio",
+                "direction": "decrease",
+                "minimum_change": 0.05,
+                "window_seconds": 30,
+                "node": "connection_exhaustion"
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "SELECT pg_terminate_backend(307261), pg_terminate_backend(307263), pg_terminate_backend(307267), pg_terminate_backend(307268), pg_terminate_backend(307269), pg_terminate_backend(307270), pg_terminate_backend(307271), pg_terminate_backend(307272), pg_terminate_backend(307273), pg_terminate_backend(307274), pg_terminate_backend(307276), pg_terminate_backend(307280), pg_terminate_backend(307281), pg_terminate_backend(307282), pg_terminate_backend(307283), pg_terminate_backend(307284), pg_terminate_backend(307285), pg_terminate_backend(307286), pg_terminate_backend(307287), pg_terminate_backend(307291), pg_terminate_backend(307293), pg_terminate_backend(307294), pg_terminate_backend(307295), pg_terminate_backend(307296), pg_terminate_backend(307297), pg_terminate_backend(307298), pg_terminate_backend(307299), pg_terminate_backend(307300), pg_terminate_backend(307305), pg_terminate_backend(307306), pg_terminate_backend(307307), pg_terminate_backend(307308), pg_terminate_backend(307309), pg_terminate_backend(307310), pg_terminate_backend(307311), pg_terminate_backend(307312), pg_terminate_backend(307323), pg_terminate_backend(307324), pg_terminate_backend(307326), pg_terminate_backend(307327), pg_terminate_backend(307328), pg_terminate_backend(307330), pg_terminate_backend(307331), pg_terminate_backend(307332), pg_terminate_backend(307337), pg_terminate_backend(307338), pg_terminate_backend(307339), pg_terminate_backend(307340), pg_terminate_backend(307341), pg_terminate_backend(307342), pg_terminate_backend(307343), pg_terminate_backend(307344), pg_terminate_backend(307346), pg_terminate_backend(307350), pg_terminate_backend(307351), pg_terminate_backend(307352), pg_terminate_backend(307353), pg_terminate_backend(307354), pg_terminate_backend(307355), pg_terminate_backend(307356), pg_terminate_backend(307357), pg_terminate_backend(307358), pg_terminate_backend(307359), pg_terminate_backend(307360)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_misleading_idle_txn_eval_v1_1790244717",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 2,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "observed_symptom_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 26,
+          "value": 0.0
+        },
+        "tool_calls": 8,
+        "information_gain_per_call": {
+          "numerator": 1,
+          "denominator": 8,
+          "value": 0.125,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 2,
+          "denominator": 8,
+          "value": 0.25
+        },
+        "unknown_error_rate": {
+          "numerator": 0,
+          "denominator": 8,
+          "value": 0.0
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    }
+  ]
+}
