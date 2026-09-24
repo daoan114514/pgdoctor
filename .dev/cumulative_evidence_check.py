@@ -13,7 +13,12 @@ from agent import esc
 from agent.episode_state import (EpisodeState, EvidenceStatus,
                                  evidence_is_observed)
 from agent.state_machine import StateMachine
+from agent import toolbox as toolbox_module
 from agent.toolbox import Toolbox
+
+# 这里钉的是差分、reset、回退、错误的语义，不是等窗口：读数前的等待换成空操作（原来 5 次
+# 读数真睡了约 150 秒）。需要"故障窗口之后"语义的读数用 age_baselines 把基线往前拨。
+toolbox_module._window_sleep = lambda _seconds: None
 
 
 DB_COUNTERS = {
@@ -127,7 +132,16 @@ check("ESC 给出再次采集指令",
       any("再次调用 get_database_stats" in d for d in report.directives))
 check("首次返回不含伪造的窗口增量", first["window_delta"]["pg_stat_database"] is None)
 
+def age_baselines(seconds: float = 60.0) -> None:
+    """"故障窗口后再次调用"：把基线时刻往前拨，窗口满足判据下限。短于下限的读数不推进基线
+    （2026-09-24 c610108 缺陷报告 P2-1），毫秒级连读会一直从第一次读数算起。"""
+    import time as _time
+    for base in st.cumulative_baselines.values():
+        base["captured_at"] = _time.time() - seconds
+
+
 print("\n[2] 同一统计周期的第二次读取产生可用窗口增量")
+age_baselines()
 second = tb.get_database_stats()
 db_delta = second["window_delta"]["pg_stat_database"]
 ckpt_delta = second["window_delta"]["checkpoint_stats"]
@@ -156,6 +170,7 @@ check("正增量支持对应根因",
                         "checkpoint_pressure"))
 
 print("\n[3] 合法的零增量是 OBSERVED，但不支持当前根因")
+age_baselines()
 tb.get_database_stats()
 check("零增量仍为 OBSERVED",
       statuses(st) == [EvidenceStatus.OBSERVED.value] * 3)

@@ -41,6 +41,10 @@ MAX_WALL_S = 20 * 3600
 # 窗口类观测横跨休眠就失效了，episode 必须作废重跑。2026-09-23 18:25-20:47 合盖，
 # 当时只报了"超过 90 分钟上限"，看不出真正原因。
 SUSPEND_GAP_S = 240
+# 看门狗轮询间隔。休眠检测靠相邻两次轮询之间墙钟多走了多少；间隔越短，"休眠从何时开始"
+# 定得越准。结果文件写在休眠开始之前才算有效（suspend_verdict），原来 60 秒一轮，醒来后
+# run_suite 最多还能接着跑 60 秒才被察觉。卡死检查仍按分钟做。
+POLL_S = 5
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
@@ -197,6 +201,47 @@ def model_ok() -> bool:
     return r.returncode == 0
 
 
+def suspend_verdict(result_path: Path, stem: str, run_start: float,
+                    suspend_start: float) -> tuple[bool, str]:
+    """检测到主机休眠时，这一次 run_one 的结果还算不算数。
+
+    只有结果文件由本次运行写出（不早于 run_start）、且写于休眠开始之前，才说明 episode 全程
+    （含 VERIFY 观测窗）都在休眠前完成 —— 有效。写于休眠开始之后、没写、或写的不是本场景，
+    都说明 episode 横跨了休眠：醒来后 run_suite 可能在看门狗察觉之前接着跑完 VERIFY、写出一份
+    "完整"的结果，它的观测窗与 KPI 横跨休眠，必须作废（CLAUDE.md 首要原则：静默失败）。
+    原来按"有没有可用结果"判、文案却一律宣布作废：2026-09-24 missing_index 在休眠前 1 分钟已
+    完成，日志写"观测窗与 KPI 已失效，清理后重跑"，实际保留了结果（c610108 缺陷报告 P3）。
+    """
+    if not result_path.exists():
+        return False, "没有写出结果"
+    mtime = result_path.stat().st_mtime
+    try:
+        data = json.loads(result_path.read_text(encoding="utf-8"))
+        has_stem = any(e.get("scenario") == stem for e in data.get("episodes", []))
+    except Exception:
+        has_stem = False
+    when = time.strftime("%T", time.localtime(mtime))
+    start = time.strftime("%T", time.localtime(suspend_start))
+    if mtime < run_start:
+        return False, f"结果文件写于 {when}，早于本次运行开始，不是本次的结果"
+    if not has_stem:
+        return False, f"结果文件（写于 {when}）里没有本场景"
+    if mtime <= suspend_start:
+        return True, f"结果写于 {when}，早于休眠开始（约 {start}）：episode 在休眠前已完成，结果有效"
+    return False, f"结果写于 {when}，晚于休眠开始（约 {start}）"
+
+
+def _quarantine_suspended(result_path: Path, run_start: float) -> None:
+    """横跨休眠的结果移进隔离区（只动本次运行写出的文件），守护按"不可用"重跑。"""
+    if not result_path.exists() or result_path.stat().st_mtime < run_start:
+        return
+    qdir = RESULTS / "quarantine"
+    qdir.mkdir(parents=True, exist_ok=True)
+    target = qdir / f"{result_path.stem}_suspended_{time.strftime('%Y%m%d_%H%M%S')}.json"
+    result_path.rename(target)
+    log(f"    横跨休眠的结果已移入隔离区：{target.name}")
+
+
 def run_one(fault: str, stem: str) -> None:
     tag = f"guard_{fault}"
     log(f"  >>> {stem}  (--faults {fault} --tag {tag})")
@@ -208,21 +253,32 @@ def run_one(fault: str, stem: str) -> None:
     with out.open("w", encoding="utf-8") as f:
         proc = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
         last_tick = time.time()
+        last_stall_check = last_tick
         while proc.poll() is None:
-            time.sleep(60)
+            time.sleep(POLL_S)
             now = time.time()
-            gap = now - last_tick - 60
+            gap = now - last_tick - POLL_S
+            suspend_start = last_tick
             last_tick = now
             if gap > SUSPEND_GAP_S:
-                log(f"    看门狗：检测到主机休眠约 {gap / 60:.0f} 分钟，观测窗与 KPI 已失效，"
-                    "清理后重跑（长跑批请保持开盖）")
                 _kill_tree(proc)
+                result_path = RESULTS / f"{tag}.json"
+                valid, why = suspend_verdict(result_path, stem, t_start, suspend_start)
+                if valid:
+                    log(f"    看门狗：检测到主机休眠约 {gap / 60:.0f} 分钟；{why}，不重跑")
+                else:
+                    log(f"    看门狗：检测到主机休眠约 {gap / 60:.0f} 分钟，episode 横跨休眠"
+                        f"（{why}），观测窗与 KPI 已失效，作废重跑（长跑批请保持开盖）")
+                    _quarantine_suspended(result_path, t_start)
                 break
             elapsed = now - t_start
             if elapsed > EPISODE_CAP_S:
                 log(f"    看门狗：单场景超过 {EPISODE_CAP_S // 60} 分钟上限，清理")
                 _kill_tree(proc)
                 break
+            if now - last_stall_check < 60:
+                continue
+            last_stall_check = now
             if elapsed / 60.0 < STALL_MIN:
                 continue
             try:

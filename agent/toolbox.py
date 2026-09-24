@@ -73,6 +73,23 @@ TABLE_SCAN_COUNTERS = ("seq_scan_raw", "seq_tup_read_raw", "idx_scan_raw",
                        "own_seq_scan", "own_seq_tup_read", "own_idx_scan")
 
 
+# 每个累计计数器基线键上有哪些窗口类证据。只有当前取证任务要这些证据时，读数前才等窗口
+# 满下限（_needs_window）：为 stats_freshness 调的 get_table_stats 原来也先等满 30 秒
+# （2026-09-24 c610108 缺陷报告 P2-1）。键由本文件产生，映射也放在这里；evidence_direction_check
+# 核对它与图上窗口类判据一致。
+WINDOW_EVIDENCE_OF_KEY = {
+    "pg_stat_database": frozenset({"deadlock_count", "temp_file_volume"}),
+    "checkpoint_stats": frozenset({"checkpoint_stats"}),
+}
+TABLE_SCAN_WINDOW_EVIDENCE = frozenset({"seq_scan_volume"})
+
+
+def window_evidence_of(key: str) -> frozenset[str]:
+    if key.startswith("table_scan:"):
+        return TABLE_SCAN_WINDOW_EVIDENCE
+    return WINDOW_EVIDENCE_OF_KEY.get(key, frozenset())
+
+
 def _window_sleep(seconds: float) -> None:
     """等累计计数器窗口长满。单独成函数，离线检查替换它来断言等了多久。"""
     time.sleep(seconds)
@@ -207,7 +224,15 @@ class Toolbox:
         重取得到的又是一个短窗口。取证改成确定性执行后一轮只要几秒，窗口永远凑不满，ESC
         空转到预算耗尽（2026-09-24 e2e 夹具：4 轮变 30 轮、8 秒变 474 秒）。所以在读数这一刻
         保证判定力：上一个基线还不满下限就等到满。下限与判据共用同一个常量（规则 4）。
-        没有基线（第一次读）不等：那次读数只建基线。"""
+        没有基线（第一次读）不等：那次读数只建基线。
+
+        只有当前调用要这个键的窗口证据时才等（_needs_window）。不要的调用照常读、不等，
+        它的短窗口读数也不推进基线（见 _cumulative_delta），下一次真正要窗口的读数沿用更长
+        的窗口 —— 原来为别的证据调的 get_table_stats 先等 30 秒、又把基线推到"现在"，第 2 轮
+        真要 seq_scan_volume 时只好再等一次（2026-09-24 c610108 缺陷报告 P2-1）。"""
+        keys = tuple(key for key in keys if self._needs_window(key))
+        if not keys:
+            return 0.0
         from knowledge import evidence_predicates as ep
         floor = float(ep.MIN_REFUTE_WINDOW_S)
         now = time.time()
@@ -222,6 +247,18 @@ class Toolbox:
             "event": "cumulative_window_wait", "keys": list(keys),
             "waited_s": round(wait, 2), "floor_s": floor, "at": time.time()})
         return wait
+
+    def _needs_window(self, key: str) -> bool:
+        """当前调用要不要这个计数器键的窗口证据。取证任务看它的 evidence_types；没有任务上下文
+        （主 agent 直接调）或任务没带证据类型时不知道要什么，按要处理（保守，与原行为一致）。"""
+        task = self.task_context
+        if task is None:
+            return True
+        types = (task.get("evidence_types") if isinstance(task, dict)
+                 else getattr(task, "evidence_types", None))
+        if types is None:
+            return True
+        return bool(set(types) & window_evidence_of(key))
 
     def establish_counter_baselines(self) -> list[str]:
         """MONITOR 的系统动作：告警时刻给目标表建扫描计数器基线。不是 agent 工具，不扣步数、
@@ -270,6 +307,11 @@ class Toolbox:
         首次读取、统计被 reset、计数器回退、字段缺失都没有可解释的窗口，
         因此只能返回 UNKNOWN。查询错误单列为 ERROR，并且不覆盖最后一个
         正常基线，避免暂时性权限/连接错误破坏下一次差分。
+
+        窗口短于判据下限（MIN_REFUTE_WINDOW_S）的读数照常返回增量（下界：可支持、不能反证），
+        但**不推进基线**：下一次读数沿用从更早基线算起的长窗口（2026-09-24 c610108 缺陷报告
+        P2-1）。窗口只会更长，不降判定力；更长的窗口更容易跨过自家写操作，那由
+        window_spans_own_write 判不可信，方向安全。reset / 回退 / 字段缺失仍重建基线。
         """
         if error:
             return None, EvidenceStatus.ERROR, f"观测失败: {error}"
@@ -285,27 +327,36 @@ class Toolbox:
             "values": {name: current[name] for name in counters},
         }
         previous = self.st.cumulative_baselines.get(key)
-        self.st.cumulative_baselines[key] = snapshot
         if not previous:
+            self.st.cumulative_baselines[key] = snapshot
             return (None, EvidenceStatus.UNKNOWN,
                     f"已记录累计基线；需要在故障窗口后再次调用 {tool}")
         if previous.get("stats_reset") != snapshot["stats_reset"]:
+            self.st.cumulative_baselines[key] = snapshot
             return (None, EvidenceStatus.UNKNOWN,
                     "统计在两次观测之间被重置；新读数仅作为下一窗口基线")
 
         old_values = previous.get("values", {})
         if any(name not in old_values for name in counters):
+            self.st.cumulative_baselines[key] = snapshot
             return (None, EvidenceStatus.UNKNOWN,
                     "上一次累计基线字段不完整；已刷新基线")
         delta = {name: current[name] - old_values[name] for name in counters}
         negative = {name: value for name, value in delta.items() if value < 0}
         if negative:
+            self.st.cumulative_baselines[key] = snapshot
             return (None, EvidenceStatus.UNKNOWN,
                     f"累计计数器发生回退 {negative}；无法解释该窗口")
-        delta["window_s"] = max(0.0, now - float(previous.get("captured_at", now)))
+        from knowledge import evidence_predicates as ep
+        window = max(0.0, now - float(previous.get("captured_at", now)))
+        anchored = window < float(ep.MIN_REFUTE_WINDOW_S)
+        if not anchored:
+            self.st.cumulative_baselines[key] = snapshot
+        delta["window_s"] = window
         delta["window_start"] = float(previous.get("captured_at", now))
         delta["window_end"] = now
         delta["source_epoch"] = snapshot["stats_reset"]
+        delta["baseline_anchored"] = anchored
         return delta, EvidenceStatus.OBSERVED, ""
 
     # ── 只读观测 ──────────────────────────────────────────

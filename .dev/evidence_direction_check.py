@@ -350,13 +350,18 @@ db0 = {"deadlocks": 0, "temp_files": 0, "temp_bytes": 1000, "own_temp_bytes": 0,
        "xact_rollback": 0, "db_stats_reset": "epoch", "errors": {}}
 db_readings[:] = [db0, dict(db0, temp_files=2, temp_bytes=1000 + 8000000, own_temp_bytes=8192000),
                   dict(db0, temp_files=9, temp_bytes=1000 + 58000000, own_temp_bytes=16384000)]
-for _ in range(3):
+for i10 in range(3):
+    if i10:
+        # "故障窗口后再次调用"：基线往前拨，窗口满下限、读数推进基线（不真睡 30 秒）
+        for base10 in st10.cumulative_baselines.values():
+            base10["captured_at"] = time.time() - 60
     tb10.get_database_stats()
 temps = [e.get("structured_value") or {} for e in st10.scratchpad if e.get("evidence_type") == "temp_file_volume"]
 check(len(temps) >= 3 and temps[1].get("temp_bytes") == 0 and temps[1].get("temp_bytes_raw") == 8000000
       and temps[1].get("own_temp_bytes") == 8192000, "外溢净值扣掉自家上界（在 0 处截断），原始增量另记",
       temps[1] if len(temps) > 1 else temps)
-check(len(temps) >= 3 and temps[2].get("temp_bytes") == 50000000 - 8192000, "负载外溢远大于自家上界时净值为正", temps[2:])
+check(len(temps) >= 3 and temps[2].get("temp_bytes") == 50000000 - 8192000
+      and temps[2].get("baseline_anchored") is False, "负载外溢远大于自家上界时净值为正", temps[2:])
 r = ep.evaluate("temp_file_volume_v2", dict(temps[1], source_epoch="epoch"), context=win_ctx(426))
 check(r.result == "NEUTRAL", "自家外溢把原始增量全扣光 -> NEUTRAL（原来 REFUTES）", r.reason)
 r = ep.evaluate("temp_file_volume_v2", dict(temps[2], source_epoch="epoch"), context=win_ctx(426))
@@ -527,6 +532,89 @@ check("_STATS_EPOCH_SQL" in inspect.getsource(observe.Observer.get_table_stats)
       "基线读数与 get_table_stats 用同一个统计周期表达式（ESC 按它核对 seq_scan_volume 的周期）")
 for d13 in (eid13, eid13b):
     shutil.rmtree(TRACE_DIR / d13, ignore_errors=True)
+
+print("[14] 只有要窗口证据的调用才等；短窗口读数不推进基线（2026-09-24 c610108 缺陷报告 P2-1）")
+mapped14 = set(toolbox_module.TABLE_SCAN_WINDOW_EVIDENCE).union(*toolbox_module.WINDOW_EVIDENCE_OF_KEY.values())
+graph14 = G.load()
+produced14 = {n for n, d in graph14.nodes(data=True)
+              if d.get("kind") == "Evidence" and d.get("obtained_by") in {"get_database_stats", "get_table_stats"}
+              and d.get("predicate_id") in ep.CUMULATIVE_WINDOW_PREDICATES}
+check(mapped14 == produced14, "键 -> 窗口证据映射与图上这两个工具产出的累计窗口判据一致",
+      (sorted(mapped14), sorted(produced14)))
+tb14 = Toolbox(SimpleNamespace(trace=TraceStore(eid + "_w14")), EpisodeState(eid + "_w14", "direction_fixture"),
+               StateMachine(EpisodeState(eid + "_w14", "direction_fixture")))
+tb14.task_context = None
+check(tb14._needs_window("table_scan:orders"), "主 agent 直接调（无任务上下文）-> 按要窗口处理（保守）")
+tb14.task_context = SimpleNamespace(evidence_types=["stats_freshness", "stats_range_drift"])
+check(not tb14._needs_window("table_scan:orders"), "任务只要 stats_freshness 等 -> 表扫描键不等")
+tb14.task_context = SimpleNamespace(evidence_types=["seq_scan_volume"])
+check(tb14._needs_window("table_scan:orders") and not tb14._needs_window("pg_stat_database"),
+      "任务要 seq_scan_volume -> 只等表扫描键")
+tb14.task_context = {"evidence_types": ["temp_file_volume"]}
+check(tb14._needs_window("pg_stat_database") and not tb14._needs_window("checkpoint_stats"),
+      "dict 形式的任务上下文同样按证据类型判")
+tb14.task_context = SimpleNamespace()
+check(tb14._needs_window("checkpoint_stats"), "任务没带证据类型 -> 按要处理（保守）")
+
+eid14 = eid + "_anchor"
+st14 = EpisodeState(eid14, "direction_fixture")
+st14.budget["max_steps"] = 30
+obs14 = SimpleNamespace(trace=TraceStore(eid14))
+reads14 = iter([100, 110, 130, 131])
+
+
+def _ts14(_t):
+    n = next(reads14)
+    return _ts(seq_scan=n, seq_tup_read=n * 1000, idx_scan=5, seq_scan_raw=n, seq_tup_read_raw=n * 1000, idx_scan_raw=5,
+               raw_ref=obs14.trace.record("get_table_stats", {}, "{}", {"k": 1}))
+
+
+obs14.get_table_stats = _ts14
+tb14b = Toolbox(obs14, st14, StateMachine(st14), target_context={"table": "orders", "hot_query": "SELECT 1"})
+try:
+    tb14b.sm.goto(Phase.OBSERVE, "t"); tb14b.sm.goto(Phase.HYPOTHESIZE, "t"); tb14b.sm.goto(Phase.INVESTIGATE, "t")
+except Exception:
+    pass
+from agent.investigator import task_environment_tools  # noqa: E402
+from agent.permissions import Role  # noqa: E402
+
+
+def scoped14(types):
+    """与确定性执行器同一种调用方式：取证角色 + 任务上下文的权限视图。"""
+    task = SimpleNamespace(task_id="t14", need_ids=["n14"], selected_tools=["get_table_stats"],
+                           evidence_types=list(types), target_context={"table": "orders", "hot_query": "SELECT 1"},
+                           explanation_id="x", explanation_revision=1, path_ids=[], target_kind="NODE",
+                           target_ids=["missing_index"])
+    return tb14b.scoped(role=Role.INVESTIGATOR, task_context=task, environment_tools=task_environment_tools(task))
+
+
+waits14: list[float] = []
+saved_sleep14 = toolbox_module._window_sleep
+toolbox_module._window_sleep = waits14.append
+try:
+    scoped14(["stats_freshness"]).get_table_stats("orders")      # 第一次：建基线
+    base0 = dict(st14.cumulative_baselines["table_scan:orders"])
+    scoped14(["stats_freshness"]).get_table_stats("orders")      # 不要窗口的调用：不等、短窗口不推进基线
+    vol14 = [e for e in st14.scratchpad if e.get("evidence_type") == "seq_scan_volume"]
+    check(waits14 == [], "不要 seq_scan_volume 的任务读表统计不等窗口", waits14)
+    check(st14.cumulative_baselines["table_scan:orders"]["captured_at"] == base0["captured_at"]
+          and (vol14[-1].get("structured_value") or {}).get("baseline_anchored") is True,
+          "短窗口读数不推进基线（锚在第一次读数）")
+    st14.cumulative_baselines["table_scan:orders"]["captured_at"] -= 40
+    scoped14(["seq_scan_volume"]).get_table_stats("orders")      # 要窗口：基线已满 40s，不用等，直接有判定力
+    v14 = [e for e in st14.scratchpad if e.get("evidence_type") == "seq_scan_volume"][-1]
+    check(waits14 == [] and (v14.get("structured_value") or {}).get("seq_scan") == 30
+          and (v14.get("structured_value") or {}).get("window_s", 0) >= 40,
+          "第 2 轮要窗口时沿用从第一次读数算起的长窗口：不再等、增量从基线算起", v14.get("structured_value"))
+    check((v14.get("structured_value") or {}).get("baseline_anchored") is False
+          and st14.cumulative_baselines["table_scan:orders"]["values"]["seq_scan_raw"] == 130,
+          "满下限的读数推进基线")
+    scoped14(["seq_scan_volume"]).get_table_stats("orders")      # 刚推进过基线，又要窗口 -> 等
+    check(len(waits14) == 1 and 29.0 <= waits14[0] <= 30.5, f"刚推进过基线又要窗口 -> 等满下限（{waits14}）")
+finally:
+    toolbox_module._window_sleep = saved_sleep14
+for d14 in (eid + "_w14", eid14):
+    shutil.rmtree(TRACE_DIR / d14, ignore_errors=True)
 
 print()
 if fails:
