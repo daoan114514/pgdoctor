@@ -538,6 +538,21 @@ async def run_evidence_investigation(
         explanation, needs, tb, target_context=context,
         incident_window=st.incident_window, config=planning_config,
         remaining_calls=remaining)
+    # 需求定义与任务分派落审计：原来只有 need id，事后查"这条需求要的是什么、给了谁"
+    # 只能枚举哈希反推（2026-09-24 missing_index 缺陷报告 P2-2）。
+    st.evidence_task_audit.append({
+        "event": "evidence_plan",
+        "explanation_id": plan.explanation_id,
+        "explanation_revision": plan.explanation_revision,
+        "needs": [{
+            "need_id": need.need_id, "evidence_type": need.evidence_type,
+            "target_kind": need.target_kind, "target_ids": list(need.target_ids),
+            "predicate_id": need.predicate_id, "required": need.required,
+            "path_ids": list(need.path_ids), "reason": need.reason,
+        } for need in needs],
+        "tasks": [{"task_id": task.task_id, "need_ids": list(task.need_ids),
+                   "tools": list(task.selected_tools)} for task in plan.tasks],
+        "deferred_need_ids": list(plan.deferred_need_ids), "at": time.time()})
     if plan.deferred_need_ids:
         st.evidence_task_audit.append({
             "event": "evidence_plan_truncated_by_budget",

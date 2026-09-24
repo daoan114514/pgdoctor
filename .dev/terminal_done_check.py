@@ -90,6 +90,22 @@ finally:
     for episode_id in episode_ids:
         shutil.rmtree(TRACE_DIR / episode_id, ignore_errors=True)
 
+
+# 非终止出口只记过程说明，不写 outcome_note：原来 DIAGNOSE 第 1 轮没选中路径时写的
+# "没有可选择的已支持解释路径" 在之后 SUFFICIENT、修复 VERIFIED 的成功报告里仍是 reason
+# （2026-09-24 缺陷报告 P2-1）。
+from agent.llm_policy import LLMPolicy  # noqa: E402
+from agent.depth_policy import DifferentialDepthPolicy as DepthPolicy  # noqa: E402
+from agent.policy import ScriptedPolicy  # noqa: E402
+for pol in (ScriptedPolicy(), LLMPolicy(verbose=False), DepthPolicy("missing_index")):
+    st_n = EpisodeState("ep_progress_note_" + uuid.uuid4().hex[:8], "progress_fixture",
+                        phase=Phase.DIAGNOSE.value)
+    st_n.explanation_graph = SimpleNamespace(selected_path_ids=[])
+    nxt = pol.run_phase(Phase.DIAGNOSE, None, st_n, {"hot_query": "SELECT 1", "allow_repair": True})
+    check(f"{type(pol).__name__}: DIAGNOSE without selection keeps outcome_note empty",
+          nxt is Phase.INVESTIGATE and st_n.outcome_note == "" and bool(st_n.progress_notes),
+          (nxt, st_n.outcome_note, st_n.progress_notes))
+
 print("\n" + "=" * 78)
 print("TERMINAL DONE:", "PASS" if ok else "FAIL")
 raise SystemExit(0 if ok else 1)

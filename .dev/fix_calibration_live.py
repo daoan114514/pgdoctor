@@ -28,6 +28,17 @@ def kpi_line(label: str, kpi) -> str:
             f"errors={d['errors']:>4} cpu={d['cpu_pct']:>6.1f}% conn={d['connection_usage_ratio']:.3f}")
 
 
+def residual_line(env, label: str) -> str:
+    """connection_residual 的活库读数与裁决（2026-09-24 缺陷报告 P1-2 的标定）。"""
+    from knowledge import evidence_predicates as ep
+    r = env.observe().get_connection_stats()
+    d = ep.evaluate("connection_residual_v2", r, context=ep.PredicateContext(
+        target_kind="NODE", target_ids=("connection_exhaustion",)))
+    return (f"{label:<18} used={r['used']}/{r['max_connections']} idle_in_tx={r['idle_in_transaction']} "
+            f"long(>={r.get('long_idle_threshold_s', 0):.0f}s)={r.get('idle_in_transaction_long')} "
+            f"-> connection_residual {d.result}: {d.reason}")
+
+
 def connection() -> bool:
     from safety import gate, shield
     from safety.gate import RemediationProposal
@@ -38,6 +49,7 @@ def connection() -> bool:
         print(kpi_line("healthy", env.healthy_kpi))
         fault, _ = env.verify(settle_s=0)
         print(kpi_line("fault", fault))
+        print(residual_line(env, "fault residual"))
         rows = env.observe().get_active_sessions(include_idle=True)
         pids = [r.pid for r in rows if r.state == "idle" and not r.is_system_or_diagnostic
                 and not r.is_current_diagnostic_connection][:shield.MAX_SESSION_TARGETS]
@@ -54,6 +66,7 @@ def connection() -> bool:
             passed = metrics.eval_expr(env.spec["success"]["outcome"], kpi, baseline=env.healthy_kpi)
             print(kpi_line(f"after +{wait}s", kpi), "| success:", passed)
             ok = passed
+        print(residual_line(env, "after residual"))
         return ok
 
 
@@ -68,6 +81,7 @@ def misleading() -> bool:
         print(kpi_line("healthy", env.healthy_kpi))
         fault, _ = env.verify(settle_s=0)
         print(kpi_line("fault", fault))
+        print(residual_line(env, "fault residual"))
         rows = env.observe().get_active_sessions(include_idle=True)
         pids = [r.pid for r in rows if r.state == "idle in transaction"
                 and not r.is_system_or_diagnostic and not r.is_current_diagnostic_connection
@@ -85,6 +99,7 @@ def misleading() -> bool:
             ok = metrics.eval_expr(env.spec["success"]["outcome"], kpi, baseline=env.healthy_kpi,
                                    fault=getattr(env, "fault_kpi", None))
             print(kpi_line(f"after +{wait}s", kpi), "| success:", ok)
+        print(residual_line(env, "after residual"))
         return ok
 
 

@@ -132,9 +132,13 @@ def _entry_matches(explanation, need: EvidenceNeed, entry: dict) -> bool:
         return False
     if need.target_kind == EvidenceTargetKind.INTERVENTION.value:
         return bool(set(need.target_ids).intersection(entry.get("target_ids") or []))
+    # 与需求根因有关的证据才能绑：图上的方向关系（唯一真相源）并上 toolbox 的 bears_on 与
+    # 条目自带的目标。只看 bears_on 时，图上声明了关系而 toolbox 没写的需求永远绑不上
+    # （2026-09-24 缺陷报告 P1-1）。方向仍由 _causal_relation 按同一张图给，这里只放行。
     bears_on = set(entry.get("bears_on") or [])
     targets = set(entry.get("target_ids") or [])
-    return bool(_target_causes(explanation, need).intersection(bears_on | targets))
+    related = set(G.causes_bearing(str(entry.get("evidence_type") or "")))
+    return bool(_target_causes(explanation, need).intersection(bears_on | targets | related))
 
 
 def _binding_targets(need: EvidenceNeed) -> tuple[list[str], list[str]]:
@@ -445,6 +449,25 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
         explanation.set_edge_status(
             edge_id, _decision_status(results, attempted=edge_id in edge_attempts))
 
+    # 根角色反证（edges.yaml scope: ROOT）：只关"以该节点为根"的路径，节点与边的状态不动 ——
+    # 同一个节点在别的路径上是中间机制（2026-09-24 缺陷报告 P1-2）。_causal_relation 对
+    # NODE / PATH 要求范围一致，ROOT 反证在上面的节点/边计算里天然不生效。可信、不跨自家
+    # 写操作、未被活着的污染源污染（与节点/边同一套 _direction_result）才算数。
+    root_refuted: set[str] = set()
+    for binding in explanation.evidence_bindings.values():
+        if (binding.predicate_result != PredicateResult.REFUTES.value or
+                not binding.is_trusted(now=current) or
+                window_spans_own_write(st, binding)):
+            continue
+        for node_id in binding.target_node_ids:
+            relation = (graph.get_edge_data(node_id, binding.evidence_type) or {}
+                        ).get("REFUTED_BY") or {}
+            if (relation.get("scope") == "ROOT" and
+                    str(relation.get("predicate_id") or "") == binding.predicate_id and
+                    _direction_result(binding, live, edge_sources) ==
+                    PredicateResult.REFUTES.value):
+                root_refuted.add(node_id)
+
     for path in explanation.candidate_paths:
         segment_states = ([explanation.node_status.get(
             node_id, CausalStatus.UNTESTED.value) for node_id in path.node_ids[:-1]] +
@@ -457,7 +480,8 @@ def recompute_statuses(st: EpisodeState, *, now: float | None = None) -> None:
             for binding_id in path.evidence_binding_ids
             if (binding := explanation.evidence_bindings.get(binding_id)) is not None)
             for evidence_type in path.required_evidence_types)
-        if CausalStatus.REFUTED.value in segment_states:
+        if (CausalStatus.REFUTED.value in segment_states or
+                path.root_node_id in root_refuted):
             status = CausalStatus.REFUTED.value
         elif (segment_states and all(value == CausalStatus.SUPPORTED.value
                                      for value in segment_states) and

@@ -202,6 +202,8 @@ REFUTE_VALUES = {
         "reclaimable_pct": 5.0,
     },
     "connection_count": {"near_limit": False},
+    # 扣掉持续 idle in transaction 的会话后只剩 25% -> 反证 connection_exhaustion 是根
+    "connection_residual": {"used": 95, "max_connections": 100, "idle_in_transaction_long": 70},
     "idle_in_transaction": {"idle_in_transaction": 0},
     "checkpoint_stats": {"ckpt_timed": 10, "ckpt_requested": 0},
     "xid_age": {"wraparound_pct": 1.0},

@@ -51,7 +51,9 @@ wsrc = (ROOT / "sandbox/workload.py").read_text(encoding="utf-8")
 check('"episode_id": _OWNER.get("episode_id", "")' in wsrc and '"owner_pid": os.getpid()' in wsrc, "快照带 episode_id / owner_pid")
 rsrc = (ROOT / "eval/run_suite.py").read_text(encoding="utf-8")
 check("_sweep_orphan_workloads()" in rsrc, "跑批开跑前清扫孤儿负载")
-check('"harness": _harness_identity()' in rsrc and "complete=True" in rsrc, "结果带 harness 身份与 complete 标记")
+# harness 身份之外还带本次实际运行参数（2026-09-24 缺陷报告 P3：原来只有默认 max_steps）
+check('"harness": {**_harness_identity(), "run": _run_parameters(args)}' in rsrc and "complete=True" in rsrc,
+      "结果带 harness 身份、实际运行参数与 complete 标记")
 
 print()
 if fails:

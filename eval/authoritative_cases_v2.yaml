@@ -1,7 +1,7 @@
 schema_version: 2
 dataset_id: pgdoctor_authoritative_replay_v2
 revision: 2
-generated_from_graph_version: graph_7f61ea9266abd6c163f5fea1
+generated_from_graph_version: graph_9204c5e9eaa28e2590d021b1
 source_catalog: eval/authoritative_sources.yaml
 fidelity_notice: These are source-grounded controlled replays, not the unpublished official DBA-Bench
   scenarios and not 100 independent production incidents.
@@ -75,7 +75,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id001
     - missing_index
     - latency_p99_up
@@ -88,12 +88,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id001
     edge_ids: *id002
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -103,7 +103,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -372,7 +372,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id007
     - missing_index
     - latency_p99_up
@@ -385,12 +385,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id007
     edge_ids: *id008
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -400,7 +400,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -669,7 +669,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id013
     - missing_index
     - latency_p99_up
@@ -682,12 +682,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id013
     edge_ids: *id014
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -697,7 +697,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -966,7 +966,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id019
     - missing_index
     - latency_p99_up
@@ -979,12 +979,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id019
     edge_ids: *id020
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -994,7 +994,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1263,7 +1263,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id025
     - missing_index
     - latency_p99_up
@@ -1276,12 +1276,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id025
     edge_ids: *id026
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1291,7 +1291,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1560,7 +1560,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id031
     - missing_index
     - latency_p99_up
@@ -1573,12 +1573,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id031
     edge_ids: *id032
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1588,7 +1588,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -1857,7 +1857,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id037
     - missing_index
     - latency_p99_up
@@ -1870,12 +1870,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id037
     edge_ids: *id038
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -1885,7 +1885,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -2154,7 +2154,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: missing_index
-    path_id: path_29fa08cbacad90f45d819e80
+    path_id: path_71831e3b137cb651bddc39f0
     node_ids: &id043
     - missing_index
     - latency_p99_up
@@ -2167,12 +2167,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_29fa08cbacad90f45d819e80
+  - path_id: path_71831e3b137cb651bddc39f0
     node_ids: *id043
     edge_ids: *id044
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -2182,7 +2182,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -2451,7 +2451,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id049
     - stale_statistics
     - latency_p99_up
@@ -2463,12 +2463,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id049
     edge_ids: *id050
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -2478,7 +2478,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -2737,7 +2737,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id057
     - stale_statistics
     - latency_p99_up
@@ -2749,12 +2749,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id057
     edge_ids: *id058
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -2764,7 +2764,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -3023,7 +3023,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id065
     - stale_statistics
     - latency_p99_up
@@ -3035,12 +3035,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id065
     edge_ids: *id066
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3050,7 +3050,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -3309,7 +3309,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id073
     - stale_statistics
     - latency_p99_up
@@ -3321,12 +3321,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id073
     edge_ids: *id074
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3336,7 +3336,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -3595,7 +3595,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id081
     - stale_statistics
     - latency_p99_up
@@ -3607,12 +3607,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id081
     edge_ids: *id082
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3622,7 +3622,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -3881,7 +3881,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id089
     - stale_statistics
     - latency_p99_up
@@ -3893,12 +3893,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id089
     edge_ids: *id090
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -3908,7 +3908,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4167,7 +4167,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_statistics
-    path_id: path_fb0ecb067071656c9adc5fbc
+    path_id: path_128a968505ccbdda8404ad35
     node_ids: &id097
     - stale_statistics
     - latency_p99_up
@@ -4179,12 +4179,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fb0ecb067071656c9adc5fbc
+  - path_id: path_128a968505ccbdda8404ad35
     node_ids: *id097
     edge_ids: *id098
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4194,7 +4194,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4452,7 +4452,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id105
     - lock_contention
     - latency_p99_up
@@ -4464,12 +4464,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id105
     edge_ids: *id106
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4479,7 +4479,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -4749,7 +4749,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id110
     - lock_contention
     - latency_p99_up
@@ -4761,12 +4761,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id110
     edge_ids: *id111
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -4776,7 +4776,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -5046,7 +5046,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id115
     - lock_contention
     - latency_p99_up
@@ -5058,12 +5058,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id115
     edge_ids: *id116
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -5073,7 +5073,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -5343,7 +5343,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id120
     - lock_contention
     - latency_p99_up
@@ -5355,12 +5355,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id120
     edge_ids: *id121
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -5370,7 +5370,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -5640,7 +5640,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id125
     - lock_contention
     - latency_p99_up
@@ -5652,12 +5652,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id125
     edge_ids: *id126
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -5667,7 +5667,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -5937,7 +5937,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id130
     - lock_contention
     - latency_p99_up
@@ -5949,12 +5949,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id130
     edge_ids: *id131
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -5964,7 +5964,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6234,7 +6234,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: lock_contention
-    path_id: path_75dd2c382dfde22be42c7c1a
+    path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: &id135
     - lock_contention
     - latency_p99_up
@@ -6246,12 +6246,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_75dd2c382dfde22be42c7c1a
+  - path_id: path_638b38c50c5c2cc4dcd60a13
     node_ids: *id135
     edge_ids: *id136
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6261,7 +6261,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -6526,7 +6526,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id140
     - table_bloat
     - disk_growing
@@ -6538,12 +6538,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id140
     edge_ids: *id141
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6553,7 +6553,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -6820,7 +6820,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id146
     - table_bloat
     - disk_growing
@@ -6832,12 +6832,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id146
     edge_ids: *id147
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -6847,7 +6847,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -7114,7 +7114,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id152
     - table_bloat
     - disk_growing
@@ -7126,12 +7126,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id152
     edge_ids: *id153
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -7141,7 +7141,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -7408,7 +7408,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id158
     - table_bloat
     - disk_growing
@@ -7420,12 +7420,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id158
     edge_ids: *id159
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -7435,7 +7435,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -7702,7 +7702,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id164
     - table_bloat
     - disk_growing
@@ -7714,12 +7714,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id164
     edge_ids: *id165
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -7729,7 +7729,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -7996,7 +7996,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id170
     - table_bloat
     - disk_growing
@@ -8008,12 +8008,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id170
     edge_ids: *id171
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -8023,7 +8023,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -8290,7 +8290,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: table_bloat
-    path_id: path_27aa70b0dc917f13be26de17
+    path_id: path_300dd43c34737d684691a62c
     node_ids: &id176
     - table_bloat
     - disk_growing
@@ -8302,12 +8302,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_27aa70b0dc917f13be26de17
+  - path_id: path_300dd43c34737d684691a62c
     node_ids: *id176
     edge_ids: *id177
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -8317,7 +8317,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -8590,7 +8590,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id182
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -8602,12 +8602,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id182
     edge_ids: *id183
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -8617,7 +8617,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -8854,7 +8854,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id186
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -8866,12 +8866,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id186
     edge_ids: *id187
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -8881,7 +8881,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -9118,7 +9118,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id190
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -9130,12 +9130,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id190
     edge_ids: *id191
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -9145,7 +9145,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -9382,7 +9382,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id194
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -9394,12 +9394,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id194
     edge_ids: *id195
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -9409,7 +9409,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -9646,7 +9646,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id198
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -9658,12 +9658,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id198
     edge_ids: *id199
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -9673,7 +9673,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -9910,7 +9910,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id202
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -9922,12 +9922,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id202
     edge_ids: *id203
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -9937,7 +9937,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -10174,7 +10174,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: autovacuum_starvation
-    path_id: path_e04fb13e44d35fd18a8fd464
+    path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: &id206
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -10186,12 +10186,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids: *id206
     edge_ids: *id207
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -10201,7 +10201,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids:
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -10431,7 +10431,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id210
     - connection_exhaustion
     - conn_near_limit
@@ -10443,12 +10443,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id210
     edge_ids: *id211
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -10628,7 +10628,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id213
     - connection_exhaustion
     - conn_near_limit
@@ -10640,12 +10640,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id213
     edge_ids: *id214
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -10825,7 +10825,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id216
     - connection_exhaustion
     - conn_near_limit
@@ -10837,12 +10837,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id216
     edge_ids: *id217
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -11022,7 +11022,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id219
     - connection_exhaustion
     - conn_near_limit
@@ -11034,12 +11034,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id219
     edge_ids: *id220
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -11219,7 +11219,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id222
     - connection_exhaustion
     - conn_near_limit
@@ -11231,12 +11231,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id222
     edge_ids: *id223
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -11416,7 +11416,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id225
     - connection_exhaustion
     - conn_near_limit
@@ -11428,12 +11428,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id225
     edge_ids: *id226
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -11613,7 +11613,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: connection_exhaustion
-    path_id: path_0e2888184f21279bd295f029
+    path_id: path_579efecb11d67571fcda5a7a
     node_ids: &id228
     - connection_exhaustion
     - conn_near_limit
@@ -11625,12 +11625,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids: *id228
     edge_ids: *id229
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids:
     - long_idle_transaction
     - connection_exhaustion
@@ -11818,7 +11818,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id231
     - long_idle_transaction
     - connection_exhaustion
@@ -11833,12 +11833,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id231
     edge_ids: *id232
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -12051,7 +12051,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id234
     - long_idle_transaction
     - connection_exhaustion
@@ -12066,12 +12066,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id234
     edge_ids: *id235
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -12284,7 +12284,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id237
     - long_idle_transaction
     - connection_exhaustion
@@ -12299,12 +12299,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id237
     edge_ids: *id238
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -12517,7 +12517,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id240
     - long_idle_transaction
     - connection_exhaustion
@@ -12532,12 +12532,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id240
     edge_ids: *id241
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -12750,7 +12750,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id243
     - long_idle_transaction
     - connection_exhaustion
@@ -12765,12 +12765,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id243
     edge_ids: *id244
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -12983,7 +12983,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id246
     - long_idle_transaction
     - connection_exhaustion
@@ -12998,12 +12998,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id246
     edge_ids: *id247
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -13216,7 +13216,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id249
     - long_idle_transaction
     - connection_exhaustion
@@ -13231,12 +13231,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id249
     edge_ids: *id250
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -13449,7 +13449,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: long_idle_transaction
-    path_id: path_cc415c6cd64ea3bcfaa63348
+    path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: &id252
     - long_idle_transaction
     - connection_exhaustion
@@ -13464,12 +13464,12 @@ cases:
     intervention_kind: CONTAINMENT
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_cc415c6cd64ea3bcfaa63348
+  - path_id: path_a6bfca3fde3daea15cc1fd09
     node_ids: *id252
     edge_ids: *id253
     observed_symptom_id: conn_near_limit
     selected: true
-  - path_id: path_0e2888184f21279bd295f029
+  - path_id: path_579efecb11d67571fcda5a7a
     node_ids:
     - connection_exhaustion
     - conn_near_limit
@@ -13688,7 +13688,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id255
     - xid_wraparound_risk
     - disk_growing
@@ -13700,12 +13700,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id255
     edge_ids: *id256
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -13715,7 +13715,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -13995,7 +13995,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id260
     - xid_wraparound_risk
     - disk_growing
@@ -14007,12 +14007,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id260
     edge_ids: *id261
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -14022,7 +14022,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -14302,7 +14302,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id265
     - xid_wraparound_risk
     - disk_growing
@@ -14314,12 +14314,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id265
     edge_ids: *id266
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -14329,7 +14329,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -14609,7 +14609,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id270
     - xid_wraparound_risk
     - disk_growing
@@ -14621,12 +14621,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id270
     edge_ids: *id271
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -14636,7 +14636,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -14916,7 +14916,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id275
     - xid_wraparound_risk
     - disk_growing
@@ -14928,12 +14928,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id275
     edge_ids: *id276
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -14943,7 +14943,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -15223,7 +15223,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id280
     - xid_wraparound_risk
     - disk_growing
@@ -15235,12 +15235,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id280
     edge_ids: *id281
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -15250,7 +15250,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -15530,7 +15530,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: xid_wraparound_risk
-    path_id: path_d3875eb8721ecef49da5cd47
+    path_id: path_dcf107c63984238e577a2b93
     node_ids: &id285
     - xid_wraparound_risk
     - disk_growing
@@ -15542,12 +15542,12 @@ cases:
     intervention_kind: CORRECTIVE
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_d3875eb8721ecef49da5cd47
+  - path_id: path_dcf107c63984238e577a2b93
     node_ids: *id285
     edge_ids: *id286
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -15557,7 +15557,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -15831,7 +15831,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id290
     - disk_pressure
     - disk_growing
@@ -15843,12 +15843,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id290
     edge_ids: *id291
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -15858,7 +15858,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -16120,7 +16120,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id295
     - disk_pressure
     - disk_growing
@@ -16132,12 +16132,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id295
     edge_ids: *id296
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -16147,7 +16147,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -16409,7 +16409,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id300
     - disk_pressure
     - disk_growing
@@ -16421,12 +16421,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id300
     edge_ids: *id301
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -16436,7 +16436,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -16698,7 +16698,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id305
     - disk_pressure
     - disk_growing
@@ -16710,12 +16710,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id305
     edge_ids: *id306
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -16725,7 +16725,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -16987,7 +16987,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id310
     - disk_pressure
     - disk_growing
@@ -16999,12 +16999,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id310
     edge_ids: *id311
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -17014,7 +17014,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -17276,7 +17276,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id315
     - disk_pressure
     - disk_growing
@@ -17288,12 +17288,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id315
     edge_ids: *id316
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -17303,7 +17303,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -17565,7 +17565,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: disk_pressure
-    path_id: path_e00486df392722e9a5c4d5fc
+    path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: &id320
     - disk_pressure
     - disk_growing
@@ -17577,12 +17577,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids: *id320
     edge_ids: *id321
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -17592,7 +17592,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_33d2e49c91e42a88ae8752ac
+  - path_id: path_1697e2673290f1aeb1613760
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -17860,7 +17860,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id325
     - stale_replication_slot
     - disk_growing
@@ -17872,12 +17872,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id325
     edge_ids: *id326
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -17887,7 +17887,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -18157,7 +18157,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id330
     - stale_replication_slot
     - disk_growing
@@ -18169,12 +18169,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id330
     edge_ids: *id331
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -18184,7 +18184,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -18454,7 +18454,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id335
     - stale_replication_slot
     - disk_growing
@@ -18466,12 +18466,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id335
     edge_ids: *id336
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -18481,7 +18481,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -18751,7 +18751,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id340
     - stale_replication_slot
     - disk_growing
@@ -18763,12 +18763,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id340
     edge_ids: *id341
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -18778,7 +18778,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -19048,7 +19048,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id345
     - stale_replication_slot
     - disk_growing
@@ -19060,12 +19060,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id345
     edge_ids: *id346
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -19075,7 +19075,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -19345,7 +19345,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id350
     - stale_replication_slot
     - disk_growing
@@ -19357,12 +19357,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id350
     edge_ids: *id351
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -19372,7 +19372,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -19642,7 +19642,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: stale_replication_slot
-    path_id: path_ab65ceb2e0af0cfc509a3084
+    path_id: path_1dc18f78d0588688c6fca919
     node_ids: &id355
     - stale_replication_slot
     - disk_growing
@@ -19654,12 +19654,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_ab65ceb2e0af0cfc509a3084
+  - path_id: path_1dc18f78d0588688c6fca919
     node_ids: *id355
     edge_ids: *id356
     observed_symptom_id: disk_growing
     selected: true
-  - path_id: path_55d56269579eaec1e8f6b96a
+  - path_id: path_397a0eddee17e4e5036389da
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -19669,7 +19669,7 @@ cases:
     - edge_6245e8d644080f7d376779c5
     observed_symptom_id: disk_growing
     selected: false
-  - path_id: path_e00486df392722e9a5c4d5fc
+  - path_id: path_ac042e0c13b6183ff9b17f95
     node_ids:
     - disk_pressure
     - disk_growing
@@ -19933,7 +19933,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id360
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -19948,12 +19948,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id360
     edge_ids: *id361
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -19961,7 +19961,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -20203,7 +20203,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id364
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -20218,12 +20218,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id364
     edge_ids: *id365
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -20231,7 +20231,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -20473,7 +20473,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id368
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -20488,12 +20488,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id368
     edge_ids: *id369
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -20501,7 +20501,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -20743,7 +20743,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id372
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -20758,12 +20758,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id372
     edge_ids: *id373
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -20771,7 +20771,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -21013,7 +21013,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id376
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -21028,12 +21028,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id376
     edge_ids: *id377
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -21041,7 +21041,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -21283,7 +21283,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id380
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -21298,12 +21298,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id380
     edge_ids: *id381
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -21311,7 +21311,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -21553,7 +21553,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: orphaned_prepared_transaction
-    path_id: path_4b4591344691396ae3f92b90
+    path_id: path_0489eec96690386e766dfd84
     node_ids: &id384
     - orphaned_prepared_transaction
     - autovacuum_starvation
@@ -21568,12 +21568,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_4b4591344691396ae3f92b90
+  - path_id: path_0489eec96690386e766dfd84
     node_ids: *id384
     edge_ids: *id385
     observed_symptom_id: autovacuum_unhealthy
     selected: true
-  - path_id: path_e04fb13e44d35fd18a8fd464
+  - path_id: path_d50f33d32bc354e86d53ffd0
     node_ids:
     - autovacuum_starvation
     - autovacuum_unhealthy
@@ -21581,7 +21581,7 @@ cases:
     - edge_5f6ce19d68f26d920cb5a8aa
     observed_symptom_id: autovacuum_unhealthy
     selected: false
-  - path_id: path_c1b846a59d8a2bc43c5ffd26
+  - path_id: path_759594f550618321c7f4f843
     node_ids:
     - long_idle_transaction
     - autovacuum_starvation
@@ -21821,7 +21821,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id388
     - deadlock
     - queries_blocked
@@ -21833,12 +21833,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id388
     edge_ids: *id389
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -21846,7 +21846,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -22030,7 +22030,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id391
     - deadlock
     - queries_blocked
@@ -22042,12 +22042,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id391
     edge_ids: *id392
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -22055,7 +22055,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -22239,7 +22239,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id394
     - deadlock
     - queries_blocked
@@ -22251,12 +22251,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id394
     edge_ids: *id395
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -22264,7 +22264,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -22448,7 +22448,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id397
     - deadlock
     - queries_blocked
@@ -22460,12 +22460,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id397
     edge_ids: *id398
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -22473,7 +22473,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -22657,7 +22657,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id400
     - deadlock
     - queries_blocked
@@ -22669,12 +22669,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id400
     edge_ids: *id401
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -22682,7 +22682,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -22866,7 +22866,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id403
     - deadlock
     - queries_blocked
@@ -22878,12 +22878,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id403
     edge_ids: *id404
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -22891,7 +22891,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -23075,7 +23075,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: deadlock
-    path_id: path_02c1681c90f0a8ef888734b4
+    path_id: path_80dbd292efad7d8141e906cd
     node_ids: &id406
     - deadlock
     - queries_blocked
@@ -23087,12 +23087,12 @@ cases:
     intervention_kind: MANUAL
     automated_outcome_possible: false
   candidate_paths:
-  - path_id: path_02c1681c90f0a8ef888734b4
+  - path_id: path_80dbd292efad7d8141e906cd
     node_ids: *id406
     edge_ids: *id407
     observed_symptom_id: queries_blocked
     selected: true
-  - path_id: path_e5014d5177048dc5ec860b3b
+  - path_id: path_6f8aefc67fdb97ae38c862ca
     node_ids:
     - lock_contention
     - queries_blocked
@@ -23100,7 +23100,7 @@ cases:
     - edge_23da98f7447375caf78a9f12
     observed_symptom_id: queries_blocked
     selected: false
-  - path_id: path_549bec93ffad60349973d1e4
+  - path_id: path_ed72576b1cd8e68fbbbf7b7c
     node_ids:
     - long_idle_transaction
     - queries_blocked
@@ -23285,7 +23285,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id409
     - work_mem_spill
     - latency_p99_up
@@ -23297,12 +23297,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id409
     edge_ids: *id410
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -23312,7 +23312,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -23563,7 +23563,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id414
     - work_mem_spill
     - latency_p99_up
@@ -23575,12 +23575,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id414
     edge_ids: *id415
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -23590,7 +23590,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -23841,7 +23841,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id419
     - work_mem_spill
     - latency_p99_up
@@ -23853,12 +23853,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id419
     edge_ids: *id420
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -23868,7 +23868,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -24119,7 +24119,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id424
     - work_mem_spill
     - latency_p99_up
@@ -24131,12 +24131,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id424
     edge_ids: *id425
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -24146,7 +24146,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -24397,7 +24397,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id429
     - work_mem_spill
     - latency_p99_up
@@ -24409,12 +24409,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id429
     edge_ids: *id430
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -24424,7 +24424,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -24675,7 +24675,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id434
     - work_mem_spill
     - latency_p99_up
@@ -24687,12 +24687,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id434
     edge_ids: *id435
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -24702,7 +24702,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -24953,7 +24953,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: work_mem_spill
-    path_id: path_fc7a73e12d5bf0859ffecfba
+    path_id: path_67c2a6a217dadcbc2506685d
     node_ids: &id439
     - work_mem_spill
     - latency_p99_up
@@ -24965,12 +24965,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_fc7a73e12d5bf0859ffecfba
+  - path_id: path_67c2a6a217dadcbc2506685d
     node_ids: *id439
     edge_ids: *id440
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -24980,7 +24980,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids:
     - checkpoint_pressure
     - latency_p99_up
@@ -25231,7 +25231,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id444
     - checkpoint_pressure
     - latency_p99_up
@@ -25243,12 +25243,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id444
     edge_ids: *id445
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -25258,7 +25258,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -25509,7 +25509,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id449
     - checkpoint_pressure
     - latency_p99_up
@@ -25521,12 +25521,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id449
     edge_ids: *id450
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -25536,7 +25536,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -25787,7 +25787,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id454
     - checkpoint_pressure
     - latency_p99_up
@@ -25799,12 +25799,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id454
     edge_ids: *id455
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -25814,7 +25814,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -26065,7 +26065,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id459
     - checkpoint_pressure
     - latency_p99_up
@@ -26077,12 +26077,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id459
     edge_ids: *id460
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -26092,7 +26092,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -26343,7 +26343,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id464
     - checkpoint_pressure
     - latency_p99_up
@@ -26355,12 +26355,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id464
     edge_ids: *id465
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -26370,7 +26370,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -26621,7 +26621,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id469
     - checkpoint_pressure
     - latency_p99_up
@@ -26633,12 +26633,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id469
     edge_ids: *id470
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -26648,7 +26648,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up
@@ -26899,7 +26899,7 @@ cases:
   hot_query: SELECT id,total FROM orders WHERE user_id=%(uid)s AND status='PENDING'
   expected:
     root_cause: checkpoint_pressure
-    path_id: path_6f3d497692172c98aac29f33
+    path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: &id474
     - checkpoint_pressure
     - latency_p99_up
@@ -26911,12 +26911,12 @@ cases:
     intervention_kind: MITIGATION
     automated_outcome_possible: true
   candidate_paths:
-  - path_id: path_6f3d497692172c98aac29f33
+  - path_id: path_a19a859b8b8dc7bd2d7c2462
     node_ids: *id474
     edge_ids: *id475
     observed_symptom_id: latency_p99_up
     selected: true
-  - path_id: path_28163380f2c16b262b61b7bb
+  - path_id: path_25c1640fab281794253ac572
     node_ids:
     - autovacuum_starvation
     - table_bloat
@@ -26926,7 +26926,7 @@ cases:
     - edge_7cebde81f4a33fc40a53032f
     observed_symptom_id: latency_p99_up
     selected: false
-  - path_id: path_1e08a9539d4a1ee6480a33b2
+  - path_id: path_1465bceff61cf5001848a714
     node_ids:
     - connection_exhaustion
     - latency_p99_up

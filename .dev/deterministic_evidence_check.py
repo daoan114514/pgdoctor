@@ -77,7 +77,14 @@ lsrc = (ROOT / "agent" / "llm_policy.py").read_text(encoding="utf-8")
 loop_src = (ROOT / "agent" / "loop.py").read_text(encoding="utf-8")
 check('probe_uid=ctx.get("probe_uid")' in lsrc and '"probe_uid": getattr(env, "probe_uid", None)' in loop_src,
       "探针 uid 从环境经 ctx 传到取证编排")
-check("batch_size=4" in (ROOT / "eval" / "run_suite.py").read_text(encoding="utf-8"), "跑批子 agent 并发为 4")
+from types import SimpleNamespace  # noqa: E402
+from eval import run_suite as _run_suite  # noqa: E402
+_rsrc = (ROOT / "eval" / "run_suite.py").read_text(encoding="utf-8")
+check(_run_suite.SUBAGENT_CONCURRENCY == 4 and "batch_size=SUBAGENT_CONCURRENCY" in _rsrc, "跑批子 agent 并发为 4")
+_rp = _run_suite._run_parameters(SimpleNamespace(max_steps=30, no_repair=False, policy="llm"))
+check(_rp.get("max_steps") == 30 and _rp.get("subagent_concurrency") == 4 and _rp.get("deterministic_pinned") is True
+      and "\"run\": _run_parameters(args)" in _rsrc,
+      "结果的 harness 里记实际运行参数（max_steps 30 不再写成默认 40；缺陷报告 P3）", _rp)
 
 
 from sandbox.traces import TraceStore  # noqa: E402
@@ -156,7 +163,8 @@ def _fake_task(tid, tools):
 fake_plan = SimpleNamespace(tasks=[
     _fake_task("t_explain", ["explain_query"]), _fake_task("t_sub", ["simulate_index"]),
     _fake_task("t_conn", ["get_connection_stats"]), _fake_task("t_db", ["get_database_stats"]),
-    _fake_task("t_multi", ["get_table_stats", "explain_query"])], deferred_need_ids=[])
+    _fake_task("t_multi", ["get_table_stats", "explain_query"])], deferred_need_ids=[],
+    explanation_id="x", explanation_revision=1)
 executed: list[str] = []
 
 
@@ -192,6 +200,28 @@ check(set(executed[3:]) == {"t_sub", "t_multi"}, "单工具 simulate_index 与�
 check([r.task_id for r in out.task_results] == [t.task_id for t in fake_plan.tasks], "结果仍按规划顺序交给合并")
 order_audit = [x for x in state2.evidence_task_audit if x.get("event") == "evidence_execution_order"]
 check(bool(order_audit) and order_audit[-1]["deterministic"] == ["t_db", "t_conn", "t_explain"], "执行顺序落审计")
+need_x = EvidenceNeed.create(path_ids=["p"], target_kind="NODE", target_ids=["lock_contention"],
+                             evidence_type="connection_count", predicate_id="connection_count_v2",
+                             required=True, freshness_seconds=60, candidate_tools=["get_connection_stats"],
+                             reason="fixture reason")
+saved_plan = orchestrator.plan_evidence_tasks
+orchestrator.plan_evidence_tasks = lambda *a, **k: SimpleNamespace(
+    tasks=[], deferred_need_ids=[], explanation_id="x", explanation_revision=1)
+orchestrator.merge_evidence_task_results = lambda *a, **k: SimpleNamespace(accepted_report_ids=[], rejected_reports=[])
+saved_mark, saved_learn = orchestrator._mark_unavailable, orchestrator._record_tool_learning_observations
+orchestrator._mark_unavailable = lambda *a, **k: None
+orchestrator._record_tool_learning_observations = lambda *a, **k: None
+try:
+    asyncio.run(orchestrator.run_evidence_investigation(state2, toolbox, [need_x], "SELECT 1"))
+finally:
+    orchestrator.plan_evidence_tasks = saved_plan
+    orchestrator.merge_evidence_task_results = saved["merge_evidence_task_results"]
+    orchestrator._mark_unavailable, orchestrator._record_tool_learning_observations = saved_mark, saved_learn
+plans = [x for x in state2.evidence_task_audit if x.get("event") == "evidence_plan"]
+got = (plans[-1].get("needs") or [{}])[0] if plans else {}
+check(bool(plans) and got.get("need_id") == need_x.need_id and got.get("target_ids") == ["lock_contention"]
+      and got.get("evidence_type") == "connection_count" and got.get("reason") == "fixture reason",
+      "需求定义（类型 / 目标 / 判据 / 理由）随计划落审计（2026-09-24 缺陷报告 P2-2）", got)
 
 print()
 if fails:

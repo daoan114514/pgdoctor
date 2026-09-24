@@ -159,6 +159,14 @@ refuted_by:
   - {cause: long_idle_transaction, evidence: idle_in_transaction,
      predicate_id: idle_in_transaction_v2, scope: PATH,
      when: "idle in transaction 会话数接近 0"}
+  # scope: ROOT —— 只关"以 connection_exhaustion 为根"的路径，不碰它作为中间机制的节点与边。
+  # misleading_idle_txn 的真路径 long_idle_transaction -> connection_exhaustion -> throughput_down
+  # 与独立根因路径 connection_exhaustion -> throughput_down 共享节点和边，只差谁是根；NODE /
+  # PATH 范围的反证都会连带反证真路径（2026-09-24 缺陷报告 P1-2）。证据是 live_state，不引入
+  # 任何污染边。
+  - {cause: connection_exhaustion, evidence: connection_residual,
+     predicate_id: connection_residual_v2, scope: ROOT,
+     when: "扣掉持续 idle in transaction 的会话后连接数低于逼近上限的阈值：打满由上游长事务解释"}
   # 反事实模拟是 DB 域独有的反证手段：不碰生产就能预先否掉一个方案。
   # _supports 早就实现了这条判断，图上一直没有对应的边 —— 而 D2 判
   # "这次排除有没有依据"是照着图查的，缺边就等于这条反证不算数。

@@ -8,7 +8,7 @@
 | 因果图 | `graph_7f61ea9266abd6c163f5fea1` |
 | SDK / CLI | claude-agent-sdk 0.2.157 / CLI 2.1.277 |
 | 策略 | llm，max_steps 30，ESC 开、案例库开、L1-L4 开；确定性取证开（无参 + 钉参工具），子 agent 并发 4 |
-| 结果文件 | `eval/results/guard_*.json`，合并版 `eval/results/llm_eval_guarded.json` |
+| 结果文件 | `eval/results/quarantine/guard_*_20260924_2da6494.json`，合并版 `eval/results/quarantine/llm_eval_guarded_20260924_2da6494.json`（本报告的缺陷修复后被复跑取代，移入隔离区） |
 | 时间 | 14:35 起、15:13 结束，一次跑完，无停机、无重跑 |
 | 成本 | 5 个计分 episode 合计 **$0.89** |
 
@@ -91,6 +91,18 @@ lock_contention 与 stale_statistics 的最终报告 `reason` 是"没有可选�
 2. P1-1：先把需求生成端和 `DISCRIMINATES` 的语义查清，再决定是"不发"还是"由图推出 bears_on"。改后跑污染边 diff、graph_lint、回放回归、checkall，再用守护全量复跑。
 3. P1-2：先写"根角色范围反证"的语义设计与污染分析，确认不会反证真路径上的中间节点，再动图。
 4. P3 的 harness 身份补运行参数。
+
+## 修复状态（2026-09-24 晚，复跑前）
+
+| 缺陷 | 修法 | 验证 |
+|---|---|---|
+| P1-1 跨根因鉴别需求 | `graph.evidence_needs` 不再按 `discriminators_of` 发需求（判别力只留在 frontier 排序里）；`_entry_matches` 以图的 CONFIRMED_BY / REFUTED_BY（`graph.causes_bearing`）并上 toolbox 的 bears_on 放行 | `evidence_direction_check` [12]：7 个症状召回的全部需求都与证据有方向关系；图上有关系而 bears_on 没写的能绑、两边都没有的仍不能绑 |
+| P1-2 根角色反证 | 新 REFUTED_BY 范围 `ROOT`（`graph.REFUTER_SCOPES` 一处定义）：只把以该节点为根的路径判 REFUTED，节点与边不动；新证据 `connection_residual`（同一次 `get_connection_stats`、同一个快照，扣掉持续 >=30 秒的 idle in transaction 后是否仍逼近上限），`live_state`，挂在 connection_exhaustion 上；需求、ESC 竞争路径关闭都认它 | `root_scope_check` 22 项；污染边前后对比只多一条干净的可反证证据、无新污染边；活库标定见上面判据注释（97% SUPPORTS / 10% REFUTES） |
+| P2-1 成功报告里的过程说明 | 非终止出口（DIAGNOSE 回 INVESTIGATE、GATE 无提案、批准计划过期）改记 `st.progress_notes`，`outcome_note` 只留给终止 / 升级出口 | `terminal_done_check`：三种策略的 DIAGNOSE 无选中路径都不写 outcome_note |
+| P2-2 需求定义不落盘 | 每轮 `evidence_plan` 审计带需求的类型 / 目标 / 判据 / 理由与任务分派 | `deterministic_evidence_check` |
+| P3 harness 身份 | 结果的 `harness.run` 记实际 max_steps、子 agent 并发、确定性开关、窗口下限 | `deterministic_evidence_check` |
+
+P2-2 里"顺带观测没人用"与 ESC 只要求两个主要竞争路径被解决，属于设计取舍，本轮不改。
 
 ## 附录：每个 episode 的原始素材
 

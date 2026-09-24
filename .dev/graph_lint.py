@@ -173,7 +173,7 @@ for edge in edges_raw.get("refuted_by", []) or []:
     if predicate_id != evidence_predicate:
         bad_refuters.append(
             f"{edge['cause']}<-{edge['evidence']} predicate 与证据节点不一致")
-    if edge.get("scope") not in {"NODE", "PATH", "INTERVENTION"}:
+    if edge.get("scope") not in G.REFUTER_SCOPES:
         bad_refuters.append(f"{edge['cause']}<-{edge['evidence']} scope 非法")
     if edge.get("scope") == "INTERVENTION" and not edge.get("target_fix"):
         bad_refuters.append(

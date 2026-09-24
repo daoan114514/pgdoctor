@@ -455,6 +455,7 @@ TOOL_OF = {
     "session_wait_profile": "get_active_sessions",
     "connection_count": "get_connection_stats",
     "idle_in_transaction": "get_connection_stats",
+    "connection_residual": "get_connection_stats",
     "slow_query_ranking": "get_top_queries",
     "counterfactual_index": "simulate_index",
     "xid_age": "get_vacuum_horizon",

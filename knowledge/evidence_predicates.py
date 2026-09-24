@@ -330,6 +330,51 @@ def _idle_in_transaction(value: dict, _ctx: PredicateContext) -> PredicateDecisi
                      f"only {count} idle-in-transaction sessions observed")
 
 
+# 连接"逼近上限"的阈值。observe.get_connection_stats 的 near_limit 与 connection_residual 共用。
+CONNECTION_NEAR_LIMIT_RATIO = 0.85
+
+
+def _connection_residual(value: dict, _ctx: PredicateContext) -> PredicateDecision:
+    """连接打满是不是由长时间 idle in transaction 的会话解释掉了 —— 只判"connection_exhaustion 是根"。
+
+    misleading_idle_txn 的真路径是 long_idle_transaction -> connection_exhaustion ->
+    throughput_down，connection_exhaustion 在这里是中间机制。以它为根的路径与真路径共享节点和
+    边，NODE / PATH 范围的反证都会连带反证真路径上的中间节点，所以这条边在图上是 scope: ROOT，
+    只关以它为根的路径（2026-09-24 缺陷报告 P1-2）。
+
+    扣掉持续 >= 阈值秒数的 idle in transaction 会话后，连接数若已低于逼近上限的阈值，打满就由
+    上游的长事务解释，connection_exhaustion 不是根 -> REFUTES。只数"持续"的：事务型应用在语句
+    之间会短暂处于 idle in transaction，把它们也扣掉会反证真正的连接打满；阈值偏高只会少反证
+    （规则 1 的安全方向）。没有逼近上限时这条问题不成立，交给 connection_count_v2 -> NEUTRAL。
+
+    活库标定（.dev/fix_calibration_live.py connection|misleading，2026-09-24）：
+        connection_exhaustion 故障态  97/100，idle in transaction 0（持续 >=30s 0）  扣后 97% -> SUPPORTS
+        misleading_idle_txn 故障态    97/100，idle in transaction 87（持续 >=30s 87） 扣后 10% -> REFUTES
+        两者修复后                    33-36/100                                      -> NEUTRAL
+    0.85 两侧余量都很大；诊断时点上堆积的会话全都已满 30 秒，门槛没有偏高到漏数。
+    """
+    if ("idle_in_transaction_long" not in value or "used" not in value or
+            not value.get("max_connections")):
+        return _decision(PredicateResult.NEUTRAL,
+                         "residual connection inputs are missing")
+    max_conn = max(int(value["max_connections"]), 1)
+    used = int(value["used"] or 0)
+    long_idle = int(value["idle_in_transaction_long"] or 0)
+    if used < max_conn * CONNECTION_NEAR_LIMIT_RATIO:
+        return _decision(PredicateResult.NEUTRAL,
+                         f"usage {used}/{max_conn} is not near the limit")
+    ratio = (used - long_idle) / max_conn
+    if ratio < CONNECTION_NEAR_LIMIT_RATIO:
+        return _decision(
+            PredicateResult.REFUTES,
+            f"{long_idle} long idle-in-transaction sessions account for the exhaustion: "
+            f"without them usage is {ratio:.0%} of max_connections")
+    return _decision(
+        PredicateResult.SUPPORTS,
+        f"usage stays at {ratio:.0%} of max_connections even without "
+        f"{long_idle} long idle-in-transaction sessions")
+
+
 def _connection_count(value: dict, _ctx: PredicateContext) -> PredicateDecision:
     near = bool(value.get("near_limit"))
     return _supports_if(near, support="connection usage is near the configured limit",
@@ -438,6 +483,7 @@ _PREDICATES: dict[str, Predicate] = {
     "prepared_xact_age_v2": _prepared_xact,
     "deadlock_count_v2": _deadlock_count,
     "temp_file_volume_v2": _temp_file_volume,
+    "connection_residual_v2": _connection_residual,
     "checkpoint_stats_v2": _checkpoint_stats,
     "disk_usage_v2": _disk_usage,
 }

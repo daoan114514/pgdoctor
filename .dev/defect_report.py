@@ -116,7 +116,7 @@ def main() -> None:
     print("# 跑批缺陷报告素材")
     print()
     print(f"harness: commit `{harness.get('git_commit')}` dirty={harness.get('git_dirty')} | graph `{harness.get('graph_version')}` | "
-          f"SDK {harness.get('sdk_version')} / CLI {harness.get('cli_version')} | max_steps {harness.get('default_max_steps')}")
+          f"SDK {harness.get('sdk_version')} / CLI {harness.get('cli_version')} | max_steps {(harness.get('run') or {}).get('max_steps', str(harness.get('default_max_steps')) + '（默认值，结果未记实际值）')}")
     print()
     print("| 场景 | 真值 | 声明 | D报告 | D曾选对 | O | S | steps | $ | infra | 终态 |")
     print("|---|---|---|---|---|---|---|---|---|---|---|")

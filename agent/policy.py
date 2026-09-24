@@ -179,7 +179,7 @@ class ScriptedPolicy(Policy):
         if phase is Phase.DIAGNOSE:
             explanation = st.explanation_graph
             if explanation is None or not explanation.selected_path_ids:
-                st.outcome_note = "没有可选择的已支持解释路径"
+                st.progress("没有可选择的已支持解释路径")
                 return Phase.INVESTIGATE
             if st.claimed_fault_class != "missing_index":
                 st.outcome_note = (f"已选择路径 {explanation.selected_path_ids}；"

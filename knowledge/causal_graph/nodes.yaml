@@ -203,6 +203,15 @@ evidence:
     desc: 当前连接数与上限、按状态与角色的分布
     obtained_by: get_connection_stats
     predicate_id: connection_count_v2
+  # 与 connection_count 同一次观测（同一个 pg_stat_activity 快照），只回答一个问题：扣掉持续
+  # idle in transaction 的会话后连接还逼不逼近上限。只作 connection_exhaustion 的**根角色**反证
+  # （edges.yaml scope: ROOT），它在长事务路径上是中间机制，不能被节点/边范围的反证连带否定。
+  - id: connection_residual
+    provenance: live_state
+    source: pg_connection_incident
+    desc: 扣掉持续 idle in transaction 的会话后，剩余连接数与上限的关系
+    obtained_by: get_connection_stats
+    predicate_id: connection_residual_v2
 
   # ── 两个新工具产出的证据类型 ────────────────────────────────
   # 每一条都必须真有工具能产出，否则 ESC 只能退化成看模型自述 ——

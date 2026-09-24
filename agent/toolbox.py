@@ -523,6 +523,18 @@ class Toolbox:
             f"按状态={r['by_state']}",
             bears_on=["long_idle_transaction", "connection_exhaustion"],
             structured_value=structured_connection)
+        # 扣掉持续 idle in transaction 的会话后还剩多少连接：只判 connection_exhaustion 是不是
+        # **根**（图上 scope: ROOT）。它在长事务路径上是中间机制，节点/边范围的反证会连带反证
+        # 真路径（2026-09-24 缺陷报告 P1-2）。只给了原始计数的桩观测器不产出这条。
+        if "idle_in_transaction_long" in r:
+            residual = int(r["used"]) - int(r["idle_in_transaction_long"])
+            self._evidence(
+                "connection_residual", raw_ref,
+                f"连接 {r['used']}/{r['max_connections']}，其中持续 "
+                f">= {r.get('long_idle_threshold_s', '?')}s 的 idle in transaction "
+                f"{r['idle_in_transaction_long']} 个；扣掉后 {residual}/{r['max_connections']}",
+                bears_on=["connection_exhaustion"],
+                structured_value=structured_connection)
         return r
 
     def get_vacuum_horizon(self) -> dict:

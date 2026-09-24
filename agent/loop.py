@@ -650,7 +650,7 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
             # ── 系统阶段：安全门裁决 ───────────────────────
             if cur is Phase.GATE:
                 if not st.proposal:
-                    st.outcome_note = "进入 GATE 但没有提案"
+                    st.progress("进入 GATE 但没有提案")
                     sm.goto(Phase.PLAN, "no proposal, replan")
                     continue
                 if st.schema_version == 2:
@@ -754,7 +754,7 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                              plan.explanation_revision != explanation.revision or
                              context.explanation_revision != explanation.revision)
                     if stale:
-                        st.outcome_note = "批准后的干预计划已过期，禁止执行"
+                        st.progress("批准后的干预计划已过期，禁止执行")
                         st.proposal = {}
                         st.intervention_plan = None
                         st.causal_gate_context = None

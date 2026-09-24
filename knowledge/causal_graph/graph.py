@@ -744,6 +744,26 @@ def path_frontier(explanation: ExplanationGraph) -> list[dict]:
         0 if item["target_kind"] == "EDGE" else 1, item["target_id"]))
 
 
+# REFUTED_BY 的合法范围。NODE：反证节点（经过它的每条路径）；PATH：反证边；INTERVENTION：只否掉
+# 一个修复方案；ROOT：只关"以该节点为根"的路径，节点与边不动（它在别的路径上可能是中间机制，
+# 2026-09-24 缺陷报告 P1-2）。graph_lint 与 causal_semantics_check 都读这里，不各写一份。
+REFUTER_SCOPES = frozenset({"NODE", "PATH", "INTERVENTION", "ROOT"})
+
+
+@functools.lru_cache(maxsize=None)
+def causes_bearing(evidence_type: str) -> frozenset[str]:
+    """图上与这类证据有方向关系（CONFIRMED_BY / REFUTED_BY）的根因 / 机制节点。
+
+    "一条观测关于哪些根因"的唯一真相源。toolbox 的 bears_on 是手写的另一份，
+    与图对不上时需求结构上绑不上（2026-09-24：slow_query_ranking 在图上只关
+    work_mem_spill，toolbox 写的是 missing_index / stale_statistics）。"""
+    g = load()
+    if evidence_type not in g:
+        return frozenset()
+    return frozenset(cause for cause, _ev, key in g.in_edges(evidence_type, keys=True)
+                     if key in {"CONFIRMED_BY", "REFUTED_BY"})
+
+
 @functools.lru_cache(maxsize=1)
 def window_predicate_ids() -> frozenset[str]:
     """窗口类反证判据（REFUTED_BY 边上 window_required 为真）。esc 与需求生成共用。"""
@@ -831,6 +851,18 @@ def evidence_needs(explanation: ExplanationGraph) -> list[EvidenceNeed]:
                     evidence_type=evidence_type,
                     required=data.get("necessity") == "required",
                     reason=f"{data.get('necessity', 'supporting')} support")
+            elif key == "REFUTED_BY" and data.get("scope") == "ROOT":
+                # 根角色反证只对"以 cause 为根"的路径有意义：目标固定为根节点，
+                # 路径只挂以它为根的那些；没有以它为根的候选路径就不发。
+                rooted = sorted(path.path_id for path in explanation.candidate_paths
+                                if path.root_node_id == cause_id and
+                                path.status != CausalStatus.REFUTED.value)
+                if rooted:
+                    add(path_ids=rooted, target_kind="NODE",
+                        target_ids=[cause_id], cause_id=cause_id,
+                        evidence_type=evidence_type, required=False,
+                        reason="root-role refutation",
+                        predicate_id=str(data.get("predicate_id", "")))
             elif key == "REFUTED_BY":
                 intervention = data.get("scope") == "INTERVENTION"
                 refute_kind = (EvidenceTargetKind.INTERVENTION.value
@@ -843,11 +875,14 @@ def evidence_needs(explanation: ExplanationGraph) -> list[EvidenceNeed]:
                     evidence_type=evidence_type, required=False,
                     reason="scoped refutation",
                     predicate_id=str(data.get("predicate_id", "")))
-        for evidence_type in discriminators_of(cause_id):
-            add(path_ids=item["path_ids"], target_kind=target_kind,
-                target_ids=[target_id], cause_id=cause_id,
-                evidence_type=evidence_type, required=False,
-                reason="branch discriminator")
+        # 不再按 discriminators_of(cause_id) 发"鉴别"需求。DISCRIMINATES 的 separates 列的是
+        # "这条证据在哪个候选集里有用"，不是"它能作用于其中每一个根因"（esc.py 的路径
+        # 连续性早就因同一个泄漏删掉了它）。按它发出的需求只有两种：证据与该根因另有
+        # CONFIRMED_BY / REFUTED_BY —— 上面已经发了同一条；没有 —— 条目绑不上（绑定只认与
+        # 需求根因有关的证据），绑上了 _causal_relation 也不给方向。实测每轮都在为这类
+        # 需求调工具、扣步数（2026-09-24 缺陷报告 P1-1：seq_scan_volume / temp_file_volume
+        # 给 stale_statistics、lock_blocking_chain 给 missing_index……）。判别力仍体现在
+        # path_frontier 的 discrimination_score 排序里。
 
     # Frontier state is not equivalent to required-evidence completeness.  A
     # segment can be supported by one discriminator while still missing a

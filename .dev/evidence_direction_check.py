@@ -401,6 +401,49 @@ finally:
     toolbox_module._window_sleep = real_sleep
 shutil.rmtree(TRACE_DIR / eid11, ignore_errors=True)
 
+print("[12] 需求只发给与证据有方向关系的根因；绑定按图的关系放行（2026-09-24 缺陷报告 P1-1）")
+graph12 = G.load()
+symptoms12 = sorted(n for n, d in graph12.nodes(data=True) if d.get("kind") == "Symptom")
+bad12: list[str] = []
+total12 = 0
+for sym in symptoms12:
+    ex12 = G.recall_explanation([sym], episode_id="ep_direction_needs_" + sym, use_learned=False)
+    for need in G.evidence_needs(ex12):
+        if need.target_kind == "INTERVENTION":
+            continue
+        total12 += 1
+        causes = xr._target_causes(ex12, need)
+        if not causes & set(G.causes_bearing(need.evidence_type)):
+            bad12.append(f"{sym}: {need.evidence_type} -> {sorted(causes)} ({need.reason})")
+check(total12 > 0 and not bad12, f"{len(symptoms12)} 个症状召回的 {total12} 条需求都与证据有方向关系", bad12[:6])
+check(not any("branch discriminator" in need.reason
+              for sym in symptoms12
+              for need in G.evidence_needs(G.recall_explanation(
+                  [sym], episode_id="ep_direction_disc_" + sym, use_learned=False))),
+      "不再按 DISCRIMINATES 发鉴别需求")
+check("work_mem_spill" in G.causes_bearing("slow_query_ranking")
+      and "missing_index" in G.causes_bearing("seq_scan_volume")
+      and "stale_statistics" not in G.causes_bearing("seq_scan_volume"), "causes_bearing 读图上的 CONFIRMED_BY / REFUTED_BY")
+ex12 = G.recall_explanation(["latency_p99_up"], episode_id="ep_direction_bind12", use_learned=False)
+wm_path = next((p for p in ex12.candidate_paths if p.root_node_id == "work_mem_spill"), None)
+if wm_path is not None:
+    from agent.explanation import EvidenceNeed as _Need  # noqa: E402
+    need12 = _Need.create(path_ids=[wm_path.path_id], target_kind="NODE", target_ids=["work_mem_spill"],
+                          evidence_type="slow_query_ranking", predicate_id="slow_query_ranking_v2",
+                          required=False, freshness_seconds=60, candidate_tools=["get_top_queries"])
+    entry12 = {"evidence_type": "slow_query_ranking", "raw_ref": "trace://x/step_001",
+               "bears_on": ["missing_index", "stale_statistics"], "target_ids": ["missing_index", "stale_statistics"]}
+    check(xr._entry_matches(ex12, need12, entry12),
+          "toolbox 的 bears_on 没写 work_mem_spill，图上有关系 -> 能绑（原来永远绑不上）")
+    need12b = _Need.create(path_ids=[wm_path.path_id], target_kind="NODE", target_ids=["work_mem_spill"],
+                           evidence_type="seq_scan_volume", predicate_id="seq_scan_volume_v2",
+                           required=False, freshness_seconds=60, candidate_tools=["get_table_stats"])
+    entry12b = {"evidence_type": "seq_scan_volume", "raw_ref": "trace://x/step_002",
+                "bears_on": ["missing_index"], "target_ids": ["missing_index"]}
+    check(not xr._entry_matches(ex12, need12b, entry12b), "图上没有关系、bears_on 也没有 -> 仍不能绑")
+else:
+    check(False, "latency_p99_up 的召回里有 work_mem_spill 路径")
+
 print()
 if fails:
     print(f"EVIDENCE DIRECTION: FAIL（{len(fails)}/{checks}）")

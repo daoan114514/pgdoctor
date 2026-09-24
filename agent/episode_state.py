@@ -235,7 +235,16 @@ class EpisodeState:
     budget: dict = field(default_factory=lambda: {"steps": 0, "max_steps": DEFAULT_MAX_STEPS})
     started_at: float = field(default_factory=time.time)
     finished: bool = False
+    # 终止 / 升级出口的原因，final_report 的 reason 与回滚记录的 inference 读它。
     outcome_note: str = ""
+    # 非终止出口（回到 INVESTIGATE / PLAN 继续跑）的过程性说明。原来也写 outcome_note，
+    # 之后诊断成立、修复验证通过也不清，成功报告里带着"没有可选择的已支持解释路径"
+    # （2026-09-24 lock_contention / stale_statistics）。
+    progress_notes: list[dict] = field(default_factory=list)
+
+    def progress(self, text: str) -> None:
+        """记一条过程性说明（不是终止原因，不进 final_report 的 reason）。"""
+        self.progress_notes.append({"phase": self.phase, "text": text, "at": time.time()})
 
     # ── 台账 ──────────────────────────────────────────────
     def ensure_hypotheses(self, names: list[str]) -> None:

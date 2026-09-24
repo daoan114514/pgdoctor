@@ -101,7 +101,7 @@ check("checkpoint mitigation remains escalation-only with capacity checks",
 print("\n[2] REFUTED_BY is predicate- and scope-bound")
 check("every refuter has a predicate and legal scope", all(
     item.get("predicate_id") and
-    item.get("scope") in {"NODE", "PATH", "INTERVENTION"}
+    item.get("scope") in G.REFUTER_SCOPES
     for item in refuters))
 counter = next(item for item in refuters
                if item["evidence"] == "counterfactual_index")

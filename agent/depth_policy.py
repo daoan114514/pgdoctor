@@ -136,7 +136,7 @@ class DifferentialDepthPolicy(Policy):
         if phase is Phase.DIAGNOSE:
             explanation = st.explanation_graph
             if explanation is None or not explanation.selected_path_ids:
-                st.outcome_note = "受控深度调查尚未得到已支持解释路径"
+                st.progress("受控深度调查尚未得到已支持解释路径")
                 return Phase.INVESTIGATE
             st.note("depth", "selected_explanation",
                     f"系统选择路径 {explanation.selected_path_ids}")

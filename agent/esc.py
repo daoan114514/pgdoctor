@@ -632,6 +632,20 @@ def _scoped_alternative_refutation(selected, alternative,
     selected_targets = set(selected.node_ids + selected.edge_ids)
     alternative_targets = set(alternative.node_ids + alternative.edge_ids)
     unique_alternative = alternative_targets - selected_targets
+    # 根角色反证（scope: ROOT）作用在竞争路径的根节点上，而那个节点可能是被选路径上的中间
+    # 机制 —— 只要两条路径的根不同，它关的就只是竞争路径（2026-09-24 缺陷报告 P1-2）。
+    root_allowed = {
+        (item["evidence"], item.get("predicate_id", ""))
+        for item in G.refuting_evidence(alternative.root_node_id)
+        if item.get("scope") == "ROOT"
+    } if alternative.root_node_id != selected.root_node_id else set()
+    root_matches = [
+        binding for binding in trusted.values()
+        if binding.predicate_result == PredicateResult.REFUTES.value and
+        (binding.evidence_type, binding.predicate_id) in root_allowed and
+        alternative.root_node_id in binding.target_node_ids]
+    if root_matches:
+        return root_matches
     if not unique_alternative:
         return []
     allowed = {
@@ -1009,6 +1023,19 @@ def check_explanation(
             continue
         for relation in G.refuting_evidence(alternative.root_node_id):
             if relation.get("scope") == EvidenceTargetKind.INTERVENTION.value:
+                continue
+            if relation.get("scope") == "ROOT":
+                # 根角色反证落在竞争路径的根节点上，即使它也在被选路径上（中间机制）。
+                if alternative.root_node_id == selected_path.root_node_id:
+                    continue
+                need = _need_for(
+                    path_ids=[alternative.path_id],
+                    target_kind=EvidenceTargetKind.NODE.value,
+                    target_ids=[alternative.root_node_id],
+                    evidence_type=relation["evidence"], required=False,
+                    reason="distinguish a major competing root")
+                if need:
+                    gap_needs[need.need_id] = need
                 continue
             target_kind = (EvidenceTargetKind.EDGE.value
                            if relation.get("scope") == "PATH" else

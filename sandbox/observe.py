@@ -237,6 +237,10 @@ def _flush_own_stats(conn) -> bool:
         return False
 
 
+# "持续" idle in transaction 的门槛。事务型应用在语句之间会短暂处于这个状态，只有持续这么久的
+# 才算长事务占着连接（connection_residual 判据；偏高只会少反证）。
+LONG_IDLE_TX_S = 30.0
+
 # 刷不掉时（旧版本 / 权限），等后端退出刷账的上限。宁可慢：见 CLAUDE.md 首要原则。
 OWN_STATS_SETTLE_S = 2.0
 
@@ -711,14 +715,20 @@ class Observer:
         连接打满时会话大多是 idle，用 get_active_sessions 看不出问题 ——
         必须直接看总数与上限的关系，以及谁占着这些连接。
         """
+        from knowledge.evidence_predicates import CONNECTION_NEAR_LIMIT_RATIO
         maxc = int(db.query("SHOW max_connections", role="ro")[0][0])
+        # 持续 idle in transaction 的会话单独计数（同一条查询、同一个快照）：
+        # connection_residual 用它判"打满是不是由长事务解释掉了"。
         rows = db.query(
-            "SELECT coalesce(usename,'?'), coalesce(state,'?'), count(*) "
-            "FROM pg_stat_activity GROUP BY 1,2 ORDER BY 3 DESC", role="ro")
+            "SELECT coalesce(usename,'?'), coalesce(state,'?'), count(*),"
+            " count(*) FILTER (WHERE state = 'idle in transaction'"
+            "   AND now() - state_change >= make_interval(secs => %s)) "
+            "FROM pg_stat_activity GROUP BY 1,2 ORDER BY 3 DESC",
+            (LONG_IDLE_TX_S,), role="ro")
         total = sum(r[2] for r in rows)
         by_user: dict[str, int] = {}
         by_state: dict[str, int] = {}
-        for u, st_, n in rows:
+        for u, st_, n, _long in rows:
             by_user[u] = by_user.get(u, 0) + n
             by_state[st_] = by_state.get(st_, 0) + n
         idle_in_tx = by_state.get("idle in transaction", 0)
@@ -726,7 +736,9 @@ class Observer:
                "pct": round(total / max(maxc, 1) * 100, 1),
                "by_user": by_user, "by_state": by_state,
                "idle_in_transaction": idle_in_tx,
-               "near_limit": total >= maxc * 0.85}
+               "idle_in_transaction_long": int(sum(r[3] for r in rows)),
+               "long_idle_threshold_s": LONG_IDLE_TX_S,
+               "near_limit": total >= maxc * CONNECTION_NEAR_LIMIT_RATIO}
         ref = self.trace.record("get_connection_stats", {},
                                 json.dumps(out, ensure_ascii=False), out)
         self.last_raw_refs["get_connection_stats"] = ref

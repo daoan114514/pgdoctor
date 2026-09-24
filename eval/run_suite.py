@@ -214,7 +214,8 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
         from agent.llm_policy import LLMPolicy
         # 子 agent 并发 4（2026-09-24）：工具调用在事件循环里同步执行，数据库访问仍是串行的，
         # 并发只让等待模型的时间重叠；大多数取证已改为确定性执行，剩下的子 agent 任务不多。
-        policy = LLMPolicy(verbose=False, use_subagents=True, batch_size=4)
+        policy = LLMPolicy(verbose=False, use_subagents=True,
+                           batch_size=SUBAGENT_CONCURRENCY)
 
     scored = False
     try:
@@ -330,6 +331,28 @@ def run_one(scenario_path: Path, policy_name: str, use_esc: bool,
     return out
 
 
+# 跑批取证子 agent 的并发数（2026-09-24 由 2 改为 4）。记进结果的运行参数。
+SUBAGENT_CONCURRENCY = 4
+
+
+def _run_parameters(args) -> dict:
+    """本次运行实际生效的参数；_harness_identity 只记默认值。原来只有默认值，守护传
+    --max-steps 30 时结果与缺陷报告里写的是 40（2026-09-24 缺陷报告 P3）。"""
+    out: dict = {"max_steps": args.max_steps, "allow_repair": not args.no_repair,
+                 "subagent_concurrency": (SUBAGENT_CONCURRENCY
+                                          if args.policy == "llm" else None)}
+    try:
+        from agent.tool_planner import ToolPlanningConfig
+        from knowledge import evidence_predicates as _ep
+        cfg = ToolPlanningConfig()
+        out.update(deterministic_argless=cfg.deterministic_argless,
+                   deterministic_pinned=cfg.deterministic_pinned,
+                   min_refute_window_s=_ep.MIN_REFUTE_WINDOW_S)
+    except Exception:
+        pass
+    return out
+
+
 def _harness_identity() -> dict:
     """这份结果是哪个 harness 跑出来的：没有这一块，跨提交的三率没法比（架构评审第 10 条）。"""
     import subprocess
@@ -408,7 +431,7 @@ def _write_results(path: Path, tag: str, args, learned_layers, results, t0,
          "learned_layers": sorted(learned_layers),
          "elapsed_s": round(time.time() - t0, 1),
          "complete": complete,
-         "harness": _harness_identity(),
+         "harness": {**_harness_identity(), "run": _run_parameters(args)},
          "metrics_v2": aggregate_v2,
          "episodes": serialized},
         ensure_ascii=False, indent=2), encoding="utf-8")
