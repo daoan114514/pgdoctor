@@ -58,3 +58,9 @@ glob `eval/results/*.json`，放在这里就不会再被当成"已完成"。
 | 文件 | 为什么隔离 |
 |---|---|
 | `guard_missing_index_20260923_2461f73.json` | D=True 严格 D=True，但 O=False：模型在 PLAN 里 simulate_index 三次（would_be_used=True）后提交同签名的 CREATE INDEX CONCURRENTLY，四次被 "concrete_index_definition_bound, counterfactual_index_v2" 拒 —— 与 pid 前置条件同一类：PLAN 阶段的观测进不了绑定。修复（_fresh_observations 通用化）后单场景重跑 |
+
+## 2026-09-23 全量跑批（缺陷报告 defect_report_20260923.md 的依据）
+
+| 文件 | 为什么隔离 |
+|---|---|
+| `guard_*_20260923_1c051d4.json`（5 个）+ `llm_eval_guarded_20260923_1c051d4.json` | 不是污染，是**被取代**：它们是缺陷报告的依据（D 曾选对 4/5、O 2/5、S 2/5），报告里的缺陷已在 `308cd15` 修复，诊断口径、connection 与 stale_statistics 的成功判据也都变了。守护只认 `eval/results/guard_*.json`，挪走后 5 个场景在新 harness 下统一重跑；缺陷报告仍引用这些文件，路径见此处 |

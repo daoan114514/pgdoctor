@@ -8,7 +8,7 @@
 | 因果图 | `graph_c6b0a7ce7d781c525031efed` |
 | SDK / CLI | claude-agent-sdk 0.2.157 / CLI 2.1.277 |
 | 策略 | llm，子 agent 取证，max_steps 30，ESC 开、案例库开、L1-L4 开 |
-| 结果文件 | `eval/results/guard_*.json`，合并版 `eval/results/llm_eval_guarded.json` |
+| 结果文件 | `eval/results/quarantine/guard_*_20260923_1c051d4.json`，合并版 `eval/results/quarantine/llm_eval_guarded_20260923_1c051d4.json`（缺陷已在 `308cd15` 修复，结果被复测取代后移入隔离区） |
 | 成本 | 5 个计分 episode 合计 $5.02；加上被看门狗清理的一次与修复前的几次，当天总计约 $14 |
 
 PLAN 观测修复只影响前置条件求值。前三个场景里 connection_exhaustion 与 lock_contention 的 pid 前置条件走的是同一逻辑（重构前后行为一致），misleading_idle_txn 没进 PLAN，所以五个结果可比。
