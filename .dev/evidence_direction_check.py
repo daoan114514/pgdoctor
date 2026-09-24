@@ -143,6 +143,38 @@ check({"seq_scan_raw", "own_seq_scan", "own_seq_tup_read", "own_idx_scan"} <= fi
 for d in (TRACE_DIR / eid, TRACE_DIR / (eid + "_tb")):
     shutil.rmtree(d, ignore_errors=True)
 
+print("[6] PLAN 阶段未绑定的 simulate_index 观测能满足建索引的前置条件（2026-09-23 跑批 missing_index O=False）")
+eid6 = eid + "_cf"
+store6 = TraceStore(eid6)
+exp6 = G.merge_paths([path], episode_id=eid6, observed_symptoms=["latency_p99_up"])
+exp6.select_paths([path.path_id], unexplained_symptoms=[], scope=ExplanationScope.FULL)
+st6 = EpisodeState(eid6, "direction_fixture")
+st6.explanation_graph = exp6
+cf_value = {"create_sql": "CREATE INDEX idx_x ON orders(created_at, status)", "test_sql": "SELECT 1",
+            "would_be_used": True, "trivial_baseline": False}
+ref6 = store6.record("bind_structured_evidence", {"evidence_type": "counterfactual_index"}, json.dumps(cf_value), cf_value)
+st6.note("agent", "counterfactual_index", "PLAN 阶段 simulate_index", ref6, ["missing_index"],
+         status="OBSERVED", structured_value=cf_value, target_kind="INTERVENTION",
+         target_ids=["create_covering_index"])
+fix6 = next(f for f in G.fixes_for("missing_index") if f["fix"] == "create_covering_index")
+option6 = {"path_id": path.path_id, "target_node_id": "missing_index", "fix": "create_covering_index",
+           "preconditions": fix6.get("preconditions", [])}
+
+
+def eval6(sql):
+    return {r["condition_id"]: r for r in xr._evaluate_preconditions(st6, option=option6, sql=sql)}
+
+
+res6 = eval6("CREATE INDEX CONCURRENTLY idx_y ON orders (created_at, status)")
+check(all(r["satisfied"] for r in res6.values()), "同签名（列相同、名字/CONCURRENTLY 不同）的提案：全部前置条件满足 " + str({k: v["satisfied"] for k, v in res6.items()}))
+check(all(ref6 in r["evidence_refs"] for r in res6.values()), "前置条件引用了该观测的 raw_ref")
+res6 = eval6("CREATE INDEX CONCURRENTLY idx_z ON orders (status)")
+check(not all(r["satisfied"] for r in res6.values()), "不同签名的提案不满足")
+st6.scratchpad[-1]["ts"] -= 10 * 24 * 3600
+res6 = eval6("CREATE INDEX CONCURRENTLY idx_y ON orders (created_at, status)")
+check(not all(r["satisfied"] for r in res6.values()), "过期的观测不算")
+shutil.rmtree(TRACE_DIR / eid6, ignore_errors=True)
+
 print()
 if fails:
     print(f"EVIDENCE DIRECTION: FAIL（{len(fails)}/{checks}）")

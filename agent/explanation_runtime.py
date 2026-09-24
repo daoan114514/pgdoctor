@@ -15,6 +15,7 @@ from pglast.stream import RawStream
 
 from agent.episode_state import EpisodeState, EvidenceStatus, Verdict
 from agent.explanation import (
+    DEFAULT_FRESHNESS_S,
     CausalGateContext,
     CausalStatus,
     EvidenceBinding,
@@ -751,24 +752,25 @@ _PID_EVIDENCE_TYPES = frozenset({"session_wait_profile", "lock_blocking_chain",
                                  "idle_in_transaction"})
 
 
-def _fresh_pid_observations(st: EpisodeState, pid) -> list[tuple[EvidenceBinding, dict]]:
-    """含该 pid 的、新鲜且可信的会话观测行 —— 直接读 scratchpad，不要求已绑定。
+def _fresh_observations(st: EpisodeState, evidence_types, freshness_s: float
+                        ) -> list[EvidenceBinding]:
+    """scratchpad 里新鲜、可信的观测，临时构造成绑定（不写进解释图、不动 revision）。
 
     绑定会 bump 解释图 revision，而 GATE 要求 ESC 的 SUFFICIENT 报告与当前 revision 一致，
-    所以绑定只在 INVESTIGATE/DIAGNOSE 做；终止空闲会话所需的 idle pid 行只能在 PLAN 阶段
-    由模型取到，永远进不了绑定，四条 pid 前置条件永远不满足 —— 2026-09-23 跑批与 9 月
-    22 日那批里 terminate 类修复一次都没过过门。会话行是系统产出的观测（toolbox 落盘、
-    trace 有 digest），这里按同一条信任规则（EvidenceBinding.is_trusted：状态、raw_ref、
-    digest、新鲜度）临时构造绑定来查，不写进解释图。"""
-    if pid is None:
-        return []
+    所以绑定只在 INVESTIGATE/DIAGNOSE 做；模型在 PLAN 阶段取到的观测（idle 会话行、
+    simulate_index 的反事实）永远进不了绑定，前置条件永远不满足 —— 2026-09-23 跑批：
+    terminate 类修复从未过门，missing_index 场景 simulate_index 三次 would_be_used=True 仍
+    四次被 "concrete_index_definition_bound, counterfactual_index_v2" 拒掉。观测是系统产出
+    的（toolbox 落盘、trace 有 digest），按同一条信任规则（EvidenceBinding.is_trusted：
+    状态、raw_ref、digest、新鲜度）临时构造绑定来查。"""
     now = time.time()
-    out: list[tuple[EvidenceBinding, dict]] = []
+    wanted = set(evidence_types)
+    out: list[EvidenceBinding] = []
     for entry in reversed(st.scratchpad):
-        if entry.get("evidence_type") not in _PID_EVIDENCE_TYPES or not entry.get("raw_ref"):
+        if entry.get("evidence_type") not in wanted or not entry.get("raw_ref"):
             continue
         observed_at = float(entry.get("ts", 0.0) or 0.0)
-        if now - observed_at > PID_ROW_FRESHNESS_S:
+        if now - observed_at > freshness_s:
             continue
         binding = EvidenceBinding.create(
             episode_id=st.episode_id, raw_ref=str(entry["raw_ref"]),
@@ -776,13 +778,30 @@ def _fresh_pid_observations(st: EpisodeState, pid) -> list[tuple[EvidenceBinding
             status=str(entry.get("status", EvidenceStatus.OBSERVED.value)),
             observed_at=observed_at, predicate_id="", predicate_result="NEUTRAL",
             structured_value=entry.get("structured_value"),
-            fresh_until=observed_at + PID_ROW_FRESHNESS_S)
-        if not binding.is_trusted():
-            continue
+            fresh_until=observed_at + freshness_s)
+        if binding.is_trusted():
+            out.append(binding)
+    return out
+
+
+def _fresh_pid_observations(st: EpisodeState, pid) -> list[tuple[EvidenceBinding, dict]]:
+    """含该 pid 的新鲜（PID_ROW_FRESHNESS_S 内）可信会话观测行。pid 会被回收复用，所以
+    这里的新鲜度比一般证据严得多。"""
+    if pid is None:
+        return []
+    out: list[tuple[EvidenceBinding, dict]] = []
+    for binding in _fresh_observations(st, _PID_EVIDENCE_TYPES, PID_ROW_FRESHNESS_S):
         for row in _walk_dicts(binding.structured_value()):
             if str(row.get("pid", row.get("blocked_by"))) == str(pid):
                 out.append((binding, row))
     return out
+
+
+def _evidence_type_of_predicate(predicate_id: str) -> str:
+    for node_id, data in G.load().nodes(data=True):
+        if data.get("kind") == "Evidence" and str(data.get("predicate_id") or "") == predicate_id:
+            return str(node_id)
+    return ""
 
 
 def _walk_dicts(value: Any):
@@ -844,6 +863,11 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
                 pid_rows.append((binding, row))
     pid_rows.extend(_fresh_pid_observations(st, pid))
 
+    fresh_counterfactuals = _fresh_observations(
+        st, {"counterfactual_index"},
+        float(G.load().nodes.get("counterfactual_index", {}).get(
+            "freshness_seconds", DEFAULT_FRESHNESS_S)))
+
     relevant = _plan_bindings(st, path, target=target, fix_id=fix_id)
     evidence_tables = _binding_tables(relevant) or _binding_tables(bindings)
 
@@ -867,9 +891,12 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
         if condition_id == "concrete_index_definition_bound":
             signature = facts["index_signature"]
             matching_refs = []
-            for binding, value in values:
-                if binding.predicate_id != "counterfactual_index_v2":
-                    continue
+            candidates = [(binding, value) for binding, value in values
+                          if binding.predicate_id == "counterfactual_index_v2"]
+            # PLAN 阶段刚做的 simulate_index 还没绑定，也算（同一条信任规则）
+            candidates += [(binding, binding.structured_value())
+                           for binding in fresh_counterfactuals]
+            for binding, value in candidates:
                 simulated = _sql_facts(str((value or {}).get("create_sql", "")))
                 if signature and simulated["index_signature"] == signature:
                     matching_refs.append(binding.raw_ref)
@@ -946,10 +973,32 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
                 _binding_relevant(binding, target_kind=target_kind,
                                   target=scoped_target, fix_id=fix_id, path=path)
             ]
-            satisfied = bool(matched)
+            refs = [binding.raw_ref for binding in matched]
+            if not matched:
+                # 没有绑定时看 PLAN 阶段的新鲜观测：按同一判据、同一目标现场求值。
+                # 反事实证据还要求模拟的就是本提案这条索引，否则任何一次 simulate_index
+                # 都能替所有索引定义背书。
+                evidence_type = _evidence_type_of_predicate(predicate_id)
+                freshness = float(G.load().nodes.get(evidence_type, {}).get(
+                    "freshness_seconds", DEFAULT_FRESHNESS_S)) if evidence_type else 0.0
+                for binding in (_fresh_observations(st, {evidence_type}, freshness)
+                                if evidence_type else []):
+                    value = binding.structured_value()
+                    if evidence_type == "counterfactual_index":
+                        simulated = _sql_facts(str((value or {}).get("create_sql", "")))
+                        if not facts["index_signature"] or                                 simulated["index_signature"] != facts["index_signature"]:
+                            continue
+                    decision = evaluate(predicate_id, value, context=PredicateContext(
+                        target_kind=target_kind,
+                        target_ids=((fix_id,) if target_kind ==
+                                    EvidenceTargetKind.INTERVENTION.value
+                                    else (scoped_target,)),
+                        collection_status=binding.status))
+                    if decision.result == wanted:
+                        refs.append(binding.raw_ref)
+            satisfied = bool(refs)
             reason = (f"{predicate_id} has a fresh {wanted} binding" if satisfied
                       else f"{predicate_id} lacks a fresh scoped {wanted} binding")
-            refs = [binding.raw_ref for binding in matched]
             condition_id = predicate_id
         else:
             condition_id = str(condition.get("id") or "")

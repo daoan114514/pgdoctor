@@ -52,3 +52,9 @@ glob `eval/results/*.json`，放在这里就不会再被当成"已完成"。
 |---|---|
 | `guard_connection_exhaustion_20260923_ffd6e53.json` | pid 修复已生效：terminate 过门并执行，但单 pid 终止达不到"使用率 30s 内降 5%"（0.95→0.96），两次用尽升级，O=False。修复粒度与场景判据问题记入缺陷报告 |
 | `guard_lock_contention_20260923_ffd6e53.json` | D=True 但 ESC INSUFFICIENT×4 到预算耗尽：missing_index 被自家 `_stats_range_drift` 全表扫污染成 seq_scan_volume SUPPORTS，且 index_existence/slow_query_ranking 这两条"采集即 SUPPORTS"的门与真正的反证混成 INCONCLUSIVE，永远无法反证；explain_seq_scan 需求在走索引时永远拿不到观测，被索取 18 次。四条修复后 5 个场景统一重跑 |
+
+## 2026-09-23 晚（2461f73，PLAN 阶段观测进前置条件的通用修复之前）
+
+| 文件 | 为什么隔离 |
+|---|---|
+| `guard_missing_index_20260923_2461f73.json` | D=True 严格 D=True，但 O=False：模型在 PLAN 里 simulate_index 三次（would_be_used=True）后提交同签名的 CREATE INDEX CONCURRENTLY，四次被 "concrete_index_definition_bound, counterfactual_index_v2" 拒 —— 与 pid 前置条件同一类：PLAN 阶段的观测进不了绑定。修复（_fresh_observations 通用化）后单场景重跑 |
