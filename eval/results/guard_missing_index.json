@@ -1,0 +1,426 @@
+{
+  "tag": "guard_missing_index",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "learned_layers": [
+    "l1",
+    "l2",
+    "l3",
+    "l4"
+  ],
+  "elapsed_s": 1141.4,
+  "complete": true,
+  "harness": {
+    "git_commit": "2461f73",
+    "git_dirty": true,
+    "graph_version": "graph_c6b0a7ce7d781c525031efed",
+    "sdk_version": "0.2.157",
+    "cli_version": "2.1.277",
+    "default_max_steps": 40,
+    "default_freshness_s": 7200,
+    "episode_wall_cap_s": 5400,
+    "scenario_revisions": {
+      "connection_exhaustion_eval_v1": 1,
+      "connection_exhaustion_train_v1": 2,
+      "lock_contention_eval_v1": 4,
+      "lock_contention_train_v1": 4,
+      "misleading_idle_txn_eval_v1": 1,
+      "misleading_idle_txn_train_v1": 2,
+      "missing_index_eval_v1": 7,
+      "missing_index_orders_user_status_v1": 3,
+      "stale_statistics_eval_v1": 3,
+      "stale_statistics_train_v1": 3
+    }
+  },
+  "metrics_v2": {
+    "p0_obligation_recall": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1.0
+    },
+    "observed_symptom_coverage": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1.0
+    },
+    "unexplained_symptom_rate": {
+      "numerator": 0,
+      "denominator": 3,
+      "value": 0.0
+    },
+    "selected_path_edge_precision": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1.0
+    },
+    "selected_path_edge_recall": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1.0
+    },
+    "selected_path_edge_f1": {
+      "numerator": 6,
+      "denominator": 6,
+      "value": 1.0
+    },
+    "required_evidence_completion": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1.0
+    },
+    "raw_ref_validity": {
+      "numerator": 50,
+      "denominator": 50,
+      "value": 1.0
+    },
+    "raw_ref_freshness": {
+      "numerator": 50,
+      "denominator": 50,
+      "value": 1.0
+    },
+    "duplicate_evidence_rate": {
+      "numerator": 0,
+      "denominator": 50,
+      "value": 0.0
+    },
+    "information_gain_per_call": {
+      "numerator": 9.169926,
+      "denominator": 12,
+      "value": 0.764161
+    },
+    "duplicate_tool_call_rate": {
+      "numerator": 0,
+      "denominator": 12,
+      "value": 0.0
+    },
+    "unknown_error_rate": {
+      "numerator": 0,
+      "denominator": 12,
+      "value": 0.0
+    },
+    "esc_unsafe_pass": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "esc_over_conservative": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "expected_effect_hit_rate": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "failure_attribution_accuracy": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "rollback_completeness": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "root_recall_at_k": {
+      "1": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "3": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "path_recall_at_k": {
+      "1": {
+        "numerator": 1,
+        "denominator": 3,
+        "value": 0.333333
+      },
+      "3": {
+        "numerator": 2,
+        "denominator": 3,
+        "value": 0.666667
+      },
+      "5": {
+        "numerator": 2,
+        "denominator": 3,
+        "value": 0.666667
+      },
+      "12": {
+        "numerator": 3,
+        "denominator": 3,
+        "value": 1.0
+      }
+    },
+    "tool_calls": 12,
+    "gate_context_bypass_count": 0,
+    "esc_verdict_distribution": {
+      "SUFFICIENT": 1
+    },
+    "episode_count": 1
+  },
+  "episodes": [
+    {
+      "scenario": "missing_index_eval_v1",
+      "fault_class": "missing_index",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "missing_index",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 18,
+      "elapsed_s": 998.8,
+      "cost_usd": 0.7579,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "large_table 上建索引：不锁表但耗 IO 且耗时"
+          ],
+          "sql": "CREATE INDEX CONCURRENTLY idx_orders_status_created_at ON orders(status, created_at)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_60a922bf755718c3e6491c35",
+            "explanation_revision": 111,
+            "selected_path_ids": [
+              "path_228d40d3ac20a6b1a8ce14d8",
+              "path_ab6a4c3c8dd466f7e8da0d49",
+              "path_c7bdfbcb7fa7af070757b956"
+            ],
+            "intervention_target": "missing_index",
+            "fix_id": "create_covering_index",
+            "intervention_kind": "CORRECTIVE",
+            "expected_effect_nodes": [
+              "cpu_saturated"
+            ],
+            "esc_report_id": "esc_report_b75a7b13a68b7c9046f3f6b9",
+            "evidence_refs": [
+              "trace://ep_missing_index_eval_v1_1790169467/step_007",
+              "trace://ep_missing_index_eval_v1_1790169467/step_022",
+              "trace://ep_missing_index_eval_v1_1790169467/step_020"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "latency_p99_ms",
+                "direction": "decrease",
+                "minimum_change": 0.2,
+                "window_seconds": 300
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "CREATE INDEX CONCURRENTLY idx_orders_status_created_at ON orders(status, created_at)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_missing_index_eval_v1_1790169467",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 7,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 3,
+            "value": 0.333333
+          },
+          "3": {
+            "numerator": 2,
+            "denominator": 3,
+            "value": 0.666667
+          },
+          "5": {
+            "numerator": 2,
+            "denominator": 3,
+            "value": 0.666667
+          },
+          "12": {
+            "numerator": 3,
+            "denominator": 3,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "observed_symptom_coverage": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 3,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 6,
+          "denominator": 6,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 50,
+          "denominator": 50,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 50,
+          "denominator": 50,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 50,
+          "value": 0.0
+        },
+        "tool_calls": 12,
+        "information_gain_per_call": {
+          "numerator": 9.169926,
+          "denominator": 12,
+          "value": 0.764161,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 0,
+          "denominator": 12,
+          "value": 0.0
+        },
+        "unknown_error_rate": {
+          "numerator": 0,
+          "denominator": 12,
+          "value": 0.0
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    }
+  ]
+}
