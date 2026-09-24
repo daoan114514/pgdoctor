@@ -1,0 +1,1373 @@
+{
+  "tag": "llm_eval_guarded",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "learned_layers": [
+    "l1",
+    "l2",
+    "l3",
+    "l4"
+  ],
+  "note": "由 .dev/eval_guard.py 合并（单场景独立跑批），max_steps=30",
+  "metrics_v2": {
+    "p0_obligation_recall": {
+      "numerator": 9,
+      "denominator": 9,
+      "value": 1.0
+    },
+    "observed_symptom_coverage": {
+      "numerator": 7,
+      "denominator": 7,
+      "value": 1.0
+    },
+    "unexplained_symptom_rate": {
+      "numerator": 0,
+      "denominator": 7,
+      "value": 0.0
+    },
+    "selected_path_edge_precision": {
+      "numerator": 8,
+      "denominator": 8,
+      "value": 1.0
+    },
+    "selected_path_edge_recall": {
+      "numerator": 8,
+      "denominator": 8,
+      "value": 1.0
+    },
+    "selected_path_edge_f1": {
+      "numerator": 16,
+      "denominator": 16,
+      "value": 1.0
+    },
+    "required_evidence_completion": {
+      "numerator": 6,
+      "denominator": 6,
+      "value": 1.0
+    },
+    "raw_ref_validity": {
+      "numerator": 193,
+      "denominator": 193,
+      "value": 1.0
+    },
+    "raw_ref_freshness": {
+      "numerator": 193,
+      "denominator": 193,
+      "value": 1.0
+    },
+    "duplicate_evidence_rate": {
+      "numerator": 0,
+      "denominator": 193,
+      "value": 0.0
+    },
+    "information_gain_per_call": {
+      "numerator": 26.66178,
+      "denominator": 50,
+      "value": 0.533236
+    },
+    "duplicate_tool_call_rate": {
+      "numerator": 4,
+      "denominator": 50,
+      "value": 0.08
+    },
+    "unknown_error_rate": {
+      "numerator": 2,
+      "denominator": 50,
+      "value": 0.04
+    },
+    "esc_unsafe_pass": {
+      "numerator": 0,
+      "denominator": 5,
+      "value": 0.0
+    },
+    "esc_over_conservative": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "expected_effect_hit_rate": {
+      "numerator": 5,
+      "denominator": 5,
+      "value": 1.0
+    },
+    "failure_attribution_accuracy": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "rollback_completeness": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "root_recall_at_k": {
+      "1": {
+        "numerator": 2,
+        "denominator": 5,
+        "value": 0.4
+      },
+      "3": {
+        "numerator": 3,
+        "denominator": 5,
+        "value": 0.6
+      },
+      "5": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 5,
+        "denominator": 5,
+        "value": 1.0
+      }
+    },
+    "path_recall_at_k": {
+      "1": {
+        "numerator": 2,
+        "denominator": 7,
+        "value": 0.285714
+      },
+      "3": {
+        "numerator": 4,
+        "denominator": 7,
+        "value": 0.571429
+      },
+      "5": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      }
+    },
+    "tool_calls": 50,
+    "gate_context_bypass_count": 0,
+    "esc_verdict_distribution": {
+      "SUFFICIENT": 5
+    },
+    "episode_count": 5
+  },
+  "episodes": [
+    {
+      "scenario": "connection_exhaustion_eval_v1",
+      "fault_class": "connection_exhaustion",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "connection_exhaustion",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 14,
+      "elapsed_s": 221.6,
+      "cost_usd": 0.2205,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "终止会话不可撤销，已显式声明并需人工确认"
+          ],
+          "sql": "SELECT pg_terminate_backend(220764), pg_terminate_backend(220765), pg_terminate_backend(220766), pg_terminate_backend(220767), pg_terminate_backend(220769), pg_terminate_backend(220775), pg_terminate_backend(220774), pg_terminate_backend(220776), pg_terminate_backend(220772), pg_terminate_backend(220777), pg_terminate_backend(220778), pg_terminate_backend(220779), pg_terminate_backend(220780), pg_terminate_backend(220781), pg_terminate_backend(220782), pg_terminate_backend(220783), pg_terminate_backend(220784), pg_terminate_backend(220785), pg_terminate_backend(220786), pg_terminate_backend(220787), pg_terminate_backend(220788), pg_terminate_backend(220789), pg_terminate_backend(220790), pg_terminate_backend(220797), pg_terminate_backend(220796), pg_terminate_backend(220798), pg_terminate_backend(220794), pg_terminate_backend(220799), pg_terminate_backend(220800), pg_terminate_backend(220801), pg_terminate_backend(220802), pg_terminate_backend(220808), pg_terminate_backend(220809), pg_terminate_backend(220810), pg_terminate_backend(220805), pg_terminate_backend(220811), pg_terminate_backend(220812), pg_terminate_backend(220813), pg_terminate_backend(220814), pg_terminate_backend(220815), pg_terminate_backend(220821), pg_terminate_backend(220822), pg_terminate_backend(220823), pg_terminate_backend(220819), pg_terminate_backend(220824), pg_terminate_backend(220825), pg_terminate_backend(220826), pg_terminate_backend(220827), pg_terminate_backend(220828), pg_terminate_backend(220834), pg_terminate_backend(220832), pg_terminate_backend(220835), pg_terminate_backend(220836), pg_terminate_backend(220837), pg_terminate_backend(220838), pg_terminate_backend(220839), pg_terminate_backend(220840), pg_terminate_backend(220847), pg_terminate_backend(220854), pg_terminate_backend(220855)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_c32c39614a0e3a1d9d2b6936",
+            "explanation_revision": 51,
+            "selected_path_ids": [
+              "path_9eb8f4a86353273d109efd59"
+            ],
+            "intervention_target": "connection_exhaustion",
+            "fix_id": "terminate_idle_backend",
+            "intervention_kind": "CONTAINMENT",
+            "expected_effect_nodes": [
+              "throughput_down"
+            ],
+            "esc_report_id": "esc_report_7a3ac549a85cff52bd91ab47",
+            "evidence_refs": [
+              "trace://ep_connection_exhaustion_eval_v1_1790239264/step_017"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "connection_usage_ratio",
+                "direction": "decrease",
+                "minimum_change": 0.05,
+                "window_seconds": 30
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "SELECT pg_terminate_backend(220764), pg_terminate_backend(220765), pg_terminate_backend(220766), pg_terminate_backend(220767), pg_terminate_backend(220769), pg_terminate_backend(220775), pg_terminate_backend(220774), pg_terminate_backend(220776), pg_terminate_backend(220772), pg_terminate_backend(220777), pg_terminate_backend(220778), pg_terminate_backend(220779), pg_terminate_backend(220780), pg_terminate_backend(220781), pg_terminate_backend(220782), pg_terminate_backend(220783), pg_terminate_backend(220784), pg_terminate_backend(220785), pg_terminate_backend(220786), pg_terminate_backend(220787), pg_terminate_backend(220788), pg_terminate_backend(220789), pg_terminate_backend(220790), pg_terminate_backend(220797), pg_terminate_backend(220796), pg_terminate_backend(220798), pg_terminate_backend(220794), pg_terminate_backend(220799), pg_terminate_backend(220800), pg_terminate_backend(220801), pg_terminate_backend(220802), pg_terminate_backend(220808), pg_terminate_backend(220809), pg_terminate_backend(220810), pg_terminate_backend(220805), pg_terminate_backend(220811), pg_terminate_backend(220812), pg_terminate_backend(220813), pg_terminate_backend(220814), pg_terminate_backend(220815), pg_terminate_backend(220821), pg_terminate_backend(220822), pg_terminate_backend(220823), pg_terminate_backend(220819), pg_terminate_backend(220824), pg_terminate_backend(220825), pg_terminate_backend(220826), pg_terminate_backend(220827), pg_terminate_backend(220828), pg_terminate_backend(220834), pg_terminate_backend(220832), pg_terminate_backend(220835), pg_terminate_backend(220836), pg_terminate_backend(220837), pg_terminate_backend(220838), pg_terminate_backend(220839), pg_terminate_backend(220840), pg_terminate_backend(220847), pg_terminate_backend(220854), pg_terminate_backend(220855)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_connection_exhaustion_eval_v1_1790239264",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 2,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "observed_symptom_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 26,
+          "value": 0.0
+        },
+        "tool_calls": 8,
+        "information_gain_per_call": {
+          "numerator": 1,
+          "denominator": 8,
+          "value": 0.125,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 2,
+          "denominator": 8,
+          "value": 0.25
+        },
+        "unknown_error_rate": {
+          "numerator": 1,
+          "denominator": 8,
+          "value": 0.125
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    },
+    {
+      "scenario": "lock_contention_eval_v1",
+      "fault_class": "lock_contention",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "lock_contention",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 18,
+      "elapsed_s": 218.1,
+      "cost_usd": 0.2083,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "终止会话不可撤销，已显式声明并需人工确认"
+          ],
+          "sql": "SELECT pg_terminate_backend(233928)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_aac8e2ad41465ab277766f54",
+            "explanation_revision": 115,
+            "selected_path_ids": [
+              "path_638b38c50c5c2cc4dcd60a13",
+              "path_9d36ff1d29e5d655cec62d4c"
+            ],
+            "intervention_target": "lock_contention",
+            "fix_id": "terminate_blocker",
+            "intervention_kind": "CONTAINMENT",
+            "expected_effect_nodes": [
+              "latency_p99_up"
+            ],
+            "esc_report_id": "esc_report_d87ec541eb0470df567ba4b2",
+            "evidence_refs": [
+              "trace://ep_lock_contention_eval_v1_1790239635/step_002",
+              "trace://ep_lock_contention_eval_v1_1790239635/step_022",
+              "trace://ep_lock_contention_eval_v1_1790239635/step_030"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "blocked_session_count",
+                "direction": "decrease",
+                "minimum_change": 1,
+                "window_seconds": 30
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "SELECT pg_terminate_backend(233928)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_lock_contention_eval_v1_1790239635",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 4,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 2,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 0,
+            "denominator": 2,
+            "value": 0.0
+          },
+          "5": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "observed_symptom_coverage": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 2,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 53,
+          "denominator": 53,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 53,
+          "denominator": 53,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 53,
+          "value": 0.0
+        },
+        "tool_calls": 13,
+        "information_gain_per_call": {
+          "numerator": 9.169926,
+          "denominator": 13,
+          "value": 0.705379,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 0,
+          "denominator": 13,
+          "value": 0.0
+        },
+        "unknown_error_rate": {
+          "numerator": 0,
+          "denominator": 13,
+          "value": 0.0
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    },
+    {
+      "scenario": "misleading_idle_txn_eval_v1",
+      "fault_class": "long_idle_transaction",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "long_idle_transaction",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 13,
+      "elapsed_s": 217.2,
+      "cost_usd": 0.2133,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "终止会话不可撤销，已显式声明并需人工确认"
+          ],
+          "sql": "SELECT pg_terminate_backend(239115), pg_terminate_backend(239116), pg_terminate_backend(239117), pg_terminate_backend(239122), pg_terminate_backend(239123), pg_terminate_backend(239124), pg_terminate_backend(239125), pg_terminate_backend(239126), pg_terminate_backend(239127), pg_terminate_backend(239128), pg_terminate_backend(239129), pg_terminate_backend(239130), pg_terminate_backend(239135), pg_terminate_backend(239136), pg_terminate_backend(239137), pg_terminate_backend(239138), pg_terminate_backend(239139), pg_terminate_backend(239140), pg_terminate_backend(239141), pg_terminate_backend(239142), pg_terminate_backend(239143), pg_terminate_backend(239144), pg_terminate_backend(239149), pg_terminate_backend(239150), pg_terminate_backend(239151), pg_terminate_backend(239152), pg_terminate_backend(239153), pg_terminate_backend(239154), pg_terminate_backend(239155), pg_terminate_backend(239156), pg_terminate_backend(239157), pg_terminate_backend(239161), pg_terminate_backend(239163), pg_terminate_backend(239164), pg_terminate_backend(239165), pg_terminate_backend(239166), pg_terminate_backend(239167), pg_terminate_backend(239168), pg_terminate_backend(239169), pg_terminate_backend(239170), pg_terminate_backend(239172), pg_terminate_backend(239176), pg_terminate_backend(239177), pg_terminate_backend(239178), pg_terminate_backend(239179), pg_terminate_backend(239180), pg_terminate_backend(239181), pg_terminate_backend(239182), pg_terminate_backend(239183), pg_terminate_backend(239186), pg_terminate_backend(239189), pg_terminate_backend(239190), pg_terminate_backend(239191), pg_terminate_backend(239192), pg_terminate_backend(239193), pg_terminate_backend(239194), pg_terminate_backend(239195), pg_terminate_backend(239196), pg_terminate_backend(239198), pg_terminate_backend(239202), pg_terminate_backend(239203), pg_terminate_backend(239204), pg_terminate_backend(239205), pg_terminate_backend(239206)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_56c592b98c21b6a27288dfb6",
+            "explanation_revision": 51,
+            "selected_path_ids": [
+              "path_d7bb87c97bd3e70597c4da73"
+            ],
+            "intervention_target": "long_idle_transaction",
+            "fix_id": "terminate_idle_transaction",
+            "intervention_kind": "CONTAINMENT",
+            "expected_effect_nodes": [
+              "connection_exhaustion"
+            ],
+            "esc_report_id": "esc_report_9b8a0ebab0aad78670201fc4",
+            "evidence_refs": [
+              "trace://ep_misleading_idle_txn_eval_v1_1790240008/step_017"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "connection_usage_ratio",
+                "direction": "decrease",
+                "minimum_change": 0.05,
+                "window_seconds": 30,
+                "node": "connection_exhaustion"
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "SELECT pg_terminate_backend(239115), pg_terminate_backend(239116), pg_terminate_backend(239117), pg_terminate_backend(239122), pg_terminate_backend(239123), pg_terminate_backend(239124), pg_terminate_backend(239125), pg_terminate_backend(239126), pg_terminate_backend(239127), pg_terminate_backend(239128), pg_terminate_backend(239129), pg_terminate_backend(239130), pg_terminate_backend(239135), pg_terminate_backend(239136), pg_terminate_backend(239137), pg_terminate_backend(239138), pg_terminate_backend(239139), pg_terminate_backend(239140), pg_terminate_backend(239141), pg_terminate_backend(239142), pg_terminate_backend(239143), pg_terminate_backend(239144), pg_terminate_backend(239149), pg_terminate_backend(239150), pg_terminate_backend(239151), pg_terminate_backend(239152), pg_terminate_backend(239153), pg_terminate_backend(239154), pg_terminate_backend(239155), pg_terminate_backend(239156), pg_terminate_backend(239157), pg_terminate_backend(239161), pg_terminate_backend(239163), pg_terminate_backend(239164), pg_terminate_backend(239165), pg_terminate_backend(239166), pg_terminate_backend(239167), pg_terminate_backend(239168), pg_terminate_backend(239169), pg_terminate_backend(239170), pg_terminate_backend(239172), pg_terminate_backend(239176), pg_terminate_backend(239177), pg_terminate_backend(239178), pg_terminate_backend(239179), pg_terminate_backend(239180), pg_terminate_backend(239181), pg_terminate_backend(239182), pg_terminate_backend(239183), pg_terminate_backend(239186), pg_terminate_backend(239189), pg_terminate_backend(239190), pg_terminate_backend(239191), pg_terminate_backend(239192), pg_terminate_backend(239193), pg_terminate_backend(239194), pg_terminate_backend(239195), pg_terminate_backend(239196), pg_terminate_backend(239198), pg_terminate_backend(239202), pg_terminate_backend(239203), pg_terminate_backend(239204), pg_terminate_backend(239205), pg_terminate_backend(239206)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_misleading_idle_txn_eval_v1_1790240008",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 2,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "observed_symptom_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 26,
+          "value": 0.0
+        },
+        "tool_calls": 8,
+        "information_gain_per_call": {
+          "numerator": 1,
+          "denominator": 8,
+          "value": 0.125,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 2,
+          "denominator": 8,
+          "value": 0.25
+        },
+        "unknown_error_rate": {
+          "numerator": 1,
+          "denominator": 8,
+          "value": 0.125
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    },
+    {
+      "scenario": "missing_index_eval_v1",
+      "fault_class": "missing_index",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "missing_index",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 14,
+      "elapsed_s": 497.2,
+      "cost_usd": 0.0952,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "large_table 上建索引：不锁表但耗 IO 且耗时"
+          ],
+          "sql": "CREATE INDEX CONCURRENTLY idx_orders_status_created_covering ON orders(status, created_at) INCLUDE (total, user_id)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_683c07767b3fc7d2629dc03e",
+            "explanation_revision": 99,
+            "selected_path_ids": [
+              "path_a9284a7ac6fc080c47da4406",
+              "path_71831e3b137cb651bddc39f0"
+            ],
+            "intervention_target": "missing_index",
+            "fix_id": "create_covering_index",
+            "intervention_kind": "CORRECTIVE",
+            "expected_effect_nodes": [
+              "cpu_saturated"
+            ],
+            "esc_report_id": "esc_report_2e5eecf556769527b2b06f1a",
+            "evidence_refs": [
+              "trace://ep_missing_index_eval_v1_1790240379/step_007",
+              "trace://ep_missing_index_eval_v1_1790240379/step_024",
+              "trace://ep_missing_index_eval_v1_1790240379/step_018"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "latency_p99_ms",
+                "direction": "decrease",
+                "minimum_change": 0.2,
+                "window_seconds": 300
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "CREATE INDEX CONCURRENTLY idx_orders_status_created_covering ON orders(status, created_at) INCLUDE (total, user_id)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_missing_index_eval_v1_1790240379",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 7,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 2,
+            "value": 0.5
+          },
+          "3": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "observed_symptom_coverage": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 2,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 42,
+          "denominator": 42,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 42,
+          "denominator": 42,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 42,
+          "value": 0.0
+        },
+        "tool_calls": 9,
+        "information_gain_per_call": {
+          "numerator": 6.584963,
+          "denominator": 9,
+          "value": 0.731663,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 0,
+          "denominator": 9,
+          "value": 0.0
+        },
+        "unknown_error_rate": {
+          "numerator": 0,
+          "denominator": 9,
+          "value": 0.0
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    },
+    {
+      "scenario": "stale_statistics_eval_v1",
+      "fault_class": "stale_statistics",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "stale_statistics",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 16,
+      "elapsed_s": 239.4,
+      "cost_usd": 0.1784,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "AUTO",
+          "approved": true,
+          "reasons": [
+            "ANALYZE 只更新统计信息，可自动执行"
+          ],
+          "sql": "ANALYZE orders",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_9ac8c7848f4a292695112e69",
+            "explanation_revision": 100,
+            "selected_path_ids": [
+              "path_128a968505ccbdda8404ad35"
+            ],
+            "intervention_target": "stale_statistics",
+            "fix_id": "analyze_table",
+            "intervention_kind": "CORRECTIVE",
+            "expected_effect_nodes": [
+              "latency_p99_up"
+            ],
+            "esc_report_id": "esc_report_c771bc0d47606f5b6429d5d8",
+            "evidence_refs": [
+              "trace://ep_stale_statistics_eval_v1_1790241054/step_007",
+              "trace://ep_stale_statistics_eval_v1_1790241054/step_037",
+              "trace://ep_stale_statistics_eval_v1_1790241054/step_029"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "row_estimate_error_ratio",
+                "direction": "decrease",
+                "minimum_change": 0.5,
+                "window_seconds": 60
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "ANALYZE orders"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_stale_statistics_eval_v1_1790241054",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 4,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "observed_symptom_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 46,
+          "denominator": 46,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 46,
+          "denominator": 46,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 46,
+          "value": 0.0
+        },
+        "tool_calls": 12,
+        "information_gain_per_call": {
+          "numerator": 8.906891,
+          "denominator": 12,
+          "value": 0.742241,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 0,
+          "denominator": 12,
+          "value": 0.0
+        },
+        "unknown_error_rate": {
+          "numerator": 0,
+          "denominator": 12,
+          "value": 0.0
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    }
+  ]
+}
