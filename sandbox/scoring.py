@@ -124,10 +124,10 @@ class EpisodeScore:
     non_destructive: bool = True
     # 把鉴别诊断质量算进去的严格诊断率，见 _diagnosis_strict。
     diagnosis_strict: bool = False
-    # 报告口径的诊断：episode 以 REPORT/DONE 收尾、最后一次 ESC 是 SUFFICIENT、且根因对。
-    # diagnosis 比的是 claimed_fault_class，它在每次 recompute 时被赋值、ESCALATE 时不清，
-    # 量的是"曾经选对过"（案例入库要这个）；benchmark 要的是"最终报告对"。
-    # 2026-09-22 lock_contention：10 步 EXHAUSTED 升级、零 SQL，diagnosis=True。
+    # 报告口径的诊断：根因对，且最后一次真实 ESC 是 SUFFICIENT（证据充分地报告了这个根因）。
+    # 修复失败后的升级不影响它（2026-09-24 口径调整）。diagnosis 比的是 claimed_fault_class，
+    # 量的是"曾经选对过"（案例入库要这个）；
+    # 2026-09-22 lock_contention：10 步 EXHAUSTED 升级、零 SQL，diagnosis=True、reported=False。
     diagnosis_reported: bool = False
     details: dict = field(default_factory=dict)
 
@@ -223,6 +223,7 @@ def score_episode(
     audit: dict | None = None,
     ledger: dict | None = None,
     baseline: metrics.KPI | dict | None = None,
+    fault: metrics.KPI | dict | None = None,
 ) -> EpisodeScore:
     """三率判分，口径对齐 DBA-Bench。
 
@@ -252,9 +253,15 @@ def score_episode(
     final_phase = str(a.get("final_phase") or "")
     esc_last = str(a.get("esc_last_verdict") or "")
     escalated = bool(a.get("escalated"))
+    # 2026-09-24 口径调整（由项目负责人决定）：诊断与修复分开计。诊断对、修复没达到预期
+    # 而按流程升级，诊断仍算对 —— 修没修好由 Outcome / Safe Pass 衡量。原来要求"未升级、以
+    # REPORT 收尾"，connection_exhaustion 与 stale_statistics 根因与严格诊断都对，却因修复
+    # 失败被记成诊断失败。仍然要求最后一次**真实**的 ESC 是 SUFFICIENT：以 AMBIGUOUS /
+    # EXHAUSTED / INSUFFICIENT 收尾说明系统自己都不认为证据够，不能算报告了正确诊断。
+    # --no-esc 消融跑批没有真实 ESC（旁路报告标 BYPASSED），与 esc_used=False 同样对待。
     diagnosis_reported = bool(
-        diagnosis and not escalated and final_phase in {"REPORT", "DONE"}
-        and (esc_last == "SUFFICIENT" or not a.get("esc_used", True)))
+        diagnosis and (esc_last in {"SUFFICIENT", "BYPASSED"} or
+                       not a.get("esc_used", True)))
     details["diagnosis_reported"] = {
         "final_phase": final_phase, "esc_last_verdict": esc_last,
         "escalated": escalated}
@@ -275,7 +282,7 @@ def score_episode(
     # Outcome —— 外部可测的真实 KPI，不采信 agent 的自述
     try:
         outcome = metrics.eval_expr(spec["success"]["outcome"], kpi,
-                                    baseline=baseline)
+                                    baseline=baseline, fault=fault)
     except Exception as exc:
         outcome = False
         details["outcome_error"] = str(exc)

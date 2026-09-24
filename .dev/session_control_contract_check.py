@@ -22,12 +22,12 @@ fails: list[str] = []
 checks = 0
 
 
-def check(cond: bool, label: str) -> None:
+def check(cond: bool, label: str, detail="") -> None:
     global checks
     checks += 1
     if not cond:
         fails.append(label)
-    print(f"    {'OK ' if cond else 'FAIL'} {label}")
+    print(f"    {'OK ' if cond else 'FAIL'} {label}" + (f"  {detail}" if not cond and detail else ""))
 
 
 print("[1] 过滤规则")
@@ -115,7 +115,65 @@ st.scratchpad[-1]["structured_value"] = [dict(row, pid=4242, state="active")]
 st.scratchpad[-1]["ts"] = time.time()
 res = evaluate("SELECT pg_terminate_backend(4242)")
 check(not res["pid_is_client_backend_and_state_idle"]["satisfied"], "篡改过的 scratchpad 值（digest 不符）不被信任")
+
+print("[4] 多 pid 终止：每个 pid 各自满足前置条件（2026-09-24，connection_exhaustion 单 pid 修不好）")
+row2 = dict(row, pid=4343)
+rows2 = [row, row2, diag]
+ref2 = store.record("bind_structured_evidence", {"evidence_type": "session_wait_profile"},
+                    json.dumps(rows2), rows2)
+st.note("agent", "session_wait_profile", "PLAN 阶段 include_idle 观测（两行 idle）", ref2,
+        ["lock_contention"], status="OBSERVED", structured_value=rows2)
+res = evaluate("SELECT pg_terminate_backend(4242), pg_terminate_backend(4343)")
+check(all(res[c]["satisfied"] for c in PID_CONDS), "两个都观测过的 idle pid：全部前置条件满足")
+res = evaluate("SELECT pg_terminate_backend(4242), pg_terminate_backend(9999)")
+check(not res["pid_is_client_backend_and_state_idle"]["satisfied"] and "9999" in res["pid_is_client_backend_and_state_idle"]["reason"],
+      "其中一个没观测过：整条不满足，原因里点名该 pid")
+res = evaluate("SELECT pg_terminate_backend(4242), pg_terminate_backend(7)")
+check(not res["role_is_not_system_or_diagnostic"]["satisfied"], "其中一个是诊断连接：整条不满足")
+check(er._sql_facts("SELECT pg_terminate_backend(4242), pg_terminate_backend(4343)")["pids"] == [4242, 4343], "_sql_facts 给出 pid 列表")
 shutil.rmtree(TRACE_DIR / eid, ignore_errors=True)
+
+print("[5] 护盾形态与 gate 的执行前复核")
+from safety import gate, shield  # noqa: E402
+from safety.gate import RemediationProposal  # noqa: E402
+ok, _r, got = shield.inspect_session_control("SELECT pg_terminate_backend(11), pg_terminate_backend(12), pg_terminate_backend(13)")
+check(ok and got == [11, 12, 13], "三个常量 pid 合规")
+check(not shield.inspect_session_control("SELECT pg_terminate_backend(11), pg_terminate_backend(11)")[0], "重复 pid 拒绝")
+check(not shield.inspect_session_control("SELECT pg_terminate_backend(11), pg_cancel_backend(12)")[0], "混用两种函数拒绝")
+many = ", ".join(f"pg_terminate_backend({i})" for i in range(1, shield.MAX_SESSION_TARGETS + 2))
+check(not shield.inspect_session_control("SELECT " + many)[0], f"超过 {shield.MAX_SESSION_TARGETS} 个拒绝")
+check(not shield.inspect_session_control("SELECT pg_terminate_backend(11), pg_terminate_backend(pid) FROM pg_stat_activity")[0], "夹带非常量项拒绝")
+d = gate.assess(RemediationProposal(action_type="session_control",
+                                    sql="SELECT pg_terminate_backend(11), pg_terminate_backend(12)",
+                                    rollback="IRREVERSIBLE", root_cause="connection_exhaustion",
+                                    fix_id="terminate_idle_backend"))
+check(d.approved and d.tier == "CONFIRM", "多 pid 提案过门且仍是 CONFIRM", d.reasons)
+real_query = gate.db.query
+try:
+    gate.db.query = lambda *a, **k: [(11, "idle", "client backend", "app_user"),
+                                     (12, "active", "client backend", "app_user")]
+    p2 = RemediationProposal(action_type="session_control",
+                             sql="SELECT pg_terminate_backend(11), pg_terminate_backend(12), pg_terminate_backend(13)",
+                             rollback="IRREVERSIBLE", fix_id="terminate_idle_backend")
+    ok2, why2 = gate._recheck_sessions(p2)
+    check(not ok2 and "12" in why2 and "13" in why2, "复核：一个已变 active、一个已不存在 -> 拒绝并点名", why2)
+    gate.db.query = lambda *a, **k: [(11, "idle", "client backend", "app_user"),
+                                     (12, "idle", "client backend", "agent_ro")]
+    ok3, why3 = gate._recheck_sessions(RemediationProposal(
+        action_type="session_control", sql="SELECT pg_terminate_backend(11), pg_terminate_backend(12)",
+        rollback="IRREVERSIBLE", fix_id="terminate_idle_backend"))
+    check(not ok3 and "诊断" in why3, "复核：诊断连接拒绝", why3)
+    gate.db.query = lambda *a, **k: [(11, "idle", "client backend", "app_user"),
+                                     (12, "idle", "client backend", "app_user")]
+    ok4, _w = gate._recheck_sessions(RemediationProposal(
+        action_type="session_control", sql="SELECT pg_terminate_backend(11), pg_terminate_backend(12)",
+        rollback="IRREVERSIBLE", fix_id="terminate_idle_backend"))
+    check(ok4, "复核：都仍是 idle 客户端 -> 放行")
+finally:
+    gate.db.query = real_query
+import inspect as _inspect  # noqa: E402
+esrc = _inspect.getsource(gate.execute)
+check(esrc.index("_recheck_sessions(p)") < esrc.index("undo_journal.append("), "复核在写 journal 与执行之前")
 
 print()
 if fails:

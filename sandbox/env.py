@@ -110,6 +110,8 @@ class DBAScenarioEnv:
         self.suite = RegressionSuite(self.spec["workload"].get("canary_queries", []))
         self._wl: subprocess.Popen | None = None
         self.healthy_kpi: metrics.KPI | None = None
+        # 告警时刻（窗口填满故障期样本之后）的读数，判据里的 fault_<字段> 引用它。
+        self.fault_kpi: metrics.KPI | None = None
         self.injection = None
         self.applied_sql: list[str] = []
 
@@ -297,6 +299,7 @@ class DBAScenarioEnv:
                 self._log(f"[env] 等待 {settle:.0f}s 让指标窗口填满故障期样本 ...")
                 time.sleep(settle)
             cur = metrics.collect(expected_episode_id=self.episode_id)
+            self.fault_kpi = cur
 
         self._log(f"[env] 告警({alert_expr}) 触发={fired} "
                   f"p99={cur.p99_ms}ms errors={cur.errors} cpu={cur.cpu_pct}%")
@@ -362,7 +365,7 @@ class DBAScenarioEnv:
                              list(self.applied_sql if applied_sql is None
                                   else applied_sql),
                              kpi, regression, audit, ledger,
-                             baseline=self.healthy_kpi)
+                             baseline=self.healthy_kpi, fault=self.fault_kpi)
 
     def close(self) -> None:
         self._stop_workload()

@@ -37,6 +37,10 @@ QUOTA_WAIT_S = 600
 STALL_MIN = 15            # 最新 step / 状态文件超过这么久没动 -> 判卡死
 EPISODE_CAP_S = 90 * 60   # 单场景硬上限；真死锁由 STALL_MIN 负责，这只是"慢而不死"的兜底
 MAX_WALL_S = 20 * 3600
+# 一次 sleep(60) 实际过去的墙钟超出这么多，判定主机休眠过（合盖、手动睡眠）。VERIFY 等
+# 窗口类观测横跨休眠就失效了，episode 必须作废重跑。2026-09-23 18:25-20:47 合盖，
+# 当时只报了"超过 90 分钟上限"，看不出真正原因。
+SUSPEND_GAP_S = 240
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 
@@ -203,9 +207,18 @@ def run_one(fault: str, stem: str) -> None:
     t_start = time.time()
     with out.open("w", encoding="utf-8") as f:
         proc = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT)
+        last_tick = time.time()
         while proc.poll() is None:
             time.sleep(60)
-            elapsed = time.time() - t_start
+            now = time.time()
+            gap = now - last_tick - 60
+            last_tick = now
+            if gap > SUSPEND_GAP_S:
+                log(f"    看门狗：检测到主机休眠约 {gap / 60:.0f} 分钟，观测窗与 KPI 已失效，"
+                    "清理后重跑（长跑批请保持开盖）")
+                _kill_tree(proc)
+                break
+            elapsed = now - t_start
             if elapsed > EPISODE_CAP_S:
                 log(f"    看门狗：单场景超过 {EPISODE_CAP_S // 60} 分钟上限，清理")
                 _kill_tree(proc)
@@ -283,9 +296,10 @@ def main() -> int:
         if waited:
             log(f"  额度恢复（等了 {waited // 60} 分钟），回到开头重新查锚")
             continue
-        before = len(have)
         run_one(fault, stem)
-        if len(usable_episodes(stems)) <= before:
+        # 按"本场景是否进入可用集合"判成败，不按可用数量：跑批中途挪走别的场景的结果文件
+        # 会让数量抵消，2026-09-23 stale_statistics 拿到了有效结果却被记成失败。
+        if stem not in usable_episodes(stems):
             fails[fault] = fails.get(fault, 0) + 1
             log(f"  {stem} 没拿到可用结果（累计失败 {fails[fault]} 次），排到后面，先试别的场景")
             time.sleep(60)

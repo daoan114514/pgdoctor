@@ -107,7 +107,9 @@ confirmed_by:
   - {cause: orphaned_prepared_transaction, evidence: prepared_xact_age,
      necessity: required}
   - {cause: deadlock, evidence: deadlock_count, necessity: required}
-  - {cause: deadlock, evidence: session_wait_profile, necessity: supporting}
+  # 2026-09-24 去掉 deadlock <- session_wait_profile(supporting)：有锁等待是锁竞争与死锁的共同
+  # 表现，分不开两者；它的 SUPPORTS 与 deadlock_count 的干净 REFUTES 混在一起，deadlock 路径在
+  # 每个锁竞争场景里都只能 INCONCLUSIVE，严格诊断永远差一条（2026-09-23 lock_contention）。
   - {cause: work_mem_spill, evidence: temp_file_volume, necessity: required}
   - {cause: checkpoint_pressure, evidence: checkpoint_stats, necessity: required}
   - {cause: autovacuum_starvation, evidence: backend_xmin_age,
@@ -176,8 +178,10 @@ refuted_by:
   - {cause: orphaned_prepared_transaction, evidence: prepared_xact_age,
      predicate_id: prepared_xact_age_v2, scope: NODE,
      when: "pg_prepared_xacts 为空"}
+  # scope NODE：窗口内死锁计数不涨，反证的是"发生了死锁"这个根因本身，不只是某条边
+  # （NODE 范围的反证对边同样生效，见 explanation_runtime._causal_relation）。
   - {cause: deadlock, evidence: deadlock_count,
-     predicate_id: deadlock_count_v2, scope: PATH, window_required: true,
+     predicate_id: deadlock_count_v2, scope: NODE, window_required: true,
      when: "故障窗口内 deadlocks 计数没有增长"}
   - {cause: work_mem_spill, evidence: temp_file_volume,
      predicate_id: temp_file_volume_v2, scope: PATH, window_required: true,

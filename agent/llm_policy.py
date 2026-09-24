@@ -150,6 +150,28 @@ def _root_cause_schema() -> dict:
     }, "required": ["fault_class", "root_cause"]}
 
 
+def _session_view(rows: list[dict]) -> dict:
+    """get_active_sessions 给主 agent 的视图：pid 列表放最前面、完整给出。
+
+    连接打满时 idle 行有几十个，逐行给会被截断到十来行（每行 300 多字），模型只能拿到
+    少数几个 pid，多 pid 终止无从谈起。列表里只放可终止的客户端连接（排除系统/诊断连接），
+    完整行仍在 trace 里，前置条件读的是那份。"""
+    def usable(row, states):
+        return (str(row.get("state", "")) in states and
+                not row.get("is_system_or_diagnostic", True) and
+                not row.get("is_current_diagnostic_connection", True))
+    return {
+        "idle_client_pids": [r["pid"] for r in rows if usable(r, {"idle"})],
+        "idle_in_transaction_pids": [
+            r["pid"] for r in rows
+            if usable(r, {"idle in transaction", "idle in transaction (aborted)"})],
+        "session_count": len(rows),
+        "sessions_sample": rows[:6],
+        "note": ("终止多个会话时写成一条 SELECT pg_terminate_backend(p1), "
+                 "pg_terminate_backend(p2), ...（最多 64 个，只能用上面列出的 pid）"),
+    }
+
+
 def _build_tools(tb: Toolbox) -> list:
     """把 Toolbox 包成 SDK 工具。阶段校验仍由 Toolbox 内部执行。"""
 
@@ -189,8 +211,12 @@ def _build_tools(tb: Toolbox) -> list:
         tool("get_top_queries", "按累计耗时排序的最慢查询", {"n": int})(
             wrap(lambda a: tb.get_top_queries(int(a.get("n", 5))))),
 
-        tool("get_active_sessions", "异常会话及等待事件。默认不含 idle；要终止空闲会话（terminate_idle_backend 需要一个已观测到的 idle 客户端 pid）时传 include_idle=true，会附带最久的 idle 会话", {"include_idle": bool})(
-            wrap(lambda a: tb.get_active_sessions(bool(a.get("include_idle", False))))),
+        tool("get_active_sessions", "异常会话及等待事件。默认不含 idle；要终止空闲会话或空闲事务时传 "
+             "include_idle=true。返回可终止的 idle / idle in transaction 客户端 pid 列表"
+             "（已排除系统与诊断连接）和少量样例行",
+             {"include_idle": bool})(
+            wrap(lambda a: _session_view(
+                tb.get_active_sessions(bool(a.get("include_idle", False)))))),
 
         tool("get_blocking_chain", "锁阻塞链：谁挡住了谁", {})(
             wrap(lambda a: tb.get_blocking_chain())),
@@ -518,6 +544,11 @@ set_parameter / alter_table_options / session_control / dml_update / dml_delete
    锁竞争用 pg_terminate_backend 终止阻塞源，action_type 填
    session_control、rollback 填 IRREVERSIBLE（终止会话本就撤不回来，
    写假的回滚语句会制造"以为能回滚"的错觉）。
+   会话控制一律**先观测、再提交**：先调 get_active_sessions(include_idle=true)，
+   只用它返回列表里的 pid；pid 超过 5 分钟没重新观测会被拒。连接被大量空闲连接
+   占满时，一个 pid 不够把使用率降下来 —— 把列表里的 idle 客户端 pid 写进同一条
+   SELECT pg_terminate_backend(p1), pg_terminate_backend(p2), ...（最多 64 个），
+   不要写 FROM/WHERE，护盾只接受常量 pid。执行前系统还会逐个复核状态。
 5. 提交前可以用 simulate_index 确认该索引确实会被优化器采用。
 
 提案会经过 AST 校验与风险分级，不合规会被拒。"""

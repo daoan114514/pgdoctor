@@ -649,11 +649,39 @@ def assess_explanation(st: EpisodeState) -> dict:
     return check_explanation(st, persist=False)
 
 
+def effective_but_insufficient_fixes(st: EpisodeState) -> set[str]:
+    """本 episode 里执行成功、预期效果全部达成、症状却没恢复的修复（fix id）。
+
+    再执行一次同一个修复不会带来新信息：2026-09-23 stale_statistics 第一次 ANALYZE 把
+    估计偏差从 440 倍压到 1.0（效果完美），p50 没恢复，回 INVESTIGATE 后模型又提交了
+    VACUUM ANALYZE（同一个 fix），偏差 1.25→1.25，判 INTERVENTION 失败，白白多一次写库、
+    耗尽尝试次数。效果达成却未恢复说明解释不完整，该换修复或升级，不该重试。
+
+    会话控制除外：终止另一组 pid 是另一次干预，不是重复（完全相同的 SQL 已由
+    EpisodeState.tried_fix 挡住）。"""
+    fixes: dict[str, dict] = {}
+    for root in G.load().nodes:
+        for fix in G.fixes_for(root):
+            fixes.setdefault(fix["fix"], fix)
+    out: set[str] = set()
+    for attempt in getattr(st, "intervention_attempts", []) or []:
+        get = (attempt.get if isinstance(attempt, dict)
+               else lambda name, default=None: getattr(attempt, name, default))
+        actual = list(get("actual") or [])
+        if (str(get("execution_status") or "") == "SUCCEEDED" and actual and
+                all(item.get("met") is True for item in actual) and
+                str(get("outcome") or "") != "VERIFIED" and
+                fixes.get(str(get("fix_id") or ""), {}).get("action_type") != "session_control"):
+            out.add(str(get("fix_id")))
+    return out
+
+
 def intervention_options(st: EpisodeState, *, executable_only: bool = False
                          ) -> list[dict]:
     explanation = st.explanation_graph
     if explanation is None:
         return []
+    exhausted = effective_but_insufficient_fixes(st) if executable_only else set()
     options: list[dict] = []
     for path_id in explanation.selected_path_ids:
         for option in G.intervention_options(path_id, explanation):
@@ -674,13 +702,15 @@ def intervention_options(st: EpisodeState, *, executable_only: bool = False
             if executable_only and (item.get("execution") == "escalate_only" or
                                     item.get("risk_tier") == "DENY"):
                 continue
+            if executable_only and item.get("fix") in exhausted:
+                continue
             options.append(item)
     return options
 
 
 def _sql_facts(sql: str) -> dict[str, Any]:
     facts: dict[str, Any] = {"statement": None, "table": "", "pid": None,
-                             "index_signature": None, "parameter": ""}
+                             "pids": [], "index_signature": None, "parameter": ""}
     try:
         parsed = parse_sql(sql)
     except Exception:
@@ -717,9 +747,10 @@ def _sql_facts(sql: str) -> dict[str, Any]:
         # `..., pg_terminate_backend(pid) FROM pg_stat_activity` 的第二项会掐掉整库会话
         # （2026-09-23 审计）。判定与 gate.assess 共用 shield 的同一个函数。
         from safety import shield
-        shape_ok, _reasons, pid = shield.inspect_session_control(sql)
-        if shape_ok and pid:
-            facts["pid"] = pid
+        shape_ok, _reasons, pids = shield.inspect_session_control(sql)
+        if shape_ok and pids:
+            facts["pids"] = list(pids)
+            facts["pid"] = pids[0]
     return facts
 
 
@@ -854,14 +885,34 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
                 if binding.is_trusted()]
     values = [(binding, binding.structured_value()) for binding in bindings]
     facts = _sql_facts(sql) if sql.strip() else _sql_facts("")
-    pid = facts["pid"]
-    pid_rows: list[tuple[EvidenceBinding, dict]] = []
+    pids = list(facts.get("pids") or [])
+    # 每个 pid 各自的观测行（已绑定的 + PLAN 阶段新鲜可信的）。多 pid 提案要求每个 pid
+    # 都满足同一条前置条件 —— 任何一个不满足，整条提案不满足。
+    rows_by_pid: dict[str, list[tuple[EvidenceBinding, dict]]] = {
+        str(item): [] for item in pids}
     for binding, value in values:
         for row in _walk_dicts(value):
-            row_pid = row.get("pid", row.get("blocked_by"))
-            if pid is not None and str(row_pid) == str(pid):
-                pid_rows.append((binding, row))
-    pid_rows.extend(_fresh_pid_observations(st, pid))
+            row_pid = str(row.get("pid", row.get("blocked_by")))
+            if row_pid in rows_by_pid:
+                rows_by_pid[row_pid].append((binding, row))
+    for item in pids:
+        rows_by_pid[str(item)].extend(_fresh_pid_observations(st, item))
+
+    def per_pid(check_row, label: str) -> tuple[bool, str, list[str]]:
+        if not pids:
+            return False, "SQL AST binds no backend PID", []
+        refs: list[str] = []
+        missing: list[str] = []
+        for key, rows in rows_by_pid.items():
+            hits = [binding.raw_ref for binding, row in rows if check_row(binding, row)]
+            if hits:
+                refs.extend(hits)
+            else:
+                missing.append(key)
+        if missing:
+            return (False, f"{label} fails for pid {', '.join(missing[:10])}"
+                    + (f" (+{len(missing) - 10} more)" if len(missing) > 10 else ""), [])
+        return True, f"{label} holds for all {len(pids)} pid(s)", refs
 
     fresh_counterfactuals = _fresh_observations(
         st, {"counterfactual_index"},
@@ -913,7 +964,8 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
             return table_matches_evidence(facts["table"],
                                           "VACUUM AST binds a concrete relation")
         if condition_id == "concrete_pid_bound":
-            return pid is not None, "SQL AST binds one positive backend PID", []
+            return (bool(pids), f"SQL AST binds {len(pids)} positive backend PID(s)"
+                    if pids else "SQL AST binds no backend PID", [])
         if condition_id == "session_or_transaction_scope_only":
             ok = isinstance(statement, ast.VariableSetStmt)
             return ok, "SET is scoped to the executing session/transaction", []
@@ -922,12 +974,10 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
             # （2026-09-23 审计）。现在"新鲜"是真的：该 pid 的行必须在 PID_ROW_FRESHNESS_S
             # 内观测到。
             now = time.time()
-            refs = [binding.raw_ref for binding, row in pid_rows
-                    if bool(row.get("identity_rechecked", True)) and
-                    now - float(binding.observed_at or 0.0) <= PID_ROW_FRESHNESS_S]
-            return (bool(refs),
-                    f"PID row observed within {PID_ROW_FRESHNESS_S}s with identity rechecked",
-                    refs)
+            return per_pid(
+                lambda binding, row: bool(row.get("identity_rechecked", True)) and
+                now - float(binding.observed_at or 0.0) <= PID_ROW_FRESHNESS_S,
+                f"PID row observed within {PID_ROW_FRESHNESS_S}s")
 
         checks = {
             "pid_is_topmost_blocker": lambda row: bool(
@@ -954,8 +1004,8 @@ def _evaluate_preconditions(st: EpisodeState, *, option: dict,
         check = checks.get(condition_id)
         if check is None:
             return False, f"no deterministic evaluator for {condition_id}", []
-        refs = [binding.raw_ref for binding, row in pid_rows if check(row)]
-        return bool(refs), f"trace-bound PID facts satisfy {condition_id}", refs
+        return per_pid(lambda _binding, row: check(row),
+                       f"trace-bound PID facts satisfy {condition_id}")
 
     results: list[dict] = []
     for condition in option.get("preconditions", []):

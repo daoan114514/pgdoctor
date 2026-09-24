@@ -394,6 +394,46 @@ def _preflight(p: RemediationProposal) -> tuple[bool, str]:
     return True, ""
 
 
+# 执行前复核会话状态：前置条件用的是最多 300 秒前的观测行，这期间 pid 可能已退出、被复用，
+# 或 idle 连接已被应用拿去跑查询。多 pid 终止放大了这个窗口的代价，所以在写库之前、
+# 以只读角色逐个再查一遍；任何一个不符合就整条不执行、退回 PLAN（不写 journal）。
+_DIAGNOSTIC_ROLES = frozenset({"postgres", "agent_ro", "agent_rw"})
+_EXPECTED_STATES = {
+    "terminate_idle_backend": ("idle",),
+    "terminate_idle_transaction": ("idle in transaction", "idle in transaction (aborted)"),
+}
+
+
+def _recheck_sessions(p: RemediationProposal) -> tuple[bool, str]:
+    ok, reasons, pids = shield.inspect_session_control(p.sql)
+    if not ok:
+        return False, "; ".join(reasons)
+    try:
+        rows = db.query(
+            "SELECT pid, coalesce(state,''), coalesce(backend_type,''), coalesce(usename,'')"
+            " FROM pg_stat_activity WHERE pid = ANY(%s)", (list(pids),), role="ro")
+    except Exception as exc:
+        return False, f"复核查询失败: {exc}"[:200]
+    seen = {int(r[0]): r for r in rows}
+    expected = _EXPECTED_STATES.get(p.fix_id)
+    problems: list[str] = []
+    for pid in pids:
+        row = seen.get(int(pid))
+        if row is None:
+            problems.append(f"{pid} 已不存在")
+            continue
+        _pid, state, backend_type, role = row
+        if backend_type != "client backend" or role in _DIAGNOSTIC_ROLES:
+            problems.append(f"{pid} 是系统或诊断连接（{backend_type}/{role}）")
+        elif expected and state not in expected:
+            problems.append(f"{pid} 当前状态 {state!r}，不再是 {expected[0]!r}")
+    if problems:
+        head = "; ".join(problems[:6])
+        more = f"（另有 {len(problems) - 6} 个）" if len(problems) > 6 else ""
+        return False, f"执行前复核未通过：{head}{more}；请重新观测会话后再提交"
+    return True, ""
+
+
 def execute(p: RemediationProposal, episode_id: str,
             confirm_cb=None) -> ExecutionResult:
     """护盾 -> 分级 -> 确认 -> 先写 journal -> 执行。"""
@@ -411,6 +451,10 @@ def execute(p: RemediationProposal, episode_id: str,
                                    error="人工确认被拒绝")
 
     _preflight(p)
+    if shield.classify(p.sql) == "session_control":
+        recheck_ok, recheck_error = _recheck_sessions(p)
+        if not recheck_ok:
+            return ExecutionResult(False, denied=True, decision=d, error=recheck_error)
 
     rec = undo_journal.append(episode_id, p.action_type, p.sql, p.rollback)
     t0 = time.time()
@@ -437,11 +481,17 @@ def rollback(undo_id: str) -> tuple[bool, str]:
     if rec.get("status") == UndoStatus.REVERTED.value:
         return True, "已经撤销过（幂等）"
     if undo_journal.is_marker(rec.get("undo_sql", "")):
-        # 不是失败，是这个动作本来就撤不回来 —— 提案时已显式声明并经人工确认。
-        # 当成"回滚失败"会误判成需人工介入的严重情形。
-        undo_journal.mark(undo_id, UndoStatus.APPLIED,
-                          "该动作不可撤销，提案时已显式声明")
-        return True, "该动作不可撤销（提案时已声明 IRREVERSIBLE），无需回滚"
+        # 不是失败：要么动作本来就撤不回来（IRREVERSIBLE，提案时已声明并经确认），
+        # 要么本就无需撤销（NO_ROLLBACK_NEEDED，如 ANALYZE）。当成"回滚失败"会误判成
+        # 需人工介入的严重情形。文案按实际标记给，原来一律写 IRREVERSIBLE。
+        if undo_journal.is_irreversible(rec.get("undo_sql", "")):
+            note = "该动作不可撤销，提案时已显式声明"
+            msg = "该动作不可撤销（提案时已声明 IRREVERSIBLE），无需回滚"
+        else:
+            note = "该动作无需撤销，提案时已显式声明"
+            msg = "该动作本就无需撤销（提案时已声明 NO_ROLLBACK_NEEDED）"
+        undo_journal.mark(undo_id, UndoStatus.APPLIED, note)
+        return True, msg
     # 执行前再验一次：日志是文件，提案时通过不等于现在还成立。配对用日志里的
     # forward_sql，而不是信任 undo_sql 自己。不通过就冻结升级，绝不执行。
     rb = shield.inspect_rollback(rec.get("forward_sql", ""), rec.get("undo_sql", ""))

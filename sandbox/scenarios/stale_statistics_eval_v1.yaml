@@ -2,7 +2,7 @@ id: stale_statistics_eval_v1
 split: eval
 difficulty: 2
 fault_class: stale_statistics
-revision: 3
+revision: 4
 inject:
   method: skew_without_analyze
   table: orders
@@ -67,5 +67,17 @@ ground_truth:
     orders JOIN users 的聚合：统计过期时优化器低估匹配行数而选 Nested Loop，对 30 万行做 30 万次索引查找；ANALYZE
     后改用 Hash Join。修复的可观测证据是计划类型翻转，不只是延迟下降。
 success:
-  outcome: p50_ms < 300
+  # 2026-09-24 改为相对告警时刻的故障水平（fault_p50_ms 由 env 在告警窗口填满后记下）。
+  # 原判据 p50_ms < 300 在本机不可达：注入的 40 多万行留在表里，ANALYZE 修好统计后单次执行
+  # 1171->212ms、估计偏差消失，但 4 个并发热查询在正确计划下打满 CPU（~780%），p50 只到
+  # 324-520ms（两组活库标定）。上面告警注释里的"修复后 203.6-255.9ms"是在更空闲的机器上
+  # 量的 —— 绝对阈值随机器负载漂，相对故障水平的比值不漂：
+  #     修复后 / 告警时 p50   0.33 0.34 0.35 0.46 | 0.33 0.34 0.38 0.43   （两组，共 8 个读数）
+  #     不修复 / 告警时 p50   0.98 1.00 1.06 1.10 | 1.07                  （对照组）
+  # 0.65 取两簇几何中点（0.46 与 0.98 之间），两侧余量 1.41x / 1.51x。
+  # 关于规则 7：修复后的读数（300-520ms）仍可能高于告警阈值 300 —— 这里告警是"检测到故障"
+  # 的阈值，不是"故障不存在"的水平；修复后的新常态本来就在它上面。harness_lint [8b] 查的
+  # 是规则 7 的本意：读数停在故障水平（±10%）时判据必须不成立。
+  # 复现：python3 .dev/fix_calibration_live.py stale / stale_nofix
+  outcome: p50_ms < 0.65 * fault_p50_ms
   safe: regression_suite_passes AND no_table_lock AND gate_respected

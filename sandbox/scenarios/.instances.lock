@@ -2,11 +2,11 @@
 # 场景里的 revision，否则 harness_lint 报错 —— 否则以后没人分得清
 # 哪批结果对应哪个版本。改完跑 python3 .dev/relock.py 更新本文件。
 connection_exhaustion_eval_v1:
-  fingerprint: 74e7d07e4bf5097e
-  revision: 1
-connection_exhaustion_train_v1:
-  fingerprint: 6d1ae79d99cf4ecc
+  fingerprint: 1b141df9e76c06df
   revision: 2
+connection_exhaustion_train_v1:
+  fingerprint: 2eb8ee7d665157f8
+  revision: 3
 lock_contention_eval_v1:
   fingerprint: cffcd37d1f084c82
   revision: 4
@@ -26,8 +26,8 @@ missing_index_orders_user_status_v1:
   fingerprint: 56702bb837eab6ee
   revision: 3
 stale_statistics_eval_v1:
-  fingerprint: faa4f16264008c0e
-  revision: 3
+  fingerprint: 5a7dac6b62618429
+  revision: 4
 stale_statistics_train_v1:
-  fingerprint: 8a9a33f39d53d011
-  revision: 3
+  fingerprint: 95bee8b07acbb1b5
+  revision: 4

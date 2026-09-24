@@ -99,7 +99,7 @@ for k, s in specs.items():
         try:
             # 判据右边可以乘一个健康基线，求值时必须给得出基线，
             # 否则这里会把可用的表达式误报成写错了
-            metrics.eval_expr(expr, FAKE, baseline=FAKE)
+            metrics.eval_expr(expr, FAKE, baseline=FAKE, fault=FAKE)
         except Exception as exc:
             bad_expr.append(f"{k}.{path}: {type(exc).__name__}")
 check("表达式都能求值", not bad_expr, bad_expr[:5])
@@ -321,6 +321,41 @@ for k, s in specs.items():
             f"{k}: {witness[0]} 在健康基线 p99={witness[1]} cpu={witness[2]} 下"
             f"同时满足 [{alert}] 与 [{outcome}]")
 check("告警集与成功集不相交", not both_true, both_true[:3])
+
+print("\n[8b] 引用 fault_<字段> 的成功判据：读数停在故障水平时必须判不成立")
+# 上面 [8] 对 fault_ 引用求不了值（没有故障读数就抛错、被跳过），这类判据要单独查。
+# 规则 7 的本意是"成功必须意味着故障没了"：对相对判据，就是读数仍在故障水平（含 ±10%
+# 的窗口噪声）时不能判成功；同时判据必须可满足（读数回到很低时能判成功）。
+fault_bad = []
+for k, s in specs.items():
+    alert = (s.get("trigger", {}) or {}).get("alert", "")
+    outcome = (s.get("success", {}) or {}).get("outcome", "")
+    if "fault_" not in outcome:
+        continue
+    fields = sorted(_cmp_fields(outcome) | _cmp_fields(alert))
+    lits = sorted(_literals(alert)) or [1.0]
+    for level in (1.01, 2.0, 10.0):
+        fault = metrics.KPI(p50_ms=1.0, p95_ms=2.0, p99_ms=3.0, qps=100.0,
+                            errors=0, cpu_pct=6.0, samples=1000)
+        for name in fields:
+            setattr(fault, name, max(lits) * level)
+        try:
+            if not metrics.eval_expr(alert, fault):
+                continue
+            for band in (1.0, 0.9, 1.1):
+                reading = metrics.KPI(**fault.as_dict())
+                for name in fields:
+                    setattr(reading, name, getattr(fault, name) * band)
+                if metrics.eval_expr(outcome, reading, fault=fault):
+                    fault_bad.append(f"{k}: 故障读数 {max(lits) * level:.0f} 的 {band:.0%} 仍判成功 [{outcome}]")
+            low = metrics.KPI(**fault.as_dict())
+            for name in fields:
+                setattr(low, name, getattr(fault, name) * 0.05)
+            if not metrics.eval_expr(outcome, low, fault=fault):
+                fault_bad.append(f"{k}: 读数降到故障水平的 5% 仍判不成功，判据不可满足 [{outcome}]")
+        except Exception as exc:
+            fault_bad.append(f"{k}: 判据求值失败 {type(exc).__name__}: {exc}")
+check("相对故障水平的判据在故障水平处不成立、且可满足", not fault_bad, fault_bad[:3])
 
 
 print("\n[9] 有持续时间的故障必须撑过整个 episode")

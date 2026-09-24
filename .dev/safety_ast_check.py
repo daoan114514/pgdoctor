@@ -123,7 +123,8 @@ print("[5] _sql_facts 的 pid 只在形态合规时绑定")
 from agent import explanation_runtime as xr  # noqa: E402
 check(xr._sql_facts("SELECT pg_terminate_backend(4242)")["pid"] == 4242, "单常量 -> 绑定")
 check(xr._sql_facts("SELECT pg_cancel_backend(7)")["pid"] == 7, "cancel 也绑定")
-check(xr._sql_facts("SELECT pg_terminate_backend(4242), pg_terminate_backend(pid) FROM pg_stat_activity")["pid"] is None, "多目标 -> 不绑定")
+check(xr._sql_facts("SELECT pg_terminate_backend(4242), pg_terminate_backend(pid) FROM pg_stat_activity")["pid"] is None, "夹带非常量目标 -> 不绑定")
+check(xr._sql_facts("SELECT pg_terminate_backend(4242), pg_terminate_backend(4343)")["pids"] == [4242, 4343], "多个常量目标 -> 逐个绑定")
 check(xr._sql_facts("SELECT pg_terminate_backend(4242) WHERE true")["pid"] is None, "带 WHERE -> 不绑定")
 check("inspect_session_control" in inspect.getsource(xr._sql_facts), "_sql_facts 与 gate 共用 shield.inspect_session_control")
 
@@ -244,7 +245,9 @@ print("[10] 读取点接线")
 from sandbox import db, observe  # noqa: E402
 from agent import loop  # noqa: E402
 from agent import toolbox as tbmod  # noqa: E402
-check("shield.inspect_readonly" in inspect.getsource(observe.Observer.explain_query), "observe.explain_query 先过只读白名单")
+check("_explainable(sql)" in inspect.getsource(observe.Observer.explain_query) and
+      "shield.inspect_readonly" in inspect.getsource(observe._explainable),
+      "observe.explain_query 先过只读白名单（经共用入口 _explainable）")
 check("to_regclass" in inspect.getsource(observe.Observer.get_indexes), "get_indexes 对未知表 KeyError")
 check("statement_timeout" in inspect.getsource(db.connect) and db.RO_STATEMENT_TIMEOUT_MS > 0, "只读连接带 statement_timeout")
 check("Toolbox(env.observe(), st, sm, target_context=" in inspect.getsource(loop), "loop 给主 agent 注入 target_context")

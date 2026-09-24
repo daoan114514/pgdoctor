@@ -27,12 +27,18 @@ class KPI:
     cpu_pct: float
     samples: int
     stale: bool = False          # 指标文件太旧 -> 负载生成器没在跑
+    # 连接使用率（pg_stat_activity 行数 / max_connections，与 get_connection_stats 同口径）。
+    # connection_exhaustion 的成功判据要它：errors 只在注入那一刻非零，执行干预时已是 0，
+    # `errors == 0` 在连接池仍 95% 满时也成立（2026-09-23 跑批）。取不到时是 NaN —— 任何
+    # 比较都为假，只会判"没恢复"，不会凭空判"修好了"（CLAUDE.md 规则 1）。
+    connection_usage_ratio: float = 0.0
 
     def as_dict(self) -> dict:
         return {
             "p50_ms": self.p50_ms, "p95_ms": self.p95_ms, "p99_ms": self.p99_ms,
             "qps": self.qps, "errors": self.errors, "cpu_pct": self.cpu_pct,
             "samples": self.samples, "stale": self.stale,
+            "connection_usage_ratio": self.connection_usage_ratio,
         }
 
 
@@ -132,7 +138,18 @@ def collect(kind: str = "hot", include_all_errors: bool = True,
         cpu_pct=container_cpu_pct(),
         samples=int(w.get("n", 0)),
         stale=bool(w.get("_stale", True)),
+        connection_usage_ratio=_connection_usage_ratio(),
     )
+
+
+def _connection_usage_ratio() -> float:
+    try:
+        from sandbox import db
+        used = int(db.query("SELECT count(*) FROM pg_stat_activity")[0][0])
+        maxc = int(db.query("SHOW max_connections")[0][0])
+        return round(used / max(maxc, 1), 4)
+    except Exception:
+        return float("nan")
 
 
 def baseline_refs(baseline: "KPI | dict | None") -> dict:
@@ -146,6 +163,20 @@ def baseline_refs(baseline: "KPI | dict | None") -> dict:
         return {}
     raw = baseline.as_dict() if hasattr(baseline, "as_dict") else dict(baseline)
     return {f"healthy_{k}": float(v) for k, v in raw.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
+def fault_refs(fault: "KPI | dict | None") -> dict:
+    """告警时刻的故障读数摊成 `fault_<字段>` 引用（与 healthy_ 对称）。
+
+    有的故障修好之后也回不到健康态：stale_statistics 注入的 40 多万行留在表里，修好统计后
+    的正确计划照样要聚合它们，并发下 p50 在 370-520ms（2026-09-24 活库标定），绝对阈值
+    300ms 在这台机器上不可达。这类场景的成功判据写成"相对告警时刻的故障水平降到多少"，
+    harness_lint 检查读数处在故障水平时判据必须不成立（规则 7 的推广）。"""
+    if fault is None:
+        return {}
+    raw = fault.as_dict() if hasattr(fault, "as_dict") else dict(fault)
+    return {f"fault_{k}": float(v) for k, v in raw.items()
             if isinstance(v, (int, float)) and not isinstance(v, bool)}
 
 
@@ -186,7 +217,8 @@ def _is_number(tok: str) -> bool:
 
 
 def eval_expr(expr: str, kpi: KPI,
-              baseline: "KPI | dict | None" = None) -> bool:
+              baseline: "KPI | dict | None" = None,
+              fault: "KPI | dict | None" = None) -> bool:
     """判定 success.outcome / trigger.alert 这类表达式。
 
     只支持 `<字段> <比较符> <数值>`，或 `<字段> <比较符> <倍数> * healthy_<字段>`，
@@ -202,7 +234,7 @@ def eval_expr(expr: str, kpi: KPI,
     import re
 
     vals = kpi.as_dict()
-    refs = baseline_refs(baseline)
+    refs = {**baseline_refs(baseline), **fault_refs(fault)}
     tokens = re.split(r"\s+(AND|OR)\s+", expr.strip(), flags=re.I)
     result: bool | None = None
     op: str | None = None

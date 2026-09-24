@@ -625,7 +625,11 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                         ]
                         if manual_options:
                             xr.create_manual_intervention_plan(st)
+                        spent = sorted(xr.effective_but_insufficient_fixes(st))
                         st.outcome_note = (
+                            f"修复 {spent} 已生效（预期效果全部达成）但症状未恢复："
+                            f"解释不完整，不重试同一修复，升级人工"
+                            if spent else
                             f"已选择解释路径 "
                             f"{st.explanation_graph.selected_path_ids if st.explanation_graph else []}；"
                             f"修复 {names or ['未定义']} 只能升级人工")
@@ -825,7 +829,8 @@ def run_episode(env: DBAScenarioEnv, obs, policy: Policy,
                     # 健康态的倍数写，绝对阈值在不同核数的机器上不可移植。
                     recovered = metrics.eval_expr(
                         env.spec["success"]["outcome"], kpi,
-                        baseline=getattr(env, "healthy_kpi", None))
+                        baseline=getattr(env, "healthy_kpi", None),
+                        fault=getattr(env, "fault_kpi", None))
                 except Exception as exc:
                     # 判据求值失败与"没恢复"长得一模一样，都会触发回滚 ——
                     # 静默吞掉的话，一条正确的修复会被撤销而没人知道为什么。

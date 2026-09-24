@@ -61,6 +61,20 @@ def _readonly_proxy(sql: str) -> tuple[str, str]:
     return proxy, "select_proxy"
 
 
+def _explainable(sql: str) -> tuple[str, str]:
+    """任何要被只读角色 EXPLAIN 的语句都先经这里：AST 白名单（拒 pg_sleep、advisory lock、
+    数据修改 CTE……），再把 UPDATE/DELETE 换成同表同 WHERE 的 SELECT 代理。
+
+    原来这两步只长在 explain_query 里，simulate_index 直接对原语句 EXPLAIN：lock_contention
+    的热查询是 UPDATE，只读角色连纯 EXPLAIN UPDATE 都被拒，8 条反事实需求全部不可得
+    （2026-09-23 跑批；CLAUDE.md 规则 4 —— 同一条规则只修了一个读取点）。"""
+    from safety import shield
+    verdict = shield.inspect_readonly(sql)
+    if not verdict.allowed:
+        raise ValueError("拒绝 EXPLAIN: " + "; ".join(verdict.reasons))
+    return _readonly_proxy(sql)
+
+
 def keep_session(state: str | None, duration_s: float, min_duration_s: float,
                  include_idle: bool) -> bool:
     """会话观测的过滤规则，抽成纯函数是为了让离线检查能钉住它。
@@ -196,11 +210,7 @@ class Observer:
         # 只读连接挡写权限，挡不住 pg_sleep / advisory lock / 数据修改 CTE / 无 WHERE
         # 大排序污染 temp 计数器（CLAUDE.md 规则 6）。语句先过 AST 白名单，不合规直接拒，
         # 由调用方回给模型，不落盘为证据。
-        from safety import shield
-        verdict = shield.inspect_readonly(sql)
-        if not verdict.allowed:
-            raise ValueError("拒绝 EXPLAIN: " + "; ".join(verdict.reasons))
-        run_sql, mode = _readonly_proxy(sql)
+        run_sql, mode = _explainable(sql)
         with db.connect(role="ro") as conn, conn.cursor() as cur:
             cur.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + run_sql, params or {})
             plan_json = cur.fetchone()[0]
@@ -226,7 +236,7 @@ class Observer:
 
     def get_active_sessions(self, min_duration_s: float = 1.0,
                             include_idle: bool = False,
-                            idle_limit: int = 15) -> list[SessionDigest]:
+                            idle_limit: int = 64) -> list[SessionDigest]:
         """异常会话；include_idle=True 时另外带上最久的 idle 客户端会话。
 
         为什么要能带 idle：connection_exhaustion 的修复 terminate_idle_backend 的前置条件
@@ -245,7 +255,9 @@ class Observer:
             " FROM pg_stat_activity"
             " WHERE state IS NOT NULL AND pid <> pg_backend_pid()"
             "   AND datname = current_database()"
-            " ORDER BY 5 DESC NULLS LAST LIMIT 50",
+            # 上限要盖住 max_connections：多 pid 终止的每个 pid 都必须来自这里的观测行
+            # （shield.MAX_SESSION_TARGETS = 64），原来 LIMIT 50 / idle 15 行根本凑不够。
+            " ORDER BY 5 DESC NULLS LAST LIMIT 200",
             role="ro")
         out = []
         for (pid, state, wtype, wevent, dur, q, role, xact_age,
@@ -795,13 +807,17 @@ class Observer:
     def simulate_index(self, create_sql: str, test_sql: str,
                        params: dict | None = None) -> dict:
         """hypopg 假设索引：不改生产就能预先证伪一个缺索引的判断。ESC 的 D5。"""
+        from safety import shield
+        if shield.classify(create_sql) != "create_index":
+            raise ValueError("simulate_index 的 create_sql 必须是一条 CREATE INDEX")
+        run_sql, mode = _explainable(test_sql)
         with db.connect(role="ro") as conn, conn.cursor() as cur:
             cur.execute("SELECT hypopg_reset()")
-            cur.execute("EXPLAIN (FORMAT JSON) " + test_sql, params or {})
+            cur.execute("EXPLAIN (FORMAT JSON) " + run_sql, params or {})
             before = cur.fetchone()[0][0]["Plan"]
             cur.execute("SELECT indexname FROM hypopg_create_index(%s)", (create_sql,))
             hypo = cur.fetchone()[0]
-            cur.execute("EXPLAIN (FORMAT JSON) " + test_sql, params or {})
+            cur.execute("EXPLAIN (FORMAT JSON) " + run_sql, params or {})
             after = cur.fetchone()[0][0]["Plan"]
             cur.execute("SELECT hypopg_reset()")
         ab, aa = _acc(), _acc()
@@ -819,7 +835,9 @@ class Observer:
                "scans_before": ab["scans"][:3], "scans_after": aa["scans"][:3],
                "would_be_used": bool(used) and not trivial,
                "cost_reduction_pct": round((1 - ca / cb) * 100, 1) if cb else 0.0,
-               "trivial_baseline": trivial}
+               "trivial_baseline": trivial,
+               # DML 热查询走的是同表同 WHERE 的 SELECT 代理：访问路径可比，写代价不在其中
+               "mode": mode}
         if trivial:
             res["note"] = (
                 f"原查询成本仅 {cb:.1f}，本来就很快，加索引的收益没有意义；"

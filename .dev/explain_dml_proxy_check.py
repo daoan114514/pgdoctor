@@ -51,6 +51,20 @@ print("[3] 解析失败不猜")
 sql, mode = _readonly_proxy("UPDATE orders SET WHERE (")
 check(mode == "analyze" and sql == "UPDATE orders SET WHERE (", "语法错误的 UPDATE 原样返回（让它去撞真实错误）", (sql, mode))
 
+
+print("[4] simulate_index 与 explain_query 共用同一个入口（2026-09-23：lock_contention 8 条反事实不可得）")
+import inspect as _inspect  # noqa: E402
+from sandbox import observe as _obs  # noqa: E402
+check("_explainable(sql)" in _inspect.getsource(_obs.Observer.explain_query), "explain_query 经 _explainable")
+ssrc = _inspect.getsource(_obs.Observer.simulate_index)
+check("_explainable(test_sql)" in ssrc and '" + test_sql' not in ssrc, "simulate_index 经 _explainable，不再直接 EXPLAIN 原语句")
+check(_obs._explainable("UPDATE orders SET status = 'PAID' WHERE id = %(uid)s")[1] == "select_proxy", "UPDATE 热查询走 SELECT 代理")
+try:
+    _obs._explainable("SELECT pg_sleep(10)")
+    check(False, "pg_sleep 应被拒")
+except ValueError:
+    check(True, "pg_sleep 被拒")
+
 print()
 if fails:
     print(f"EXPLAIN DML PROXY: FAIL（{len(fails)}/{checks}）")

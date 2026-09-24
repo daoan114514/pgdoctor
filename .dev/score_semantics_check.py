@@ -66,6 +66,30 @@ s = score_episode(SPEC, "stale_statistics", [FIX], GOOD, REG, base)
 check(not s.diagnosis and not s.diagnosis_reported, "根因错 -> 两个都 False")
 s = score_episode(SPEC, "missing_index", [FIX], GOOD, REG, dict(final_phase="DONE", esc_used=False))
 check(s.diagnosis_reported, "关掉 ESC 的跑批（esc_used=False）报告口径仍可为 True")
+s = score_episode(SPEC, "missing_index", [FIX], GOOD, REG, dict(final_phase="DONE", esc_last_verdict="BYPASSED", escalated=False))
+check(s.diagnosis_reported, "--no-esc 的旁路报告（BYPASSED）与 esc_used=False 同样对待")
+s = score_episode(SPEC, "missing_index", [], GOOD, REG, dict(final_phase="DONE", esc_last_verdict="SUFFICIENT", escalated=True))
+check(s.diagnosis and s.diagnosis_reported,
+      "诊断对、修复失败后升级（最后一次 ESC SUFFICIENT）-> 报告口径算对（2026-09-24 口径调整）")
+s = score_episode(SPEC, "missing_index", [], GOOD, REG, dict(final_phase="DONE", esc_last_verdict="AMBIGUOUS", escalated=True))
+check(not s.diagnosis_reported, "以 AMBIGUOUS 收尾 -> 报告口径不算对")
+
+print("[2b] 相对告警时刻故障水平的成功判据（stale_statistics，2026-09-24 活库标定）")
+import yaml as _yaml  # noqa: E402
+_stale = _yaml.safe_load((ROOT / "sandbox" / "scenarios" / "stale_statistics_eval_v1.yaml").read_text(encoding="utf-8"))
+_fault = metrics.KPI(p50_ms=968.7, p95_ms=1200, p99_ms=1378, qps=3.7, errors=0, cpu_pct=387, samples=100)
+_fixed = metrics.KPI(p50_ms=324.4, p95_ms=450, p99_ms=500, qps=11, errors=0, cpu_pct=801, samples=300)
+_same = metrics.KPI(p50_ms=1035.3, p95_ms=1200, p99_ms=1378, qps=3.7, errors=0, cpu_pct=387, samples=300)
+s2 = score_episode(_stale, "stale_statistics", ["ANALYZE orders"], _fixed, REG, base, fault=_fault)
+check(s2.outcome, "修复后 p50 = 告警时的 0.33 -> Outcome True（绝对 300ms 在本机不可达）")
+s2 = score_episode(_stale, "stale_statistics", ["ANALYZE orders"], _same, REG, base, fault=_fault)
+check(not s2.outcome, "读数仍在故障水平（1.07 倍）-> Outcome False")
+s2 = score_episode(_stale, "stale_statistics", ["ANALYZE orders"], _fixed, REG, base)
+check(not s2.outcome and "outcome_error" in s2.details, "缺告警时刻读数 -> 判不成立并记错误，不凭空判修好")
+import inspect as _insp  # noqa: E402
+from sandbox import env as _env  # noqa: E402
+check("fault=self.fault_kpi" in _insp.getsource(_env.DBAScenarioEnv.score), "env.score 传入告警时刻读数")
+check('fault=getattr(env, "fault_kpi", None)' in _insp.getsource(loop_mod.run_episode), "VERIFY 的恢复判定传入告警时刻读数")
 
 print("[3] run_suite 的归类与落盘")
 rsrc = (ROOT / "eval" / "run_suite.py").read_text(encoding="utf-8")

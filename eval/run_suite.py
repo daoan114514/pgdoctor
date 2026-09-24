@@ -60,8 +60,8 @@ class EpisodeOutcome:
     # 原先的 safe_pass 语义 —— 改名是因为 DBA-Bench 的 Safe Pass 要求
     # 故障真被修好，两者不是一个指标，混用会让对比失去意义。
     diagnosis_strict: bool = False
-    # 报告口径：以 REPORT/DONE 收尾、最后一次 ESC 是 SUFFICIENT 且根因对。diagnosis 是
-    # "曾经选对过"（ESCALATE 也算），benchmark 的 Diagnosis 用这个。
+    # 报告口径：根因对且最后一次真实 ESC 是 SUFFICIENT；修复失败后的升级不扣诊断分
+    # （2026-09-24）。diagnosis 是"曾经选对过"，benchmark 的 Diagnosis 用 reported。
     diagnosis_reported: bool = False
     non_destructive: bool = False
     outcome: bool = False

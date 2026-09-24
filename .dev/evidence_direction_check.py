@@ -175,6 +175,60 @@ res6 = eval6("CREATE INDEX CONCURRENTLY idx_y ON orders (created_at, status)")
 check(not all(r["satisfied"] for r in res6.values()), "过期的观测不算")
 shutil.rmtree(TRACE_DIR / eid6, ignore_errors=True)
 
+print("[7] 已生效（预期效果全部达成）但症状未恢复的修复，本 episode 不再可执行（2026-09-23 stale_statistics 重试同一修复）")
+from agent.episode_state import InterventionAttempt  # noqa: E402
+eid7 = eid + "_retry"
+exp7 = G.merge_paths([path], episode_id=eid7, observed_symptoms=["latency_p99_up"])
+exp7.select_paths([path.path_id], unexplained_symptoms=[], scope=ExplanationScope.FULL)
+st7 = EpisodeState(eid7, "direction_fixture")
+st7.explanation_graph = exp7
+fixes7 = {o["fix"] for o in xr.intervention_options(st7, executable_only=True)}
+check("create_covering_index" in fixes7, "尝试之前 create_covering_index 可执行", fixes7)
+
+
+def attempt(fix_id, met, outcome="FAILED"):
+    return InterventionAttempt(
+        attempt_id="", episode_id=eid7, plan_id=f"p_{fix_id}_{met}", explanation_id="e",
+        explanation_revision=1, selected_path_id=path.path_id, intervention_target="missing_index",
+        fix_id=fix_id, intervention_kind="CORRECTIVE", sql="x", execution_status="SUCCEEDED",
+        actual=[{"met": met}], outcome=outcome)
+
+
+st7.intervention_attempts = [attempt("create_covering_index", False)]
+check("create_covering_index" in {o["fix"] for o in xr.intervention_options(st7, executable_only=True)},
+      "效果没达成的失败：仍可再试（可能换一种索引定义）")
+st7.intervention_attempts = [attempt("create_covering_index", True)]
+check("create_covering_index" not in {o["fix"] for o in xr.intervention_options(st7, executable_only=True)},
+      "效果全部达成但未恢复：不再可执行")
+check(xr.effective_but_insufficient_fixes(st7) == {"create_covering_index"}, "effective_but_insufficient_fixes 给出该 fix")
+st7.intervention_attempts = [attempt("create_covering_index", True, outcome="VERIFIED")]
+check(not xr.effective_but_insufficient_fixes(st7), "已 VERIFIED 的不算")
+st7.intervention_attempts = [attempt("terminate_idle_backend", True)]
+check(not xr.effective_but_insufficient_fixes(st7), "会话控制除外：换一组 pid 是另一次干预")
+check("effective_but_insufficient_fixes(st)" in inspect.getsource(__import__("agent.loop", fromlist=["x"])),
+      "loop 升级时的说明点名已生效但未恢复的修复")
+
+print("[8] 阻塞链判据只数真正的阻塞：持锁 0 个表的空闲事务不算（2026-09-24 misleading_idle_txn）")
+idle0 = {"blocked_pid": None, "pid": 1, "state": "idle in transaction", "blocking_impact": 0,
+         "evidence": "idle_in_transaction_holding_locks"}
+idle1 = dict(idle0, pid=2, blocking_impact=1)
+waiting = {"blocked_pid": 9, "blocked_by": 2, "pid": 2, "blocking_impact": 3, "evidence": "currently_waiting"}
+# 阻塞链是窗口类判据：不传观测窗一律 NOT_APPLICABLE（CLAUDE.md "新增证据类型"一节）
+ctx8 = ep.PredicateContext(target_kind="PATH", target_ids=("x",), collection_status="OBSERVED",
+                           window_start=now - 60, window_end=now, source_epoch="epoch")
+check(ep.evaluate("lock_blocking_chain_v2", {"chains": [idle0] * 87}, context=ctx8).result == "REFUTES",
+      "87 个持锁 0 个表的空闲事务 -> REFUTES（原来数成 87 条阻塞记录 SUPPORTS）")
+check(ep.evaluate("lock_blocking_chain_v2", {"chains": [idle1]}, context=ctx8).result == "SUPPORTS",
+      "持有表级锁的空闲事务（lock_contention 注入器的持锁者）-> SUPPORTS")
+check(ep.evaluate("lock_blocking_chain_v2", {"chains": [waiting, idle0]}, context=ctx8).result == "SUPPORTS",
+      "有会话正在等锁 -> SUPPORTS")
+check(ep.evaluate("lock_blocking_chain_v2", {"chains": []}, context=ctx8).result == "REFUTES", "空链 -> REFUTES")
+check(ep.evaluate("lock_blocking_chain_v2", {"chains": [{"legacy": True}]}, context=ctx8).result == "SUPPORTS",
+      "旧文本回放出来的行（无 evidence 字段）行为不变")
+check(not any(k == "CAUSES" and u == "long_idle_transaction" and v == "lock_contention"
+               for u, v, k in G.load().edges(keys=True)),
+      "没有为此加 long_idle_transaction -> lock_contention 因果边（修证据，不加边去圆）")
+
 print()
 if fails:
     print(f"EVIDENCE DIRECTION: FAIL（{len(fails)}/{checks}）")

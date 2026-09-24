@@ -210,12 +210,35 @@ def _seq_scan_volume(value: dict, _ctx: PredicateContext) -> PredicateDecision:
     )
 
 
+def _is_blocking_record(row: Any) -> bool:
+    """这一行是不是锁竞争的证据。
+
+    观测器（observe.get_blocking_chain）除了"正在等锁"的行，还附上 idle in transaction
+    会话作为稳定信号（等待者被 statement_timeout 掐掉后链会瞬间变空）。但只有持有表级锁的
+    空闲事务才可能挡住别人；持锁 0 个表的空闲事务（事务里只跑过 SELECT 1）什么也挡不住。
+    原来一律计数：misleading_idle_txn 里 87 个"持锁 0 个对象"的空闲事务被数成 87 条阻塞
+    记录，lock_contention 被判 SUPPORTS、根因选错（2026-09-23）。这是一条 provenance 规则
+    没表达出来的污染边 long_idle_transaction ⇝ lock_contention —— 长事务为真时，这条证据
+    关于锁竞争的裁决出错。修在证据上，不靠加因果边去圆（CLAUDE.md 规则 2）。
+    """
+    if not isinstance(row, dict):
+        return bool(row)
+    if row.get("evidence") == "idle_in_transaction_holding_locks":
+        return int(row.get("blocking_impact", 0) or 0) > 0
+    return True
+
+
 def _lock_chain(value: Any, _ctx: PredicateContext) -> PredicateDecision:
     chains = value.get("chains", []) if isinstance(value, dict) else value
     chains = chains or []
+    blocking = [row for row in chains if _is_blocking_record(row)]
+    ignored = len(chains) - len(blocking)
     return _supports_if(
-        bool(chains), support=f"{len(chains)} blocking records observed",
-        refute="blocking chain is empty in the incident window")
+        bool(blocking),
+        support=f"{len(blocking)} blocking records observed"
+                + (f" ({ignored} idle transactions holding no table lock ignored)" if ignored else ""),
+        refute=("blocking chain is empty in the incident window" if not chains else
+                f"no session is blocked: {ignored} idle transactions hold no table lock"))
 
 
 def _session_wait(value: Any, _ctx: PredicateContext) -> PredicateDecision:

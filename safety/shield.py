@@ -469,25 +469,33 @@ def index_facts(sql: str) -> dict:
     return out
 
 
-def inspect_session_control(sql: str) -> tuple[bool, list[str], int | None]:
-    """会话控制语句的肯定式形态：恰好 `SELECT pg_terminate_backend(<正整数常量>)`
-    （或 pg_cancel_backend），没有 WITH/FROM/WHERE/GROUP/ORDER/LIMIT/DISTINCT/INTO/
-    锁子句/集合运算，目标列表恰好一项。
+# 一个会话控制提案最多终止/取消多少个后端。连接打满时注入器持有 85 个 idle 连接，
+# 一次只能杀一个在结构上达不到"使用率下降"的预期效果（2026-09-23 跑批）；上限防的是
+# 一条提案把整库会话清空。每个 pid 仍要各自满足前置条件，gate 执行前还会逐个复核。
+MAX_SESSION_TARGETS = 64
+
+
+def inspect_session_control(sql: str) -> tuple[bool, list[str], list[int]]:
+    """会话控制语句的肯定式形态：`SELECT f(<正整数常量>)[, f(<正整数常量>) ...]`，
+    f 是 pg_terminate_backend 或 pg_cancel_backend 且全句同一个；没有 WITH/FROM/WHERE/
+    GROUP/ORDER/LIMIT/DISTINCT/INTO/锁子句/集合运算；pid 不重复，个数 1 到
+    MAX_SESSION_TARGETS。返回 (合规, 原因, pid 列表)。
 
     原来的前置条件只验"某个字面量 pid 被观测过"：
     `SELECT pg_terminate_backend(4242), pg_terminate_backend(pid) FROM pg_stat_activity`
-    第一项合规，第二项把整库会话掐掉（2026-09-23 审计）。gate.assess 与
-    explanation_runtime._sql_facts 都调这一个函数。"""
+    第一项合规，第二项把整库会话掐掉（2026-09-23 审计）。现在每一项都必须是常量，
+    调用方对每个 pid 分别求前置条件。gate.assess 与 explanation_runtime._sql_facts
+    共用这一个函数。"""
     reasons: list[str] = []
     try:
         tree = parse_sql(sql)
     except Exception as exc:
-        return False, [f"SQL 无法解析: {exc}"], None
+        return False, [f"SQL 无法解析: {exc}"], []
     if len(tree) != 1:
-        return False, [f"必须恰好一条语句，实际 {len(tree)} 条"], None
+        return False, [f"必须恰好一条语句，实际 {len(tree)} 条"], []
     stmt = tree[0].stmt
     if _node_name(stmt) != "SelectStmt":
-        return False, [f"会话控制必须是 SELECT，实际 {_node_name(stmt)}"], None
+        return False, [f"会话控制必须是 SELECT，实际 {_node_name(stmt)}"], []
     for attr, label in (("withClause", "WITH"), ("fromClause", "FROM"),
                         ("whereClause", "WHERE"), ("groupClause", "GROUP BY"),
                         ("havingClause", "HAVING"), ("windowClause", "WINDOW"),
@@ -499,34 +507,43 @@ def inspect_session_control(sql: str) -> tuple[bool, list[str], int | None]:
         if getattr(stmt, attr, None):
             reasons.append(f"会话控制语句不允许 {label}")
     targets = list(stmt.targetList or ())
-    if len(targets) != 1:
-        reasons.append(f"目标列表必须恰好一项，实际 {len(targets)} 项")
-    pid = None
-    if targets:
-        call = getattr(targets[0], "val", None)
+    if not targets:
+        reasons.append("目标列表为空")
+    if len(targets) > MAX_SESSION_TARGETS:
+        reasons.append(f"一次最多 {MAX_SESSION_TARGETS} 个会话，实际 {len(targets)} 个")
+    pids: list[int] = []
+    functions: set[str] = set()
+    for index, target in enumerate(targets, 1):
+        call = getattr(target, "val", None)
         if _node_name(call) != "FuncCall":
-            reasons.append("目标必须是函数调用")
-        else:
-            name = ".".join(str(getattr(part, "sval", "") or "")
-                            for part in (call.funcname or ()))
-            if name.split(".")[-1].lower() not in SESSION_CONTROL_FUNCS:
-                reasons.append(f"函数 {name} 不是会话控制函数")
-            if (getattr(call, "agg_filter", None) or getattr(call, "over", None)
-                    or getattr(call, "agg_order", None)):
-                reasons.append("函数调用不允许 FILTER/OVER/ORDER")
-            args = list(call.args or ())
-            if len(args) != 1:
-                reasons.append(f"函数参数必须恰好一个，实际 {len(args)} 个")
-            else:
-                value = getattr(args[0], "val", None)
-                ival = getattr(value, "ival", None)
-                if (_node_name(args[0]) != "A_Const" or not isinstance(ival, int)
-                        or isinstance(ival, bool) or ival <= 0):
-                    reasons.append("pid 必须是正整数常量")
-                else:
-                    pid = ival
+            reasons.append(f"第 {index} 项不是函数调用")
+            continue
+        name = ".".join(str(getattr(part, "sval", "") or "")
+                        for part in (call.funcname or ()))
+        short = name.split(".")[-1].lower()
+        functions.add(short)
+        if short not in SESSION_CONTROL_FUNCS:
+            reasons.append(f"第 {index} 项的函数 {name} 不是会话控制函数")
+        if (getattr(call, "agg_filter", None) or getattr(call, "over", None)
+                or getattr(call, "agg_order", None)):
+            reasons.append(f"第 {index} 项不允许 FILTER/OVER/ORDER")
+        args = list(call.args or ())
+        if len(args) != 1:
+            reasons.append(f"第 {index} 项参数必须恰好一个，实际 {len(args)} 个")
+            continue
+        value = getattr(args[0], "val", None)
+        ival = getattr(value, "ival", None)
+        if (_node_name(args[0]) != "A_Const" or not isinstance(ival, int)
+                or isinstance(ival, bool) or ival <= 0):
+            reasons.append(f"第 {index} 项的 pid 必须是正整数常量")
+            continue
+        pids.append(ival)
+    if len(functions) > 1:
+        reasons.append(f"一条提案只能用一种会话控制函数，实际 {sorted(functions)}")
+    if len(set(pids)) != len(pids):
+        reasons.append("pid 有重复")
     ok = not reasons
-    return ok, reasons, (pid if ok else None)
+    return ok, reasons, (pids if ok else [])
 
 
 def _parseable(sql: str) -> str:
