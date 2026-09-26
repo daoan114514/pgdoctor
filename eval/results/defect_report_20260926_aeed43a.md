@@ -8,7 +8,7 @@
 | 因果图 | `graph_9204c5e9eaa28e2590d021b1` |
 | SDK / CLI | claude-agent-sdk 0.2.157 / CLI 2.1.277 |
 | 运行参数（`harness.run`） | max_steps 30，子 agent 并发 4，无参 / 钉参工具确定性执行，窗口下限 30 秒 |
-| 结果文件 | `eval/results/guard_*.json`，合并版 `eval/results/llm_eval_guarded.json` |
+| 结果文件 | `eval/results/quarantine/guard_*_20260926_aeed43a.json`，合并版 `eval/results/quarantine/llm_eval_guarded_20260926_aeed43a.json`（本报告的缺陷修复后被复跑取代，移入隔离区） |
 | 时间 | 2026-09-26 21:13 起、21:48 结束（35 分钟），一次跑完，无停机、无重跑 |
 | 时间锚 | 开跑前重锚，漂移从 0.08 小时起步 |
 | 成本 | 5 个计分 episode 合计 **$0.86** |
@@ -91,6 +91,14 @@
 1. P2-1：改成"只有需要的读数才推进基线"，离线钉住后全量复跑，看 stale_statistics 的二次等待是否消失。
 2. 评估是否让新鲜且有判定力的顺带观测直接满足后续需求。这会改变绑定语义，需要先做污染分析和规则 4 的读取点梳理。
 3. 评估 ESC 的"主要竞争路径"门槛。
+
+## 修复状态（复跑前）
+
+| 缺陷 | 修法 | 验证 |
+|---|---|---|
+| P2-1 不需要的读数仍推进共享计数器键的基线 | `_cumulative_delta` 推进基线改为同时满足"窗口满判据下限"与"当前调用要这个键的窗口证据（`_needs_window`）"；不满足的读数照常返回增量、不推进基线 | `evidence_direction_check` [15] 复现 stale_statistics 现场：一次 `get_database_stats` 读两个键、只要 checkpoint_stats，只推进 checkpoint_stats 的基线；第 2 轮要 temp_file_volume 时沿用从 MONITOR 算起的长窗口、不再等；真正需要的读数推进基线 |
+
+复跑前重锚时间锚（本批结束后已漂约 2.3 小时）。
 
 ## 附录：每个 episode 的原始素材
 

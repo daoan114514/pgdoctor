@@ -616,6 +616,55 @@ finally:
 for d14 in (eid + "_w14", eid14):
     shutil.rmtree(TRACE_DIR / d14, ignore_errors=True)
 
+print("[15] 不需要的键即使窗口满了也不推进基线（2026-09-26 aeed43a 缺陷报告 P2-1：stale_statistics 第 2 轮多等 19s）")
+eid15 = eid + "_shared_key"
+st15 = EpisodeState(eid15, "direction_fixture")
+st15.budget["max_steps"] = 30
+obs15 = SimpleNamespace(trace=TraceStore(eid15))
+db15 = {"deadlocks": 0, "temp_files": 0, "temp_bytes": 1000, "own_temp_bytes": 0, "xact_commit": 10,
+        "xact_rollback": 0, "db_stats_reset": "epoch", "ckpt_timed": 3, "ckpt_requested": 0,
+        "ckpt_write_time_ms": 1.0, "ckpt_sync_time_ms": 1.0, "ckpt_stats_reset": "epoch2", "errors": {}}
+obs15.get_database_stats = lambda: dict(db15, raw_ref=obs15.trace.record("get_database_stats", {}, "{}", {"k": 1}))
+tb15 = Toolbox(obs15, st15, StateMachine(st15), target_context={"table": "orders", "hot_query": "SELECT 1"})
+try:
+    tb15.sm.goto(Phase.OBSERVE, "t"); tb15.sm.goto(Phase.HYPOTHESIZE, "t"); tb15.sm.goto(Phase.INVESTIGATE, "t")
+except Exception:
+    pass
+
+
+def scoped15(types):
+    task = SimpleNamespace(task_id="t15", need_ids=["n15"], selected_tools=["get_database_stats"],
+                           evidence_types=list(types), target_context={"table": "orders", "hot_query": "SELECT 1"},
+                           explanation_id="x", explanation_revision=1, path_ids=[], target_kind="NODE",
+                           target_ids=["checkpoint_pressure"])
+    return tb15.scoped(role=Role.INVESTIGATOR, task_context=task, environment_tools=task_environment_tools(task))
+
+
+waits15: list[float] = []
+saved_sleep15 = toolbox_module._window_sleep
+toolbox_module._window_sleep = waits15.append
+try:
+    tb15.get_database_stats()                                  # MONITOR：两个键都建基线
+    for base15 in st15.cumulative_baselines.values():
+        base15["captured_at"] -= 40
+    db_before = st15.cumulative_baselines["pg_stat_database"]["captured_at"]
+    scoped15(["checkpoint_stats"]).get_database_stats()         # 第 1 轮只要 checkpoint_stats
+    check(waits15 == [], "第 1 轮两个键都已满 40s，不用等", waits15)
+    check(st15.cumulative_baselines["checkpoint_stats"]["captured_at"] > db_before + 30,
+          "需要的键（checkpoint_stats）满下限 -> 推进基线")
+    check(st15.cumulative_baselines["pg_stat_database"]["captured_at"] == db_before,
+          "不需要的键（pg_stat_database）窗口虽满也不推进基线")
+    scoped15(["temp_file_volume"]).get_database_stats()        # 第 2 轮要 temp_file_volume
+    temp15 = [e for e in st15.scratchpad if e.get("evidence_type") == "temp_file_volume"][-1]
+    check(waits15 == [] and (temp15.get("structured_value") or {}).get("window_s", 0) >= 40,
+          "第 2 轮要 temp_file_volume：沿用从 MONITOR 算起的长窗口，不再等（原来要再等约 30s）",
+          (waits15, (temp15.get("structured_value") or {}).get("window_s")))
+    check(st15.cumulative_baselines["pg_stat_database"]["captured_at"] > db_before + 30,
+          "真正需要的那次读数推进基线")
+finally:
+    toolbox_module._window_sleep = saved_sleep15
+shutil.rmtree(TRACE_DIR / eid15, ignore_errors=True)
+
 print()
 if fails:
     print(f"EVIDENCE DIRECTION: FAIL（{len(fails)}/{checks}）")

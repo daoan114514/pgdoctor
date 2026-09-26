@@ -308,10 +308,16 @@ class Toolbox:
         因此只能返回 UNKNOWN。查询错误单列为 ERROR，并且不覆盖最后一个
         正常基线，避免暂时性权限/连接错误破坏下一次差分。
 
-        窗口短于判据下限（MIN_REFUTE_WINDOW_S）的读数照常返回增量（下界：可支持、不能反证），
-        但**不推进基线**：下一次读数沿用从更早基线算起的长窗口（2026-09-24 c610108 缺陷报告
-        P2-1）。窗口只会更长，不降判定力；更长的窗口更容易跨过自家写操作，那由
-        window_spans_own_write 判不可信，方向安全。reset / 回退 / 字段缺失仍重建基线。
+        推进基线要同时满足两条：窗口满判据下限（MIN_REFUTE_WINDOW_S），且当前调用要这个键的
+        窗口证据（_needs_window）。不满足的读数照常返回增量（下界：可支持、不能反证），但**不推进
+        基线**，下一次读数沿用从更早基线算起的长窗口：
+          - 窗口太短（2026-09-24 c610108 缺陷报告 P2-1）；
+          - 不需要的键（2026-09-26 aeed43a 缺陷报告 P2-1）：一次 get_database_stats 同时读
+            pg_stat_database 与 checkpoint_stats 两个键，第 1 轮只要 checkpoint_stats，顺带的死锁 /
+            外溢窗口虽满 30 秒也把 pg_stat_database 的基线推到"现在"，第 2 轮真要 temp_file_volume
+            时只好再等 19 秒。
+        窗口只会更长，不降判定力；更长的窗口更容易跨过自家写操作，那由 window_spans_own_write 判
+        不可信，方向安全（随后真正需要的那次读数会推进基线）。reset / 回退 / 字段缺失仍重建基线。
         """
         if error:
             return None, EvidenceStatus.ERROR, f"观测失败: {error}"
@@ -349,7 +355,7 @@ class Toolbox:
                     f"累计计数器发生回退 {negative}；无法解释该窗口")
         from knowledge import evidence_predicates as ep
         window = max(0.0, now - float(previous.get("captured_at", now)))
-        anchored = window < float(ep.MIN_REFUTE_WINDOW_S)
+        anchored = not (window >= float(ep.MIN_REFUTE_WINDOW_S) and self._needs_window(key))
         if not anchored:
             self.st.cumulative_baselines[key] = snapshot
         delta["window_s"] = window
