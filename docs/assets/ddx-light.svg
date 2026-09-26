@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="478" viewBox="0 0 900 478" role="img" aria-label="鉴别诊断的真实一例：告警 errors &gt; 2，连接用了 95%，看着像连接打满。系统列出 5 个候选病因：连接打满作为根因被排除（扣掉 85 个长事务会话后只用了 10%），锁争用、死锁、缺索引也被证据排除；确认的是长事务堆积占满连接。终止其中 64 个空闲事务后，连接占用从 95% 降到 31%。" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', sans-serif">
+<title>鉴别诊断的真实一例：告警 errors &gt; 2，连接用了 95%，看着像连接打满。系统列出 5 个候选病因：连接打满作为根因被排除（扣掉 85 个长事务会话后只用了 10%），锁争用、死锁、缺索引也被证据排除；确认的是长事务堆积占满连接。终止其中 64 个空闲事务后，连接占用从 95% 降到 31%。</title>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#818b98"/></marker><marker id="a-ok" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="#1a7f37"/></marker></defs>
+<rect x="0.5" y="0.5" width="899" height="477" rx="14" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<rect x="28" y="118" width="214" height="180" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.3"/>
+<rect x="44" y="136" width="44" height="22" rx="11" fill="#ffebe9" stroke="#ff8182" stroke-width="1"/>
+<text x="66" y="151.5" font-size="12" fill="#cf222e" font-weight="600" text-anchor="middle">告警</text>
+<text x="98" y="152" font-size="13" fill="#1f2328" font-family="ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, Menlo, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans Mono CJK SC', monospace">errors &gt; 2</text>
+<text x="44" y="188" font-size="12" fill="#818b98">症状</text>
+<text x="44" y="216" font-size="22" fill="#1f2328" font-weight="700">吞吐下降</text>
+<text x="44" y="250" font-size="13" fill="#59636e">连接用了 95%，</text>
+<text x="44" y="270" font-size="13" fill="#59636e">看着像“连接打满”</text>
+<path d="M243,208 C276,208 266,56 297,56" fill="none" stroke="#818b98" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<rect x="300" y="24" width="572" height="64" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<circle cx="330" cy="56" r="13" fill="#cf222e"/>
+<path d="M326,52 L334,60 M334,52 L326,60" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="356" y="51" font-size="15.5" fill="#59636e" font-weight="600">连接打满本身就是根因</text>
+<path d="M355,46 L512,46" fill="none" stroke="#cf222e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+<text x="356" y="73" font-size="12.5" fill="#59636e">扣掉 85 个长事务会话，连接只用了 10% —— 它只是中间环节</text>
+<rect x="812" y="44" width="44" height="24" rx="12" fill="#ffebe9" stroke="#ff8182" stroke-width="1"/>
+<text x="834" y="60.3" font-size="12" fill="#cf222e" font-weight="600" text-anchor="middle">排除</text>
+<path d="M243,208 C276,208 266,132 297,132" fill="none" stroke="#818b98" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<rect x="300" y="100" width="572" height="64" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<circle cx="330" cy="132" r="13" fill="#cf222e"/>
+<path d="M326,128 L334,136 M334,128 L326,136" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="356" y="127" font-size="15.5" fill="#59636e" font-weight="600">锁争用</text>
+<path d="M355,122 L403.5,122" fill="none" stroke="#cf222e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+<text x="356" y="149" font-size="12.5" fill="#59636e">没有会话在等锁（空闲事务不持有表锁）</text>
+<rect x="812" y="120" width="44" height="24" rx="12" fill="#ffebe9" stroke="#ff8182" stroke-width="1"/>
+<text x="834" y="136.3" font-size="12" fill="#cf222e" font-weight="600" text-anchor="middle">排除</text>
+<path d="M243,208 C276,208 266,208 297,208" fill="none" stroke="#818b98" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<rect x="300" y="176" width="572" height="64" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<circle cx="330" cy="208" r="13" fill="#cf222e"/>
+<path d="M326,204 L334,212 M334,204 L326,212" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="356" y="203" font-size="15.5" fill="#59636e" font-weight="600">死锁</text>
+<path d="M355,198 L388,198" fill="none" stroke="#cf222e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+<text x="356" y="225" font-size="12.5" fill="#59636e">观测窗口内死锁数增量为 0</text>
+<rect x="812" y="196" width="44" height="24" rx="12" fill="#ffebe9" stroke="#ff8182" stroke-width="1"/>
+<text x="834" y="212.3" font-size="12" fill="#cf222e" font-weight="600" text-anchor="middle">排除</text>
+<path d="M243,208 C276,208 266,284 297,284" fill="none" stroke="#818b98" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 4" marker-end="url(#a)"/>
+<rect x="300" y="252" width="572" height="64" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<circle cx="330" cy="284" r="13" fill="#cf222e"/>
+<path d="M326,280 L334,288 M334,280 L326,288" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="356" y="279" font-size="15.5" fill="#59636e" font-weight="600">缺索引</text>
+<path d="M355,274 L403.5,274" fill="none" stroke="#cf222e" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+<text x="356" y="301" font-size="12.5" fill="#59636e">执行计划已经走索引；窗口内 22 万次索引扫描、0 次顺序扫描</text>
+<rect x="812" y="272" width="44" height="24" rx="12" fill="#ffebe9" stroke="#ff8182" stroke-width="1"/>
+<text x="834" y="288.3" font-size="12" fill="#cf222e" font-weight="600" text-anchor="middle">排除</text>
+<path d="M243,208 C276,208 266,360 297,360" fill="none" stroke="#1a7f37" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-ok)"/>
+<rect x="300" y="328" width="572" height="64" rx="12" fill="#dafbe1" stroke="#4ac26b" stroke-width="1.6"/>
+<circle cx="330" cy="360" r="13" fill="#1a7f37"/>
+<path d="M325,360.5 L328.5,364 L335.5,356" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="356" y="355" font-size="15.5" fill="#1f2328" font-weight="700">长事务堆积 → 连接打满</text>
+<text x="356" y="377" font-size="12.5" fill="#59636e">85 个会话 idle in transaction 超过 30 秒，把连接占满了</text>
+<rect x="812" y="348" width="44" height="24" rx="12" fill="#ffffff" stroke="#4ac26b" stroke-width="1"/>
+<text x="834" y="364.3" font-size="12" fill="#1a7f37" font-weight="600" text-anchor="middle">确认</text>
+<path d="M330,393 L330,406" fill="none" stroke="#1a7f37" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#a-ok)"/>
+<rect x="300" y="408" width="572" height="46" rx="12" fill="#ffffff" stroke="#4ac26b" stroke-width="1.3" stroke-dasharray="4 3"/>
+<text x="318" y="436.5" font-size="13" fill="#1a7f37" font-weight="700">处置</text>
+<text x="356" y="436.5" font-size="13" fill="#1f2328">终止其中 64 个空闲事务（CONFIRM，执行前逐个复核）</text>
+<text x="854" y="436.5" font-size="14" fill="#1a7f37" font-weight="700" text-anchor="end">连接 95% → 31%</text>
+</svg>

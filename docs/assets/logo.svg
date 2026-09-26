@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="pgdoctor" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', 'Noto Sans SC', sans-serif">
+<title>pgdoctor</title>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a90d9"/><stop offset="1" stop-color="#23508f"/></linearGradient></defs>
+<rect x="4" y="4" width="120" height="120" rx="30" fill="url(#g)"/>
+<path d="M34,40 V86 A30,10 0 0 0 94,86 V40" fill="#ffffff"/>
+<ellipse cx="64" cy="40" rx="30" ry="10" fill="#ffffff"/>
+<ellipse cx="64" cy="40" rx="30" ry="10" fill="none" stroke="#bcd3ee" stroke-width="2"/>
+<path d="M34,56 A30,10 0 0 0 94,56 M34,71 A30,10 0 0 0 94,71" fill="none" stroke="#bcd3ee" stroke-width="2"/>
+<polyline points="14,70 42,70 49,70 55,55 63,88 71,46 78,76 84,70 114,70" fill="none" stroke="#ff5a5f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
