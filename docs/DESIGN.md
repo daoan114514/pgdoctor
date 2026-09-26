@@ -1,4 +1,8 @@
-# pgdoctor
+# pgdoctor 设计笔记与实验记录
+
+> 这份文档是项目早期的 README，2026-09-26 迁到这里，保留完整的设计推导、踩坑记录与历史实验。
+> 其中的实验数字是**当时**的结果（例如"LLMPolicy 2/4"），最新评测结果见 [README](../README.md#评测结果)
+> 与 [`eval/results/`](../eval/results/) 下的缺陷报告；开发硬规则见 [CLAUDE.md](../CLAUDE.md)。
 
 面向 PostgreSQL 的**自主运维 Agent**：从告警出发自主诊断根因，并在确定性安全门的保护下执行修复与验证。
 
@@ -762,7 +766,7 @@ outcome: p99_ms < 100 AND cpu_pct < 2.0 * healthy_cpu_pct
 
 受控消融已经证明四层的读取端会改变下一次行为：L1 会按 wait profile 召回不同路径；L2/L4 会在积累观测后改变首选工具；L4 会改变工具集合；L3 的边级和路径级通道都能改变路径排序，关闭学习则恢复静态顺序。同时，开启学习不会降低可达 P0 recall，也不会放宽 ESC/GATE。
 
-这些结果来自 fixture/replay，不是生产事故收益。当前 v2 的 L1 有 72 条案例，全部是 `human_labeled` 的 train split——70 条是权威回放数据集（`eval/authoritative_cases_v2.yaml`）的冷启动 seed，2 条是人工标注 fixture；sandbox/production 案例、L2/L3/L4 在线记录和 processed outcome 都是 0。完整的 v1/v2 统计、逐层消融和兼容规则见 [因果解释子图 v2 迁移说明](CAUSAL_SUBGRAPH_V2_MIGRATION.md)。
+这些结果来自 fixture/replay，不是生产事故收益。当前 v2 的 L1 有 72 条案例，全部是 `human_labeled` 的 train split——70 条是权威回放数据集（`eval/authoritative_cases_v2.yaml`）的冷启动 seed，2 条是人工标注 fixture；sandbox/production 案例、L2/L3/L4 在线记录和 processed outcome 都是 0。完整的 v1/v2 统计、逐层消融和兼容规则见 [因果解释子图 v2 迁移说明](../CAUSAL_SUBGRAPH_V2_MIGRATION.md)。
 
 ## 案例记忆库（L1）
 
@@ -801,13 +805,13 @@ python3 eval/recount.py merge       # 跨跑批合并（额度有限时分段攒
 
 ```bash
 python3 demo.py          # 全部四幕
-python3 demo.py 2 3      # 只看拦截（离线，1 秒跑完）
+python3 demo.py 2 3      # 只看拦截（第 3 幕离线；第 2 幕要核对表没被删，需要数据库）
 ```
 
 | 幕 | 内容 | 需要数据库 |
 |---|---|---|
 | 1 | 正常修复：完成诊断、执行和验证，三率全过 | 是 |
-| 2 | 护盾硬拦：夹带 `DROP TABLE` 的提案 | 否 |
+| 2 | 护盾硬拦：夹带 `DROP TABLE` 的提案 | 是（执行前后核对 order_items 行数） |
 | 3 | 证据不足被拦：结论碰巧对，但过程不合格 | 否 |
 | 4 | 修复失败自动回滚：数据库回滚，知识单调增长 | 是 |
 
