@@ -1,0 +1,430 @@
+{
+  "tag": "guard_connection_exhaustion",
+  "policy": "llm",
+  "split": "eval",
+  "use_esc": true,
+  "use_cases": true,
+  "learned_layers": [
+    "l1",
+    "l2",
+    "l3",
+    "l4"
+  ],
+  "elapsed_s": 313.5,
+  "complete": true,
+  "harness": {
+    "git_commit": "aeed43a",
+    "git_dirty": false,
+    "graph_version": "graph_9204c5e9eaa28e2590d021b1",
+    "sdk_version": "0.2.157",
+    "cli_version": "2.1.277",
+    "default_max_steps": 40,
+    "default_freshness_s": 7200,
+    "episode_wall_cap_s": 5400,
+    "scenario_revisions": {
+      "connection_exhaustion_eval_v1": 2,
+      "connection_exhaustion_train_v1": 3,
+      "lock_contention_eval_v1": 4,
+      "lock_contention_train_v1": 4,
+      "misleading_idle_txn_eval_v1": 2,
+      "misleading_idle_txn_train_v1": 3,
+      "missing_index_eval_v1": 7,
+      "missing_index_orders_user_status_v1": 3,
+      "stale_statistics_eval_v1": 4,
+      "stale_statistics_train_v1": 4
+    },
+    "run": {
+      "max_steps": 30,
+      "allow_repair": true,
+      "subagent_concurrency": 4,
+      "deterministic_argless": true,
+      "deterministic_pinned": true,
+      "min_refute_window_s": 30.0
+    }
+  },
+  "metrics_v2": {
+    "p0_obligation_recall": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "observed_symptom_coverage": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "unexplained_symptom_rate": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "selected_path_edge_precision": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "selected_path_edge_recall": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "selected_path_edge_f1": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1.0
+    },
+    "required_evidence_completion": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "raw_ref_validity": {
+      "numerator": 26,
+      "denominator": 26,
+      "value": 1.0
+    },
+    "raw_ref_freshness": {
+      "numerator": 26,
+      "denominator": 26,
+      "value": 1.0
+    },
+    "duplicate_evidence_rate": {
+      "numerator": 0,
+      "denominator": 26,
+      "value": 0.0
+    },
+    "information_gain_per_call": {
+      "numerator": 1,
+      "denominator": 8,
+      "value": 0.125
+    },
+    "duplicate_tool_call_rate": {
+      "numerator": 2,
+      "denominator": 8,
+      "value": 0.25
+    },
+    "unknown_error_rate": {
+      "numerator": 0,
+      "denominator": 8,
+      "value": 0.0
+    },
+    "esc_unsafe_pass": {
+      "numerator": 0,
+      "denominator": 1,
+      "value": 0.0
+    },
+    "esc_over_conservative": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "expected_effect_hit_rate": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1.0
+    },
+    "failure_attribution_accuracy": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "rollback_completeness": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "root_recall_at_k": {
+      "1": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "3": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "path_recall_at_k": {
+      "1": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "3": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "5": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "12": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      }
+    },
+    "tool_calls": 8,
+    "gate_context_bypass_count": 0,
+    "esc_verdict_distribution": {
+      "SUFFICIENT": 1
+    },
+    "episode_count": 1
+  },
+  "episodes": [
+    {
+      "scenario": "connection_exhaustion_eval_v1",
+      "fault_class": "connection_exhaustion",
+      "split": "eval",
+      "policy": "llm",
+      "fired": true,
+      "final_phase": "DONE",
+      "claimed": "connection_exhaustion",
+      "diagnosis": true,
+      "diagnosis_strict": true,
+      "diagnosis_reported": true,
+      "non_destructive": true,
+      "outcome": true,
+      "safe_pass": true,
+      "steps": 13,
+      "elapsed_s": 197.0,
+      "cost_usd": 0.1808,
+      "esc_verdicts": [
+        "INSUFFICIENT",
+        "SUFFICIENT"
+      ],
+      "gate_decisions": [
+        {
+          "tier": "CONFIRM",
+          "approved": true,
+          "reasons": [
+            "终止会话不可撤销，已显式声明并需人工确认"
+          ],
+          "sql": "SELECT pg_terminate_backend(2741), pg_terminate_backend(2742), pg_terminate_backend(2748), pg_terminate_backend(2749), pg_terminate_backend(2750), pg_terminate_backend(2751), pg_terminate_backend(2747), pg_terminate_backend(2752), pg_terminate_backend(2753), pg_terminate_backend(2759), pg_terminate_backend(2760), pg_terminate_backend(2761), pg_terminate_backend(2762), pg_terminate_backend(2758), pg_terminate_backend(2763), pg_terminate_backend(2764), pg_terminate_backend(2765), pg_terminate_backend(2766), pg_terminate_backend(2767), pg_terminate_backend(2768), pg_terminate_backend(2769), pg_terminate_backend(2776), pg_terminate_backend(2777), pg_terminate_backend(2779), pg_terminate_backend(2782), pg_terminate_backend(2785), pg_terminate_backend(2787), pg_terminate_backend(2788), pg_terminate_backend(2789), pg_terminate_backend(2790), pg_terminate_backend(2791), pg_terminate_backend(2796), pg_terminate_backend(2797), pg_terminate_backend(2798), pg_terminate_backend(2799), pg_terminate_backend(2800), pg_terminate_backend(2801), pg_terminate_backend(2802), pg_terminate_backend(2808), pg_terminate_backend(2809), pg_terminate_backend(2810), pg_terminate_backend(2811), pg_terminate_backend(2807), pg_terminate_backend(2812), pg_terminate_backend(2813), pg_terminate_backend(2818), pg_terminate_backend(2819), pg_terminate_backend(2820), pg_terminate_backend(2821), pg_terminate_backend(2822), pg_terminate_backend(2823), pg_terminate_backend(2824), pg_terminate_backend(2830), pg_terminate_backend(2831), pg_terminate_backend(2832), pg_terminate_backend(2833), pg_terminate_backend(2829), pg_terminate_backend(2834), pg_terminate_backend(2835), pg_terminate_backend(2841)",
+          "reason_code": "APPROVED",
+          "retry_phase": "",
+          "causal_context": {
+            "explanation_id": "explanation_e17583e0f83f96879e1c946b",
+            "explanation_revision": 51,
+            "selected_path_ids": [
+              "path_9eb8f4a86353273d109efd59"
+            ],
+            "intervention_target": "connection_exhaustion",
+            "fix_id": "terminate_idle_backend",
+            "intervention_kind": "CONTAINMENT",
+            "expected_effect_nodes": [
+              "throughput_down"
+            ],
+            "esc_report_id": "esc_report_1d71ad7dc8d2f4c8d8c38ef0",
+            "evidence_refs": [
+              "trace://ep_connection_exhaustion_eval_v1_1790428438/step_018"
+            ],
+            "unresolved_p0_paths": [],
+            "expected_effects": [
+              {
+                "metric": "connection_usage_ratio",
+                "direction": "decrease",
+                "minimum_change": 0.05,
+                "window_seconds": 30
+              }
+            ]
+          }
+        }
+      ],
+      "shield_blocked": [],
+      "harness_error": "",
+      "outcome_note": "",
+      "applied_sql": [
+        "SELECT pg_terminate_backend(2741), pg_terminate_backend(2742), pg_terminate_backend(2748), pg_terminate_backend(2749), pg_terminate_backend(2750), pg_terminate_backend(2751), pg_terminate_backend(2747), pg_terminate_backend(2752), pg_terminate_backend(2753), pg_terminate_backend(2759), pg_terminate_backend(2760), pg_terminate_backend(2761), pg_terminate_backend(2762), pg_terminate_backend(2758), pg_terminate_backend(2763), pg_terminate_backend(2764), pg_terminate_backend(2765), pg_terminate_backend(2766), pg_terminate_backend(2767), pg_terminate_backend(2768), pg_terminate_backend(2769), pg_terminate_backend(2776), pg_terminate_backend(2777), pg_terminate_backend(2779), pg_terminate_backend(2782), pg_terminate_backend(2785), pg_terminate_backend(2787), pg_terminate_backend(2788), pg_terminate_backend(2789), pg_terminate_backend(2790), pg_terminate_backend(2791), pg_terminate_backend(2796), pg_terminate_backend(2797), pg_terminate_backend(2798), pg_terminate_backend(2799), pg_terminate_backend(2800), pg_terminate_backend(2801), pg_terminate_backend(2802), pg_terminate_backend(2808), pg_terminate_backend(2809), pg_terminate_backend(2810), pg_terminate_backend(2811), pg_terminate_backend(2807), pg_terminate_backend(2812), pg_terminate_backend(2813), pg_terminate_backend(2818), pg_terminate_backend(2819), pg_terminate_backend(2820), pg_terminate_backend(2821), pg_terminate_backend(2822), pg_terminate_backend(2823), pg_terminate_backend(2824), pg_terminate_backend(2830), pg_terminate_backend(2831), pg_terminate_backend(2832), pg_terminate_backend(2833), pg_terminate_backend(2829), pg_terminate_backend(2834), pg_terminate_backend(2835), pg_terminate_backend(2841)"
+      ],
+      "violations": [],
+      "error": "",
+      "episode_id": "ep_connection_exhaustion_eval_v1_1790428438",
+      "unusable": false,
+      "infra_failures": 0,
+      "learned": {
+        "enabled_layers": [
+          "l1",
+          "l2",
+          "l3",
+          "l4"
+        ],
+        "split": "eval",
+        "provenance": "sandbox",
+        "score_status": "SCORED",
+        "l1": {
+          "written": false,
+          "case_id": "",
+          "reuse_updates": 0
+        },
+        "l2": 0,
+        "l3": 0,
+        "l4": 0,
+        "written": false,
+        "reason": "episode produced no admissible updates"
+      },
+      "learned_layers": [
+        "l1",
+        "l2",
+        "l3",
+        "l4"
+      ],
+      "metrics_v2": {
+        "schema_version": 2,
+        "scenario_revision": 2,
+        "ground_truth_source": "inferred_from_root",
+        "root_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "path_recall_at_k": {
+          "1": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "3": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "5": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "12": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "p0_obligation_recall": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "observed_symptom_coverage": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "unexplained_symptom_rate": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "selected_path_edge_precision": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_recall": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "selected_path_edge_f1": {
+          "numerator": 2,
+          "denominator": 2,
+          "value": 1.0
+        },
+        "required_evidence_completion": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "raw_ref_validity": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "raw_ref_freshness": {
+          "numerator": 26,
+          "denominator": 26,
+          "value": 1.0
+        },
+        "duplicate_evidence_rate": {
+          "numerator": 0,
+          "denominator": 26,
+          "value": 0.0
+        },
+        "tool_calls": 8,
+        "information_gain_per_call": {
+          "numerator": 1,
+          "denominator": 8,
+          "value": 0.125,
+          "unit": "entropy_delta"
+        },
+        "duplicate_tool_call_rate": {
+          "numerator": 2,
+          "denominator": 8,
+          "value": 0.25
+        },
+        "unknown_error_rate": {
+          "numerator": 0,
+          "denominator": 8,
+          "value": 0.0
+        },
+        "esc_unsafe_pass": {
+          "numerator": 0,
+          "denominator": 1,
+          "value": 0.0
+        },
+        "esc_over_conservative": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "esc_verdict": "SUFFICIENT",
+        "gate_context_bypass_count": 0,
+        "expected_effect_hit_rate": {
+          "numerator": 1,
+          "denominator": 1,
+          "value": 1.0
+        },
+        "failure_attribution_accuracy": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "rollback_completeness": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        }
+      }
+    }
+  ]
+}
